@@ -441,6 +441,12 @@
               <span class="text-[11px] text-slate-500 mt-1 block">Suporta múltiplas lojas separadas por vírgula.</span>
             </div>
 
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">URL da API / Cloudflare Worker (opcional)</label>
+              <input type="text" id="drawer-cfg-custom-url" placeholder="https://ifood-integracao.iranildo-jobs.workers.dev" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono focus:ring-2 focus:ring-ifood-red focus:border-ifood-red outline-none transition bg-white">
+              <span class="text-[11px] text-slate-500 mt-1 block">Padrão para GitHub Pages: <code>https://ifood-integracao.iranildo-jobs.workers.dev</code></span>
+            </div>
+
             <div class="pt-2 flex flex-col gap-2">
               <button type="submit" class="w-full py-2.5 bg-ifood-red hover:bg-ifood-darkRed text-white font-bold rounded-xl text-xs shadow-md shadow-red-500/20 transition cursor-pointer">
                 Salvar Credenciais
@@ -2443,6 +2449,16 @@
       }
     }
 
+    function getApiBaseUrl() {
+      if (apiCredentials && apiCredentials.customApiUrl && apiCredentials.customApiUrl.trim() !== '') {
+        return apiCredentials.customApiUrl.trim().replace(/\/+$/, '');
+      }
+      if (window.location.hostname.includes('github.io')) {
+        return 'https://ifood-integracao.iranildo-jobs.workers.dev';
+      }
+      return '';
+    }
+
     function loadCredentials() {
       const saved = localStorage.getItem(CONFIG_KEY);
       if (saved) {
@@ -2459,15 +2475,20 @@
           const dCid = document.getElementById('drawer-cfg-client-id');
           const dCsec = document.getElementById('drawer-cfg-client-secret');
           const dMid = document.getElementById('drawer-cfg-merchant-id');
+          const dUrl = document.getElementById('drawer-cfg-custom-url');
           if (dCid) dCid.value = apiCredentials.clientId || '';
           if (dCsec) dCsec.value = apiCredentials.clientSecret || '';
           if (dMid) dMid.value = apiCredentials.merchantId || '';
+          if (dUrl) dUrl.value = apiCredentials.customApiUrl || (window.location.hostname.includes('github.io') ? 'https://ifood-integracao.iranildo-jobs.workers.dev' : '');
         } catch (e) {}
+      } else if (window.location.hostname.includes('github.io')) {
+        const dUrl = document.getElementById('drawer-cfg-custom-url');
+        if (dUrl) dUrl.value = 'https://ifood-integracao.iranildo-jobs.workers.dev';
       }
     }
 
-    function saveCredentials(cid, csec, mid) {
-      apiCredentials = { clientId: cid, clientSecret: csec, merchantId: mid };
+    function saveCredentials(cid, csec, mid, customUrl = '') {
+      apiCredentials = { clientId: cid, clientSecret: csec, merchantId: mid, customApiUrl: customUrl };
       localStorage.setItem(CONFIG_KEY, JSON.stringify(apiCredentials));
       loadCredentials();
       updateApiStatusUI();
@@ -2488,7 +2509,8 @@
         
         if (indicator) {
           indicator.className = 'text-xs font-semibold text-emerald-600 flex items-center gap-1 mt-1';
-          indicator.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> iFood Sandbox (Polling Ativo)';
+          const serverLabel = getApiBaseUrl() ? 'Cloudflare Worker' : 'Node Server';
+          indicator.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> iFood Polling (${serverLabel})`;
         }
       } else {
         if (badge) {
@@ -2619,7 +2641,7 @@
         const activeStore = storesList.find(s => s.active);
         const merchantIdToUse = (activeStore && activeStore.merchantId) ? activeStore.merchantId : apiCredentials.merchantId;
 
-        const response = await fetch('/api/ifood/poll', {
+        const response = await fetch(`${getApiBaseUrl()}/api/ifood/poll`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2628,6 +2650,14 @@
             autoConfirm: true // Enables automatic confirmation for Homologation SLA < 3s
           })
         });
+
+        const contentType = response.headers.get('content-type') || '';
+        if (!response.ok || !contentType.includes('application/json')) {
+          if (window.location.hostname.includes('github.io')) {
+            console.info('ℹ️ [GitHub Pages Mode]: Endpoint /api/ifood/poll indisponível na hospedagem estática. Utilizando modo simulação e Firebase.');
+          }
+          return;
+        }
 
         const data = await response.json();
 
@@ -2704,7 +2734,7 @@
       // Se for pedido real com credenciais configuradas
       if (order.ifoodOrderId && apiCredentials.clientId && apiCredentials.clientSecret) {
         try {
-          const res = await fetch('/api/ifood/order-action', {
+          const res = await fetch(`${getApiBaseUrl()}/api/ifood/order-action`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -2714,9 +2744,12 @@
               clientSecret: apiCredentials.clientSecret
             })
           });
-          const data = await res.json();
-          if (!res.ok && !data.success) {
-            console.warn('Aviso API iFood requestDriver:', data.message);
+          const contentType = res.headers.get('content-type') || '';
+          if (res.ok && contentType.includes('application/json')) {
+            const data = await res.json();
+            if (!data.success) {
+              console.warn('Aviso API iFood requestDriver:', data.message);
+            }
           }
         } catch (e) {
           console.warn('Erro ao chamar endpoint de requestDriver:', e);
@@ -3308,8 +3341,9 @@
 
       if (apiCredentials.clientId && apiCredentials.clientSecret) {
         try {
-          const res = await fetch(`/api/ifood/merchants-status?clientId=${encodeURIComponent(apiCredentials.clientId)}&clientSecret=${encodeURIComponent(apiCredentials.clientSecret)}&merchantId=${encodeURIComponent(mid)}`);
-          if (res.ok) {
+          const res = await fetch(`${getApiBaseUrl()}/api/ifood/merchants-status?clientId=${encodeURIComponent(apiCredentials.clientId)}&clientSecret=${encodeURIComponent(apiCredentials.clientSecret)}&merchantId=${encodeURIComponent(mid)}`);
+          const contentType = res.headers.get('content-type') || '';
+          if (res.ok && contentType.includes('application/json')) {
             const data = await res.json();
             if (data.success && data.store) {
               const s = data.store;
@@ -5755,8 +5789,10 @@
           const cid = document.getElementById('drawer-cfg-client-id').value.trim();
           const csec = document.getElementById('drawer-cfg-client-secret').value.trim();
           const mid = document.getElementById('drawer-cfg-merchant-id').value.trim();
+          const curlInput = document.getElementById('drawer-cfg-custom-url');
+          const curl = curlInput ? curlInput.value.trim() : '';
 
-          saveCredentials(cid, csec, mid);
+          saveCredentials(cid, csec, mid, curl);
           showToast('Credenciais Salvas', 'Configurações da API iFood atualizadas com sucesso!', 'success');
 
           if (cid && csec) {
@@ -5781,11 +5817,24 @@
 
           try {
             showToast('Testando Conexão...', 'Consultando API iFood...', 'info');
-            const res = await fetch('/api/ifood/test-credentials', {
+            const res = await fetch(`${getApiBaseUrl()}/api/ifood/test-credentials`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ clientId: cid, clientSecret: csec, merchantId: mid })
             });
+            const contentType = res.headers.get('content-type') || '';
+            if (!res.ok || !contentType.includes('application/json')) {
+              if (window.location.hostname.includes('github.io')) {
+                showToast(
+                  'Ambiente GitHub Pages (Estático)',
+                  'O GitHub Pages hospeda apenas arquivos estáticos e não executa o servidor backend Node.js. Para a API real do iFood, rode em servidor Node/Cloud Run. O app funciona perfeitamente via Firebase!',
+                  'warning'
+                );
+              } else {
+                showToast('Erro de Conexão', 'O servidor de API não respondeu com JSON válido (Status ' + res.status + ').', 'warning');
+              }
+              return;
+            }
             const result = await res.json();
             if (result.success) {
               showToast('Presença do aplicativo validada com sucesso.', `Loja Conectada: ${result.merchant?.name || 'christon-restaurante-ltda-teste-c'} (${result.merchant?.status || 'Aberta'})`, 'success');
@@ -5924,11 +5973,24 @@
 
           try {
             showToast('Testando Conectividade...', 'Autenticando e validando presença na API do iFood...', 'info');
-            const res = await fetch('/api/ifood/test-credentials', {
+            const res = await fetch(`${getApiBaseUrl()}/api/ifood/test-credentials`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ clientId: cid, clientSecret: csec, merchantId: mid })
             });
+            const contentType = res.headers.get('content-type') || '';
+            if (!res.ok || !contentType.includes('application/json')) {
+              if (window.location.hostname.includes('github.io')) {
+                showToast(
+                  'Ambiente GitHub Pages (Estático)',
+                  'O GitHub Pages hospeda apenas arquivos estáticos e não executa o servidor backend Node.js. Para a API real do iFood, rode em servidor Node/Cloud Run. O app funciona perfeitamente via Firebase!',
+                  'warning'
+                );
+              } else {
+                showToast('Erro de Conexão', 'O servidor de API não respondeu com JSON válido (Status ' + res.status + ').', 'warning');
+              }
+              return;
+            }
             const result = await res.json();
             if (result.success) {
               showToast('Presença do aplicativo validada com sucesso.', `Loja Conectada: ${result.merchant?.name || 'christon-restaurante-ltda-teste-c'} (${result.merchant?.status || 'Aberta'})`, 'success');
