@@ -2976,6 +2976,13 @@
     function removeOrder(orderId) {
       orders = orders.filter(o => o.id !== orderId);
       saveOrders();
+      if (window.firebaseDb && window.firebaseDeleteDoc) {
+        try {
+          window.firebaseDeleteDoc(window.firebaseDoc(window.firebaseDb, "orders", String(orderId)));
+        } catch(e) {
+          console.warn("Erro ao deletar pedido Kanban no Firebase:", e);
+        }
+      }
       renderKanban();
       showToast('Pedido Arquivado', `Pedido ${orderId} foi removido da tela.`, 'info');
     }
@@ -2985,6 +2992,13 @@
         'Limpar Painel Kanban?',
         'Deseja realmente limpar todos os pedidos da tela?',
         () => {
+          if (window.firebaseDb && window.firebaseDeleteDoc) {
+            orders.forEach(order => {
+              try {
+                window.firebaseDeleteDoc(window.firebaseDoc(window.firebaseDb, "orders", String(order.id)));
+              } catch(e) {}
+            });
+          }
           orders = [];
           saveOrders();
           renderKanban();
@@ -5371,6 +5385,13 @@
         () => {
           motoboyOrders = motoboyOrders.filter(o => o.id !== orderId);
           saveMotoboyOrders();
+          if (window.firebaseDb && window.firebaseDeleteDoc) {
+            try {
+              window.firebaseDeleteDoc(window.firebaseDoc(window.firebaseDb, "motoboyOrders", String(orderId)));
+            } catch(e) {
+              console.warn("Erro ao deletar pedido no Firebase:", e);
+            }
+          }
           showToast('Pedido Removido', 'Pedido excluído da planilha.', 'info');
         }
       );
