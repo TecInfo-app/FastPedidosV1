@@ -1,0 +1,6 @@
+{
+  "name": "Monitor de Pedidos iFood (Modo Teste)",
+  "description": "Sistema de Gestão de Pedidos (PDV) estilo Kanban para restaurantes com simulação de webhook iFood e alertas sonoros.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

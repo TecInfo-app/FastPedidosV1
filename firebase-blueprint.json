@@ -1,0 +1,81 @@
+{
+  "entities": {
+    "MotoboyOrder": {
+      "title": "MotoboyOrder",
+      "description": "Order assigned to a motoboy in spreadsheet",
+      "type": "object",
+      "properties": {
+        "orderNumber": { "type": "string", "maxLength": 50 },
+        "motoboyId": { "type": "string", "maxLength": 100 },
+        "storeName": { "type": "string", "maxLength": 100 },
+        "deliveryFee": { "type": "number" },
+        "feeName": { "type": "string", "maxLength": 100 },
+        "customerName": { "type": "string", "maxLength": 100 },
+        "customerAddress": { "type": "string", "maxLength": 255 },
+        "deliveryCode": { "type": "string", "maxLength": 10 },
+        "date": { "type": "string", "maxLength": 50 },
+        "createdAt": { "type": "string", "maxLength": 50 },
+        "timestamp": { "type": "number" },
+        "status": { "type": "string", "enum": ["em_loja", "entregue"] },
+        "deliveredAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["orderNumber", "motoboyId", "deliveryFee", "status"]
+    },
+    "IFoodOrder": {
+      "title": "IFoodOrder",
+      "description": "Order in KDS/Kanban board",
+      "type": "object",
+      "properties": {
+        "displayId": { "type": "string", "maxLength": 50 },
+        "customerName": { "type": "string", "maxLength": 100 },
+        "totalValue": { "type": "number" },
+        "paymentMethod": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string", "maxLength": 50 },
+        "timestamp": { "type": "number" },
+        "status": { "type": "string", "enum": ["novo", "confirmado", "despachado", "concluido", "cancelado", "pendente", "preparando"] }
+      },
+      "required": ["status"]
+    },
+    "Motoboy": {
+      "title": "Motoboy",
+      "description": "Registered delivery person",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 50 },
+        "plate": { "type": "string", "maxLength": 50 },
+        "password": { "type": "string", "maxLength": 50 },
+        "active": { "type": "boolean" }
+      },
+      "required": ["name", "active"]
+    },
+    "DeliveryFee": {
+      "title": "DeliveryFee",
+      "description": "Configurable delivery fee rate",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 100 },
+        "value": { "type": "number" }
+      },
+      "required": ["name", "value"]
+    }
+  },
+  "firestore": {
+    "/motoboyOrders/{orderId}": {
+      "schema": "MotoboyOrder",
+      "description": "Spreadsheet delivery orders"
+    },
+    "/orders/{orderId}": {
+      "schema": "IFoodOrder",
+      "description": "KDS Kanban orders"
+    },
+    "/motoboys/{motoboyId}": {
+      "schema": "Motoboy",
+      "description": "Motoboy profiles"
+    },
+    "/deliveryFees/{feeId}": {
+      "schema": "DeliveryFee",
+      "description": "Delivery fee options"
+    }
+  }
+}

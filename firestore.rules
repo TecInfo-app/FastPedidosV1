@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Configuração para PDV Fast Pedidos - Permite leitura e escrita em todos os dispositivos da loja
+    match /{document=**} {
+      allow read, write: if true;
+    }
+
+    // Coleção de Pedidos da Planilha dos Motoboys
+    match /motoboyOrders/{orderId} {
+      allow read, write: if true;
+    }
+
+    // Coleção de Pedidos do KDS / Kanban iFood
+    match /orders/{orderId} {
+      allow read, write: if true;
+    }
+
+    // Coleção de Entregadores / Motoboys
+    match /motoboys/{motoboyId} {
+      allow read, write: if true;
+    }
+
+    // Coleção de Taxas de Entrega
+    match /deliveryFees/{feeId} {
+      allow read, write: if true;
+    }
+
+    // Coleção de Lojas do Sistema
+    match /stores/{storeId} {
+      allow read, write: if true;
+    }
+  }
+}
