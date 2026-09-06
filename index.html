@@ -2820,7 +2820,7 @@
 
       if (order.isRealIFood && order.ifoodOrderId && apiCredentials.clientId) {
         try {
-          const res = await fetch(`/api/ifood/cancellation-reasons?ifoodOrderId=${order.ifoodOrderId}&clientId=${encodeURIComponent(apiCredentials.clientId)}&clientSecret=${encodeURIComponent(apiCredentials.clientSecret)}`);
+          const res = await fetch(`${getApiBaseUrl()}/api/ifood/cancellation-reasons?ifoodOrderId=${order.ifoodOrderId}&clientId=${encodeURIComponent(apiCredentials.clientId)}&clientSecret=${encodeURIComponent(apiCredentials.clientSecret)}`);
           if (res.ok) {
             const data = await res.json();
             const ifoodReasons = Array.isArray(data.reasons) ? data.reasons : (data.reasons?.data || data.reasons?.cancellationReasons || []);
@@ -2879,7 +2879,7 @@
       if (order.isRealIFood && order.ifoodOrderId && apiCredentials.clientId) {
         try {
           showToast('Comunicando iFood...', `Enviando cancelamento (Código ${cancellationCode}) ao iFood...`, 'info');
-          const res = await fetch('/api/ifood/order-action', {
+          const res = await fetch(`${getApiBaseUrl()}/api/ifood/order-action`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -2927,7 +2927,7 @@
         if (action) {
           try {
             showToast('Comunicando iFood...', `Enviando solicitação '${action}' ao iFood...`, 'info');
-            const res = await fetch('/api/ifood/order-action', {
+            const res = await fetch(`${getApiBaseUrl()}/api/ifood/order-action`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -4854,7 +4854,7 @@
       if (order.isRealIFood && order.ifoodOrderId && apiCredentials.clientId) {
         try {
           showToast('Despachando no iFood...', `Comunicando despacho do pedido ${order.id} via API iFood...`, 'ifood');
-          const res = await fetch('/api/ifood/order-action', {
+          const res = await fetch(`${getApiBaseUrl()}/api/ifood/order-action`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
