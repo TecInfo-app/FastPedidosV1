@@ -3303,7 +3303,7 @@
         return true;
       });
 
-      const novoOrders = filtered.filter(o => o.status === 'novo' || o.status === 'pendente');
+      const novoOrders = filtered.filter(o => o.status === 'novo' || o.status === 'pendente' || (!['confirmado', 'preparando', 'despachado', 'concluido', 'cancelado'].includes(o.status)));
       const confirmadoOrders = filtered.filter(o => o.status === 'confirmado' || o.status === 'preparando');
       const despachadoOrders = filtered.filter(o => o.status === 'despachado');
       const concluidoOrders = filtered.filter(o => o.status === 'concluido');
@@ -3321,7 +3321,10 @@
       if (document.getElementById('header-ifood-badge')) document.getElementById('header-ifood-badge').textContent = orders.length;
       if (document.getElementById('drawer-ifood-badge')) document.getElementById('drawer-ifood-badge').textContent = orders.length;
 
-      const totalRevenue = orders.reduce((sum, o) => sum + (o.status !== 'cancelado' ? o.totalValue : 0), 0);
+      const totalRevenue = orders.reduce((sum, o) => {
+        const val = Number(o.totalValue) || 0;
+        return sum + (o.status !== 'cancelado' ? val : 0);
+      }, 0);
       if (document.getElementById('total-revenue')) document.getElementById('total-revenue').textContent = formatCurrency(totalRevenue);
 
       const getEmptyState = (msg, iconColor) => `
