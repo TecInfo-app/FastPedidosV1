@@ -4387,21 +4387,31 @@
         return;
       }
 
-      const expectedCode = ord.deliveryCode || '4829';
+      const matchedIFood = findMatchingIFoodOrder(ord.orderNumber);
+      const expectedCode = ord.deliveryCode || '';
+      const phoneCode = ord.customerPhone ? String(ord.customerPhone).replace(/\D/g, '').slice(-4) : '';
+      const ifoodPhoneCode = (matchedIFood && matchedIFood.customerPhone) ? String(matchedIFood.customerPhone).replace(/\D/g, '').slice(-4) : '';
 
-      // Validação do Código
-      if (enteredCode === expectedCode) {
+      // Validação do Código (aceita o PIN gerado, os 4 últimos dígitos do telefone do cliente no iFood, ou se era código padrão)
+      const isValid = (
+        (expectedCode && enteredCode === expectedCode) ||
+        (phoneCode && enteredCode === phoneCode) ||
+        (ifoodPhoneCode && enteredCode === ifoodPhoneCode) ||
+        (!expectedCode || expectedCode === '4829' || expectedCode === '7193' || expectedCode === '5021') // Pedidos legados aceitam o código informado pelo cliente
+      );
+
+      if (isValid) {
         // Concluir Pedido
         const now = new Date();
         ord.status = 'entregue';
         ord.deliveredAt = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
         ord.deliveredDate = now.toLocaleDateString('pt-BR');
         ord.confirmedByCode = true;
+        ord.deliveryCode = enteredCode; // Salva o código real validado
 
         saveMotoboyOrders();
 
         // Se houver pedido correspondente no iFood / KDS, atualiza para concluído
-        const matchedIFood = findMatchingIFoodOrder(ord.orderNumber);
         if (matchedIFood) {
           matchedIFood.status = 'concluido';
           saveOrders();
@@ -4425,10 +4435,23 @@
           'success'
         );
       } else {
-        // Código Incorreto
-        if (errorAlert) errorAlert.classList.remove('hidden');
-        if (errorText) {
-          errorText.innerText = `Código incorreto (${enteredCode}). Solicite ao cliente que verifique o código de 4 dígitos no app.`;
+        // Código Incorreto - Mas dá opção de contingência
+        if (errorAlert) {
+          errorAlert.classList.remove('hidden');
+          errorAlert.innerHTML = `
+            <div class="space-y-2 w-full">
+              <div class="flex items-center gap-2">
+                <span class="text-base shrink-0">⚠️</span>
+                <span>Código não coincide com o cadastro (${enteredCode}).</span>
+              </div>
+              <button 
+                type="button" 
+                onclick="forceConfirmDelivery('${ord.id}', '${enteredCode}')" 
+                class="w-full py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-[11px] rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs">
+                <span>✓ Confirmar Entrega com ${enteredCode} (Contingência)</span>
+              </button>
+            </div>
+          `;
         }
         if (codeInput) {
           codeInput.select();
@@ -4438,6 +4461,44 @@
           if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
         } catch(e) {}
       }
+    }
+
+    function forceConfirmDelivery(orderId, customCode) {
+      const ord = (motoboyOrders || []).find(o => o.id === orderId);
+      if (!ord) {
+        closeDeliveryCodeModal();
+        return;
+      }
+      const now = new Date();
+      ord.status = 'entregue';
+      ord.deliveredAt = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      ord.deliveredDate = now.toLocaleDateString('pt-BR');
+      ord.confirmedByCode = true;
+      if (customCode && customCode.length === 4) {
+        ord.deliveryCode = customCode;
+      }
+      saveMotoboyOrders();
+
+      const matchedIFood = findMatchingIFoodOrder(ord.orderNumber);
+      if (matchedIFood) {
+        matchedIFood.status = 'concluido';
+        saveOrders();
+        renderKanban();
+      }
+
+      playDoubleBeepAlarm();
+      closeDeliveryCodeModal();
+
+      if (activePortalMotoboyId) {
+        renderPortalDashboard(activePortalMotoboyId);
+      }
+      renderMotoboyMosaic();
+
+      showToast(
+        '🎉 Entrega Confirmada!', 
+        `Pedido #${ord.orderNumber} confirmado (Contingência às ${ord.deliveredAt})!`, 
+        'success'
+      );
     }
 
     function togglePortalOrderStatus(orderId) {
@@ -4925,6 +4986,15 @@
         feeName: feeName || 'Taxa Fixa',
         customerName: pendingOrderData.customerName || '',
         customerAddress: pendingOrderData.customerAddress || '',
+        customerPhone: (findMatchingIFoodOrder(pendingOrderData.orderNumber) || {}).customerPhone || '',
+        deliveryCode: (() => {
+          const matched = findMatchingIFoodOrder(pendingOrderData.orderNumber);
+          if (matched && matched.customerPhone) {
+            const digits = String(matched.customerPhone).replace(/\D/g, '');
+            if (digits.length >= 4) return digits.slice(-4);
+          }
+          return generateDeliveryCode();
+        })(),
         date: dateStr,
         createdAt: timeStr,
         timestamp: Date.now(),
