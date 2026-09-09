@@ -2688,12 +2688,19 @@
         // Process status updates from iFood (e.g. cancellation requested / confirmed, driver updates)
         if (data.success && data.updatedEvents && data.updatedEvents.length > 0) {
           for (const upd of data.updatedEvents) {
-            const target = orders.find(o => o.ifoodOrderId === upd.ifoodOrderId);
+            const target = orders.find(o => o.ifoodOrderId === upd.ifoodOrderId || (o.displayId && o.displayId === upd.displayId));
             if (target) {
               if (upd.newStatus && target.status !== upd.newStatus) {
-                target.status = upd.newStatus;
-                updatedAny = true;
-                showToast('Evento iFood', `Pedido ${target.id} teve o status atualizado para '${upd.newStatus}'.`, 'warning');
+                // Previne regressão se o pedido já estiver concluído no sistema local
+                const isLocalConcluded = target.status === 'concluido';
+                const isLocalDispatched = target.status === 'despachado';
+                const isIncomingConfirm = upd.newStatus === 'confirmado' || upd.newStatus === 'novo';
+
+                if (!(isLocalConcluded && isIncomingConfirm) && !(isLocalDispatched && isIncomingConfirm)) {
+                  target.status = upd.newStatus;
+                  updatedAny = true;
+                  showToast('Evento iFood', `Pedido ${target.id} atualizado para '${upd.newStatus}'.`, 'info');
+                }
               }
               if (upd.driverStatus) {
                 target.ifoodDriverStatus = upd.driverStatus;
@@ -2701,7 +2708,7 @@
                   target.driverName = upd.driverInfo.name;
                 }
                 updatedAny = true;
-                showToast('🛵 Entregador iFood', `Status do entregador iFood atualizado: ${upd.driverStatus}`, 'ifood');
+                showToast('🛵 Entregador iFood', `Status do entregador: ${upd.driverStatus}`, 'ifood');
               }
             }
           }
