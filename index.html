@@ -5834,9 +5834,18 @@
 
     function checkAuthStateOnLoad() {
       try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const isPortalMotoboy = urlParams.get('portal') === 'motoboy';
+
         const savedSession = localStorage.getItem('fast_pedidos_session_v1');
         const overlay = document.getElementById('login-screen-overlay');
         const logoutBtn = document.getElementById('header-logout-btn');
+
+        if (isPortalMotoboy) {
+          if (overlay) overlay.classList.add('hidden');
+          if (logoutBtn) logoutBtn.classList.add('hidden');
+          return;
+        }
 
         if (savedSession) {
           const sess = JSON.parse(savedSession);
