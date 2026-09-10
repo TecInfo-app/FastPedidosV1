@@ -4420,6 +4420,7 @@
       saveMotoboyOrders();
 
       // Se houver pedido correspondente no iFood / KDS, atualiza para concluído
+      const matchedIFood = findMatchingIFoodOrder(ord.orderNumber);
       if (matchedIFood) {
         matchedIFood.status = 'concluido';
         saveOrders();
