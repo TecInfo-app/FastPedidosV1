@@ -2493,6 +2493,15 @@
       localStorage.setItem(CONFIG_KEY, JSON.stringify(apiCredentials));
       loadCredentials();
       updateApiStatusUI();
+      
+      // Sincroniza credenciais no Firebase
+      if (window.firebaseDb && window.firebaseSetDoc) {
+        try {
+          window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "config", "apiCredentials"), apiCredentials, { merge: true }).catch(() => {});
+        } catch(e) {
+          console.warn("Erro ao sincronizar credenciais com Firebase:", e);
+        }
+      }
     }
 
     function updateApiStatusUI() {
@@ -6240,6 +6249,34 @@
           if (typeof renderPortalMotoboySelection === 'function') renderPortalMotoboySelection();
         }
       }, (err) => console.warn("Firebase Motoboys error:", err));
+
+      // Realtime listener for API Credentials
+      onSnapshot(doc(db, "config", "apiCredentials"), (docSnap) => {
+        if (docSnap.exists()) {
+          const remoteCreds = docSnap.data();
+          window.apiCredentials = remoteCreds;
+          localStorage.setItem('ifood_api_credentials_v1', JSON.stringify(remoteCreds));
+          
+          // Update UI
+          const cidInput = document.getElementById('cfg-client-id');
+          const csecInput = document.getElementById('cfg-client-secret');
+          const midInput = document.getElementById('cfg-merchant-id');
+          if (cidInput) cidInput.value = remoteCreds.clientId || '';
+          if (csecInput) csecInput.value = remoteCreds.clientSecret || '';
+          if (midInput) midInput.value = remoteCreds.merchantId || '';
+
+          const dCid = document.getElementById('drawer-cfg-client-id');
+          const dCsec = document.getElementById('drawer-cfg-client-secret');
+          const dMid = document.getElementById('drawer-cfg-merchant-id');
+          const dUrl = document.getElementById('drawer-cfg-custom-url');
+          if (dCid) dCid.value = remoteCreds.clientId || '';
+          if (dCsec) dCsec.value = remoteCreds.clientSecret || '';
+          if (dMid) dMid.value = remoteCreds.merchantId || '';
+          if (dUrl) dUrl.value = remoteCreds.customApiUrl || (window.location.hostname.includes('github.io') ? 'https://ifood-integracao.iranildo-jobs.workers.dev' : '');
+
+          if (typeof updateApiStatusUI === 'function') updateApiStatusUI();
+        }
+      }, (err) => console.warn("Firebase Config error:", err));
 
     } catch (e) {
       console.error("Erro ao inicializar o Firebase:", e);
