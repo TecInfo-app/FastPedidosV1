@@ -2671,6 +2671,21 @@
             if (!newOrd.storeName && activeStore) {
               newOrd.storeName = activeStore.name;
             }
+            // Auto-confirmação imediata: todos os pedidos do iFood entram direto como 'confirmado'
+            if (newOrd.status === 'novo') {
+              newOrd.status = 'confirmado';
+              if (newOrd.ifoodOrderId && apiCredentials.clientId) {
+                fetch(`${getApiBaseUrl()}/api/ifood/order-action`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    ...apiCredentials,
+                    ifoodOrderId: newOrd.ifoodOrderId,
+                    action: 'confirm'
+                  })
+                }).catch(() => {});
+              }
+            }
             // Prevent duplicate entries
             if (!orders.some(o => o.id === newOrd.id || o.ifoodOrderId === newOrd.ifoodOrderId)) {
               orders.unshift(newOrd);
