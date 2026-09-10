@@ -2504,6 +2504,13 @@
       }
     }
 
+    window.receiveCredentialsFromFirebase = function(creds) {
+      apiCredentials = creds;
+      localStorage.setItem(CONFIG_KEY, JSON.stringify(apiCredentials));
+      loadCredentials();
+      updateApiStatusUI();
+    };
+
     function updateApiStatusUI() {
       const badge = document.getElementById('api-status-badge');
       const text = document.getElementById('api-status-text');
@@ -6254,27 +6261,9 @@
       onSnapshot(doc(db, "config", "apiCredentials"), (docSnap) => {
         if (docSnap.exists()) {
           const remoteCreds = docSnap.data();
-          window.apiCredentials = remoteCreds;
-          localStorage.setItem('ifood_api_credentials_v1', JSON.stringify(remoteCreds));
-          
-          // Update UI
-          const cidInput = document.getElementById('cfg-client-id');
-          const csecInput = document.getElementById('cfg-client-secret');
-          const midInput = document.getElementById('cfg-merchant-id');
-          if (cidInput) cidInput.value = remoteCreds.clientId || '';
-          if (csecInput) csecInput.value = remoteCreds.clientSecret || '';
-          if (midInput) midInput.value = remoteCreds.merchantId || '';
-
-          const dCid = document.getElementById('drawer-cfg-client-id');
-          const dCsec = document.getElementById('drawer-cfg-client-secret');
-          const dMid = document.getElementById('drawer-cfg-merchant-id');
-          const dUrl = document.getElementById('drawer-cfg-custom-url');
-          if (dCid) dCid.value = remoteCreds.clientId || '';
-          if (dCsec) dCsec.value = remoteCreds.clientSecret || '';
-          if (dMid) dMid.value = remoteCreds.merchantId || '';
-          if (dUrl) dUrl.value = remoteCreds.customApiUrl || (window.location.hostname.includes('github.io') ? 'https://ifood-integracao.iranildo-jobs.workers.dev' : '');
-
-          if (typeof updateApiStatusUI === 'function') updateApiStatusUI();
+          if (typeof window.receiveCredentialsFromFirebase === 'function') {
+            window.receiveCredentialsFromFirebase(remoteCreds);
+          }
         }
       }, (err) => console.warn("Firebase Config error:", err));
 
