@@ -254,10 +254,10 @@
           <div class="flex items-center gap-2.5">
             <div class="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700">
               <svg id="drawer-audio-icon-on" class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 4.663 12 5.109 12 6v12c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
               </svg>
               <svg id="drawer-audio-icon-off" class="w-4 h-4 text-slate-400 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 4.663 12 5.109 12 6v12c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"></path>
               </svg>
             </div>
             <div>
@@ -2441,7 +2441,8 @@
         try {
           orders.forEach(ord => {
             const cleanId = String(ord.id || ord.displayId || Date.now()).replace(/[^a-zA-Z0-9_\-]/g, '_');
-            window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "orders", cleanId), ord, { merge: true });
+            const cleanPayload = JSON.parse(JSON.stringify(ord));
+            window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "orders", cleanId), cleanPayload, { merge: true }).catch(() => {});
           });
         } catch(e) {
           console.warn("Erro ao sincronizar pedidos com Firebase:", e);
@@ -4580,7 +4581,8 @@
         try {
           motoboyOrders.forEach(ord => {
             if (ord.id) {
-              window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "motoboyOrders", String(ord.id)), ord, { merge: true });
+              const cleanPayload = JSON.parse(JSON.stringify(ord));
+              window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "motoboyOrders", String(ord.id)), cleanPayload, { merge: true }).catch(() => {});
             }
           });
         } catch(e) {
@@ -6187,6 +6189,22 @@
           window.motoboyOrders = remoteOrders;
           localStorage.setItem('cia_motoboy_orders_v1', JSON.stringify(remoteOrders));
           
+          // Sincroniza status com o Painel KDS em tempo real
+          let changedKds = false;
+          remoteOrders.forEach(mbOrd => {
+            if (mbOrd.status === 'entregue' && typeof findMatchingIFoodOrder === 'function') {
+              const matched = findMatchingIFoodOrder(mbOrd.orderNumber);
+              if (matched && matched.status !== 'concluido') {
+                matched.status = 'concluido';
+                changedKds = true;
+              }
+            }
+          });
+          if (changedKds && typeof saveOrders === 'function') {
+            saveOrders();
+            if (typeof renderKanban === 'function') renderKanban();
+          }
+
           if (typeof renderMotoboyMosaic === 'function') renderMotoboyMosaic();
           if (window.activePortalMotoboyId && typeof renderPortalDashboard === 'function') {
             renderPortalDashboard(window.activePortalMotoboyId);
