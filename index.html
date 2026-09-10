@@ -6196,65 +6196,65 @@
 
       // Realtime listener for Motoboy Orders
       onSnapshot(collection(db, "motoboyOrders"), (snapshot) => {
+        const remoteOrders = [];
         if (!snapshot.empty) {
-          const remoteOrders = [];
           snapshot.forEach(docSnap => {
             remoteOrders.push(docSnap.data());
           });
           remoteOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-          window.motoboyOrders = remoteOrders;
-          localStorage.setItem('cia_motoboy_orders_v1', JSON.stringify(remoteOrders));
-          
-          // Sincroniza status com o Painel KDS em tempo real
-          let changedKds = false;
-          remoteOrders.forEach(mbOrd => {
-            if (mbOrd.status === 'entregue' && typeof findMatchingIFoodOrder === 'function') {
-              const matched = findMatchingIFoodOrder(mbOrd.orderNumber);
-              if (matched && matched.status !== 'concluido') {
-                matched.status = 'concluido';
-                changedKds = true;
-              }
+        }
+        window.motoboyOrders = remoteOrders;
+        localStorage.setItem('cia_motoboy_orders_v1', JSON.stringify(remoteOrders));
+        
+        // Sincroniza status com o Painel KDS em tempo real
+        let changedKds = false;
+        remoteOrders.forEach(mbOrd => {
+          if (mbOrd.status === 'entregue' && typeof findMatchingIFoodOrder === 'function') {
+            const matched = findMatchingIFoodOrder(mbOrd.orderNumber);
+            if (matched && matched.status !== 'concluido') {
+              matched.status = 'concluido';
+              changedKds = true;
             }
-          });
-          if (changedKds && typeof saveOrders === 'function') {
-            saveOrders();
-            if (typeof renderKanban === 'function') renderKanban();
           }
+        });
+        if (changedKds && typeof saveOrders === 'function') {
+          saveOrders();
+          if (typeof renderKanban === 'function') renderKanban();
+        }
 
-          if (typeof renderMotoboyMosaic === 'function') renderMotoboyMosaic();
-          if (window.activePortalMotoboyId && typeof renderPortalDashboard === 'function') {
-            renderPortalDashboard(window.activePortalMotoboyId);
-          }
+        if (typeof renderMotoboyMosaic === 'function') renderMotoboyMosaic();
+        if (window.activePortalMotoboyId && typeof renderPortalDashboard === 'function') {
+          renderPortalDashboard(window.activePortalMotoboyId);
         }
       }, (err) => console.warn("Firebase MotoboyOrders error:", err));
 
       // Realtime listener for KDS iFood Orders
       onSnapshot(collection(db, "orders"), (snapshot) => {
+        const remoteOrders = [];
         if (!snapshot.empty) {
-          const remoteOrders = [];
           snapshot.forEach(docSnap => {
             remoteOrders.push(docSnap.data());
           });
           remoteOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-          window.orders = remoteOrders;
-          localStorage.setItem('ifood_pdv_orders_v1', JSON.stringify(remoteOrders));
-          
-          if (typeof renderKanban === 'function') renderKanban();
         }
+        window.orders = remoteOrders;
+        localStorage.setItem('ifood_pdv_orders_v1', JSON.stringify(remoteOrders));
+        
+        if (typeof renderKanban === 'function') renderKanban();
       }, (err) => console.warn("Firebase Orders error:", err));
 
       // Realtime listener for Motoboys Team
       onSnapshot(collection(db, "motoboys"), (snapshot) => {
+        const remoteMb = [];
         if (!snapshot.empty) {
-          const remoteMb = [];
           snapshot.forEach(docSnap => {
             remoteMb.push(docSnap.data());
           });
-          window.motoboysList = remoteMb;
-          localStorage.setItem('cia_motoboys_list_v2', JSON.stringify(remoteMb));
-          
-          if (typeof renderPortalMotoboySelection === 'function') renderPortalMotoboySelection();
         }
+        window.motoboysList = remoteMb;
+        localStorage.setItem('cia_motoboys_list_v2', JSON.stringify(remoteMb));
+        
+        if (typeof renderPortalMotoboySelection === 'function') renderPortalMotoboySelection();
       }, (err) => console.warn("Firebase Motoboys error:", err));
 
       // Realtime listener for API Credentials
