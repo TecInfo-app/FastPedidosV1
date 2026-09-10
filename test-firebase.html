@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBow5AERyHHi3_zpmPwiV9SKhHfW-ltCHY",
+      authDomain: "fastpedidos-abde5.firebaseapp.com",
+      projectId: "fastpedidos-abde5",
+      storageBucket: "fastpedidos-abde5.firebasestorage.app",
+      messagingSenderId: "780977340389",
+      appId: "1:780977340389:web:e5aa31d6a4aea8b98b390c"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    async function checkData() {
+      const d = await getDoc(doc(db, "config", "apiCredentials"));
+      console.log(d.exists() ? d.data() : "NOT_FOUND");
+    }
+    
+    checkData();
+  </script>
+</body>
+</html>

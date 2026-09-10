@@ -2497,7 +2497,13 @@
       // Sincroniza credenciais no Firebase
       if (window.firebaseDb && window.firebaseSetDoc) {
         try {
-          window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "config", "apiCredentials"), apiCredentials, { merge: true }).catch(() => {});
+          window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "config", "apiCredentials"), apiCredentials, { merge: true })
+            .then(() => {
+              console.log("Credenciais sincronizadas com a nuvem.");
+            })
+            .catch((e) => {
+              console.warn("Falha ao salvar na nuvem:", e);
+            });
         } catch(e) {
           console.warn("Erro ao sincronizar credenciais com Firebase:", e);
         }
@@ -6260,10 +6266,13 @@
       // Realtime listener for API Credentials
       onSnapshot(doc(db, "config", "apiCredentials"), (docSnap) => {
         if (docSnap.exists()) {
+          console.log("Credenciais recebidas da nuvem.");
           const remoteCreds = docSnap.data();
           if (typeof window.receiveCredentialsFromFirebase === 'function') {
             window.receiveCredentialsFromFirebase(remoteCreds);
           }
+        } else {
+          console.log("Nenhuma credencial encontrada na nuvem ainda.");
         }
       }, (err) => console.warn("Firebase Config error:", err));
 
