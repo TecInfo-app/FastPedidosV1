@@ -2776,6 +2776,14 @@
         if (data.success && data.newOrders && data.newOrders.length > 0) {
           let addedCount = 0;
           for (const newOrd of data.newOrders) {
+            // Correção de Fuso Horário (Bypass Cloudflare/Worker UTC bugs)
+            // Recalcula o horário baseado no timestamp local do dispositivo do usuário
+            if (newOrd.timestamp) {
+              newOrd.createdAt = new Date(newOrd.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            } else {
+              newOrd.createdAt = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            }
+
             // Tag with active store name if not already set
             if (!newOrd.storeName && activeStore) {
               newOrd.storeName = activeStore.name;
