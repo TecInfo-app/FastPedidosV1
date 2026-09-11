@@ -86,9 +86,9 @@
         <div class="w-16 h-16 rounded-3xl bg-amber-500 mx-auto flex items-center justify-center text-3xl font-black text-slate-950 shadow-xl shadow-amber-500/20 mb-3 border border-amber-400">
           🍺
         </div>
-        <h2 class="text-2xl font-black tracking-tight text-white">CIA DO CHOPP</h2>
+        <h2 class="text-2xl font-black tracking-tight text-white">FAST PEDIDOS</h2>
         <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-amber-400/20 text-amber-400 border border-amber-400/30 uppercase tracking-widest mt-2">
-          ⚡ FAST PEDIDOS &bull; LOGIN
+          ⚡ ACESSO AO SISTEMA
         </span>
         <p class="text-xs text-slate-400 mt-2 font-medium">
           Acesse com seu usuário/email e senha cadastrados
@@ -109,7 +109,7 @@
               type="text" 
               id="login-username" 
               required
-              placeholder="ex: admin@ciadochopp.com.br ou felipe"
+              placeholder="ex: contato@loja.com.br ou admin"
               class="w-full pl-11 pr-4 py-3 rounded-xl bg-slate-800/90 border border-slate-700 text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent font-medium transition"
             />
           </div>
@@ -160,7 +160,7 @@
     </div>
   </div>
 
-  <!-- TOP HEADER: CIA DO CHOPP / FAST PEDIDOS -->
+  <!-- TOP HEADER: Minha Loja / FAST PEDIDOS -->
   <header class="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 pt-4 pb-2">
     <div class="bg-slate-900 text-white rounded-2xl p-3.5 sm:p-5 shadow-xl flex items-center justify-between gap-3 border border-slate-800">
       <!-- Left: Logo & Branding -->
@@ -170,7 +170,7 @@
         </div>
         <div class="min-w-0">
           <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-            <h1 class="text-base sm:text-2xl font-black tracking-tight text-white truncate">CIA DO CHOPP</h1>
+            <h1 id="main-header-store-name" class="text-base sm:text-2xl font-black tracking-tight text-white truncate">FAST PEDIDOS</h1>
             <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-black bg-amber-400 text-slate-950 uppercase tracking-wider shadow-xs shrink-0">
               ⚡ FAST PEDIDOS
             </span>
@@ -432,6 +432,10 @@
           </div>
 
           <form id="drawer-config-form" class="space-y-3.5">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nome da Loja (Sistema)</label>
+              <input type="text" id="drawer-cfg-store-name" placeholder="ex: Minha Loja" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition bg-white">
+            </div>
             <div>
               <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Client ID</label>
               <input type="text" id="drawer-cfg-client-id" placeholder="ex: 93c04258-3fce-4529-b8fb-0991403cf13a" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono focus:ring-2 focus:ring-ifood-red focus:border-ifood-red outline-none transition bg-white">
@@ -1339,7 +1343,7 @@
       <div id="code-modal-order-details" class="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 mb-5 space-y-1.5 text-xs">
         <div class="flex items-center justify-between">
           <span id="code-modal-order-number" class="text-base font-black text-amber-400">#0000</span>
-          <span id="code-modal-store-name" class="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 text-[10px] font-bold uppercase">CIA DO CHOPP</span>
+          <span id="code-modal-store-name" class="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 text-[10px] font-bold uppercase">Minha Loja</span>
         </div>
         <div id="code-modal-customer-name" class="text-slate-200 font-bold truncate">Cliente: João Silva</div>
         <div id="code-modal-customer-address" class="text-slate-400 text-[11px] leading-tight line-clamp-2">📍 Endereço de entrega</div>
@@ -2151,7 +2155,7 @@
 
     // Stores List State (Lojas Próprias / Operação Interna)
     let storesList = [
-      { id: 'store-cia', name: 'CIA DO CHOPP', active: true }
+      { id: 'store-principal', name: 'Loja Principal', active: true }
     ];
 
     // Motoboys Team State
@@ -2182,7 +2186,7 @@
         id: 'ord-1',
         orderNumber: '3030',
         motoboyId: 'mb-felipe',
-        storeName: 'CIA DO CHOPP',
+        storeName: 'Minha Loja',
         deliveryFee: 12.00,
         feeName: 'Taxa Fixa',
         customerName: 'Carlos Eduardo da Silva',
@@ -2198,7 +2202,7 @@
         id: 'ord-2',
         orderNumber: '3030',
         motoboyId: 'mb-iranildo',
-        storeName: 'CIA DO CHOPP',
+        storeName: 'Minha Loja',
         deliveryFee: 17.00,
         feeName: 'Taxa Fixa',
         customerName: 'Beatriz Helena Rezende',
@@ -2214,7 +2218,7 @@
         id: 'ord-3',
         orderNumber: '1010',
         motoboyId: 'mb-jonas',
-        storeName: 'CIA DO CHOPP',
+        storeName: 'Minha Loja',
         deliveryFee: 6.00,
         feeName: 'Taxa Fixa',
         customerName: 'Aline de Souza Mendes',
@@ -2495,8 +2499,8 @@
       }
     }
 
-    function saveCredentials(cid, csec, mid, customUrl = '') {
-      apiCredentials = { clientId: cid, clientSecret: csec, merchantId: mid, customApiUrl: customUrl };
+    function saveCredentials(cid, csec, mid, customUrl = '', storeName = '') {
+      apiCredentials = { clientId: cid, clientSecret: csec, merchantId: mid, customApiUrl: customUrl, storeName: storeName };
       localStorage.setItem(CONFIG_KEY, JSON.stringify(apiCredentials));
       loadCredentials();
       updateApiStatusUI();
@@ -4249,7 +4253,7 @@
       if (breakdownEl) {
         const storeStats = {};
         assignedOrders.forEach(o => {
-          const s = o.storeName || 'CIA DO CHOPP';
+          const s = o.storeName || 'Minha Loja';
           if (!storeStats[s]) storeStats[s] = { count: 0, fees: 0 };
           storeStats[s].count++;
           storeStats[s].fees += (Number(o.deliveryFee) || 0);
@@ -4297,7 +4301,7 @@
                         </span>
                       `}
                     </div>
-                    <span class="text-[10px] font-black text-amber-400 uppercase tracking-wider block">${escapeHtml(ord.storeName || 'CIA DO CHOPP')}</span>
+                    <span class="text-[10px] font-black text-amber-400 uppercase tracking-wider block">${escapeHtml(ord.storeName || 'Minha Loja')}</span>
                   </div>
                   <div class="text-right">
                     <span class="px-3 py-1 rounded-xl bg-emerald-500/20 text-emerald-300 text-xs font-black border border-emerald-400/30 font-mono inline-block">
@@ -4396,7 +4400,7 @@
 
       if (orderIdInput) orderIdInput.value = ord.id;
       if (orderNumEl) orderNumEl.innerText = `#${ord.orderNumber}`;
-      if (storeNameEl) storeNameEl.innerText = ord.storeName || 'CIA DO CHOPP';
+      if (storeNameEl) storeNameEl.innerText = ord.storeName || 'Minha Loja';
       if (custNameEl) custNameEl.innerText = ord.customerName ? `Cliente: ${ord.customerName}` : 'Cliente não identificado';
       if (custAddrEl) custAddrEl.innerText = ord.customerAddress ? `📍 ${ord.customerAddress}` : '📍 Endereço de entrega';
 
@@ -4996,7 +5000,7 @@
         id: 'ord-' + Date.now(),
         orderNumber: pendingOrderData.orderNumber,
         motoboyId: pendingOrderData.motoboyId,
-        storeName: activeStore ? activeStore.name : 'CIA DO CHOPP',
+        storeName: activeStore ? activeStore.name : 'Minha Loja',
         deliveryFee: Number(feeValue) || 0,
         feeName: feeName || 'Taxa Fixa',
         customerName: pendingOrderData.customerName || '',
@@ -5212,7 +5216,7 @@
         return;
       }
 
-      const newStore = storeSelect ? storeSelect.value : (ord.storeName || 'CIA DO CHOPP');
+      const newStore = storeSelect ? storeSelect.value : (ord.storeName || 'Minha Loja');
       const newMotoboyId = mbSelect ? mbSelect.value : ord.motoboyId;
       const newCode = codeInput && codeInput.value.trim() ? codeInput.value.trim() : (ord.deliveryCode || generateDeliveryCode());
 
@@ -5275,7 +5279,7 @@
               <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; margin-bottom: 9px; line-height: 1.3;">
                 <div>
                   <span>Pedido: <strong>${escapeHtml(ord.orderNumber)}</strong></span>
-                  <span style="color: #475569; font-size: 11px; margin-left: 4px;">(${escapeHtml(ord.storeName || 'CIA DO CHOPP')})</span>
+                  <span style="color: #475569; font-size: 11px; margin-left: 4px;">(${escapeHtml(ord.storeName || 'Minha Loja')})</span>
                 </div>
                 <span style="font-weight: 900; font-family: monospace; font-size: 13px;">${formatCurrency(ord.deliveryFee)}</span>
               </div>
@@ -5314,7 +5318,7 @@
       // Agrupa totais de pedidos e taxas por loja
       const storeStats = {};
       assignedOrders.forEach(ord => {
-        const sName = ord.storeName || 'CIA DO CHOPP';
+        const sName = ord.storeName || 'Minha Loja';
         if (!storeStats[sName]) {
           storeStats[sName] = { count: 0, fees: 0 };
         }
@@ -5583,7 +5587,7 @@
                         </span>
                       `}
                     </div>
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">${ord.storeName || 'CIA DO CHOPP'}</span>
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">${ord.storeName || 'Minha Loja'}</span>
                   </div>
                   <div class="flex items-center gap-1.5">
                     <span class="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black border border-emerald-200 font-mono">
@@ -5783,10 +5787,8 @@
           authenticated = true;
           loggedUserName = matchedMb.name;
         } else {
-          // Aceita login do usuário/administrador do banco de dados
-          if (usernameVal.length >= 2 && passwordVal.length >= 2) {
-            authenticated = true;
-          }
+          // Bloqueia acesso se não encontrou no Firebase Auth nem na lista de motoboys
+          authenticated = false;
         }
       }
 
@@ -5897,13 +5899,14 @@
       if (drawerCfgForm) {
         drawerCfgForm.addEventListener('submit', (e) => {
           e.preventDefault();
+          const sname = document.getElementById('drawer-cfg-store-name').value.trim();
           const cid = document.getElementById('drawer-cfg-client-id').value.trim();
           const csec = document.getElementById('drawer-cfg-client-secret').value.trim();
           const mid = document.getElementById('drawer-cfg-merchant-id').value.trim();
           const curlInput = document.getElementById('drawer-cfg-custom-url');
           const curl = curlInput ? curlInput.value.trim() : '';
 
-          saveCredentials(cid, csec, mid, curl);
+          saveCredentials(cid, csec, mid, curl, sname);
           showToast('Credenciais Salvas', 'Configurações da API iFood atualizadas com sucesso!', 'success');
 
           if (cid && csec) {
