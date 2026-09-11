@@ -4868,13 +4868,13 @@
           statusEl.textContent = stMap[match.status] || match.status;
         }
 
-        // Preenchimento automático inteligente caso os campos opcionais estejam vazios
+        // Preenchimento automático com os dados do iFood (sobrescrevendo possível lixo anterior)
         const custNameInput = document.getElementById('quick-customer-name');
         const custAddrInput = document.getElementById('quick-customer-address');
-        if (custNameInput && !custNameInput.value.trim() && match.customerName) {
+        if (custNameInput && match.customerName) {
           custNameInput.value = match.customerName;
         }
-        if (custAddrInput && !custAddrInput.value.trim() && match.customerAddress) {
+        if (custAddrInput && match.customerAddress) {
           custAddrInput.value = match.customerAddress;
         }
       } else {
@@ -4906,12 +4906,10 @@
       // Localiza se o pedido existe no iFood
       const matchedIFood = findMatchingIFoodOrder(orderNumberRaw);
       if (matchedIFood) {
-        if (!customerName && matchedIFood.customerName) {
-          customerName = matchedIFood.customerName;
-        }
-        if (!customerAddress && matchedIFood.customerAddress) {
-          customerAddress = matchedIFood.customerAddress;
-        }
+        // Se for um pedido do iFood, forçamos o uso dos dados oficiais
+        // ignorando os inputs que podem ter ficado sujos de digitações anteriores.
+        customerName = matchedIFood.customerName || customerName;
+        customerAddress = matchedIFood.customerAddress || customerAddress;
       }
 
       // Guardar dados temporários para o fluxo de modais

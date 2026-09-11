@@ -195,7 +195,7 @@ app.get('/api/ifood/merchants-status', async (req, res) => {
         status: isOpen ? 'Aberta' : 'Fechada',
         isOpen,
         channel: 'iFood Delivery',
-        lastCheck: new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+        lastCheck: `${String((new Date().getUTCHours() - 3 + 24) % 24).padStart(2, '0')}:${String(new Date().getUTCMinutes()).padStart(2, '0')}`
       },
       rawStatus: storeStatus,
       merchantsList: merchants
@@ -382,8 +382,9 @@ app.post('/api/ifood/poll', async (req, res) => {
 
             const paymentMethod = rawOrder.payments?.methods?.[0]?.name || 'iFood Online';
 
-            const formattedTime = new Date(rawOrder.createdAt || Date.now())
-              .toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+            const orderDate = new Date(rawOrder.createdAt || Date.now());
+            const brHours = (orderDate.getUTCHours() - 3 + 24) % 24;
+            const formattedTime = `${String(brHours).padStart(2, '0')}:${String(orderDate.getUTCMinutes()).padStart(2, '0')}`;
 
             newOrders.push({
               id: `#IF-${rawOrder.displayId || rawOrder.id.substring(0, 5)}`,
