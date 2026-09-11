@@ -2217,6 +2217,13 @@
       { id: 'fee-1', name: 'Taxa Padrão', value: 5.00 }
     ];
 
+    // Expose setters for Firebase Module to update local let variables
+    window.setOrders = (data) => { orders = data; };
+    window.setMotoboyOrders = (data) => { motoboyOrders = data; };
+    window.setMotoboysList = (data) => { motoboysList = data; };
+    window.setStoresList = (data) => { storesList = data; };
+    window.setDeliveryFeesList = (data) => { deliveryFeesList = data; };
+
     // Pending Quick Order Data (during 2-step launch modal)
     let pendingOrderData = null;
 
@@ -6601,7 +6608,9 @@
                 window.receiveCredentialsFromFirebase(data);
               }
               if (Array.isArray(data.storesList) && data.storesList.length > 0) {
-                window.storesList = data.storesList;
+                if (typeof window.setStoresList === 'function') window.setStoresList(data.storesList);
+                else window.storesList = data.storesList;
+
                 if (typeof window.getTenantStorageKey === 'function') {
                   localStorage.setItem(window.getTenantStorageKey('stores'), JSON.stringify(data.storesList));
                 }
@@ -6610,7 +6619,9 @@
                 if (typeof updateActiveStoreDisplay === 'function') updateActiveStoreDisplay();
               }
               if (Array.isArray(data.deliveryFeesList) && data.deliveryFeesList.length > 0) {
-                window.deliveryFeesList = data.deliveryFeesList;
+                if (typeof window.setDeliveryFeesList === 'function') window.setDeliveryFeesList(data.deliveryFeesList);
+                else window.deliveryFeesList = data.deliveryFeesList;
+
                 if (typeof window.getTenantStorageKey === 'function') {
                   localStorage.setItem(window.getTenantStorageKey('delivery_fees'), JSON.stringify(data.deliveryFeesList));
                 }
@@ -6629,7 +6640,9 @@
               remoteMb.push(docSnap.data());
             });
           }
-          window.motoboysList = remoteMb;
+          if (typeof window.setMotoboysList === 'function') window.setMotoboysList(remoteMb);
+          else window.motoboysList = remoteMb;
+
           if (typeof window.getTenantStorageKey === 'function') {
             localStorage.setItem(window.getTenantStorageKey('motoboys'), JSON.stringify(remoteMb));
           }
@@ -6652,7 +6665,9 @@
             });
             remoteOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
           }
-          window.motoboyOrders = remoteOrders;
+          if (typeof window.setMotoboyOrders === 'function') window.setMotoboyOrders(remoteOrders);
+          else window.motoboyOrders = remoteOrders;
+
           if (typeof window.getTenantStorageKey === 'function') {
             localStorage.setItem(window.getTenantStorageKey('motoboy_orders'), JSON.stringify(remoteOrders));
           }
@@ -6688,7 +6703,9 @@
             });
             remoteOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
           }
-          window.orders = remoteOrders;
+          if (typeof window.setOrders === 'function') window.setOrders(remoteOrders);
+          else window.orders = remoteOrders;
+
           if (typeof window.getTenantStorageKey === 'function') {
             localStorage.setItem(window.getTenantStorageKey('orders'), JSON.stringify(remoteOrders));
           }
