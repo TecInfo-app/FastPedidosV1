@@ -1444,14 +1444,11 @@
       </div>
 
       <div class="flex items-center gap-2">
-        <button 
-          type="button" 
-          onclick="closeMotoboyPortal()" 
-          class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition cursor-pointer border border-slate-700">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-          <span class="hidden sm:inline">Voltar ao Painel Geral</span>
-          <span class="sm:hidden">Sair</span>
-        </button>
+        <div class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800/90 border border-slate-700/80 text-xs font-bold text-slate-300 shadow-sm">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span class="hidden sm:inline">Área Exclusiva do Entregador</span>
+          <span class="sm:hidden">Entregador</span>
+        </div>
       </div>
     </header>
 
@@ -4169,6 +4166,23 @@
     let selectedPortalAuthMbId = null;
 
     function openMotoboyPortal() {
+      const tenantId = getCurrentTenantId();
+      const storeParam = tenantId ? `&store=${encodeURIComponent(tenantId)}` : '';
+      const portalUrl = `${window.location.origin}${window.location.pathname}?portal=motoboy${storeParam}`;
+
+      // Se acionado a partir do painel administrativo, tenta abrir em nova aba
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('portal') !== 'motoboy') {
+        try {
+          const win = window.open(portalUrl, '_blank');
+          if (win) {
+            closeDrawer();
+            showToast('Portal Aberto', 'O Portal do Entregador foi aberto em uma nova aba isolada.', 'info');
+            return;
+          }
+        } catch (e) {}
+      }
+
       const portalView = document.getElementById('portal-motoboy-view');
       if (!portalView) return;
 
@@ -4184,6 +4198,12 @@
     }
 
     function closeMotoboyPortal() {
+      // Bloqueio de Segurança: Nunca permite fechar o portal se acessado via link do motoboy
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('portal') === 'motoboy') {
+        console.warn('Tentativa de fechar portal do entregador bloqueada por segurança.');
+        return;
+      }
       const portalView = document.getElementById('portal-motoboy-view');
       if (portalView) portalView.classList.add('hidden');
     }
@@ -6166,6 +6186,8 @@
         if (isPortalMotoboy) {
           if (overlay) overlay.classList.add('hidden');
           if (logoutBtn) logoutBtn.classList.add('hidden');
+          const portalView = document.getElementById('portal-motoboy-view');
+          if (portalView) portalView.classList.remove('hidden');
           if (storeFromUrl) {
             initTenantSession(storeFromUrl, 'Portal Motoboy');
           } else if (savedSession) {
@@ -6173,6 +6195,9 @@
             if (sess && sess.tenantId) {
               initTenantSession(sess.tenantId, sess.username);
             }
+          }
+          if (typeof renderPortalMotoboySelection === 'function') {
+            renderPortalMotoboySelection();
           }
           return;
         }
