@@ -2495,14 +2495,14 @@
       }
     }
 
-    function saveOrders() {
+    function saveOrders(skipFirebase = false) {
       const tenantId = getCurrentTenantId();
       const storageKey = getTenantStorageKey('orders');
       localStorage.setItem(storageKey, JSON.stringify(orders));
       if (typeof renderMotoboySpreadsheet === 'function') {
         renderMotoboySpreadsheet();
       }
-      if (tenantId && window.firebaseDb && window.firebaseSetDoc) {
+      if (!skipFirebase && tenantId && window.firebaseDb && window.firebaseSetDoc) {
         try {
           orders.forEach(ord => {
             const cleanId = String(ord.id || ord.displayId || Date.now()).replace(/[^a-zA-Z0-9_\-]/g, '_');
@@ -3053,6 +3053,7 @@
         let action = '';
         if (newStatus === 'confirmado' || newStatus === 'preparando') action = 'confirm';
         if (newStatus === 'despachado') action = 'dispatch';
+        if (newStatus === 'concluido') action = 'delivered';
         if (newStatus === 'cancelado') action = 'requestCancellation';
 
         if (action) {
@@ -4589,6 +4590,21 @@
         matchedIFood.status = 'concluido';
         saveOrders();
         renderKanban();
+
+        // Se for pedido real do iFood, notifica a API externa que o pedido foi concluído
+        if (matchedIFood.isRealIFood && matchedIFood.ifoodOrderId && apiCredentials.clientId) {
+          fetch(`${getApiBaseUrl()}/api/ifood/order-action`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ifoodOrderId: matchedIFood.ifoodOrderId,
+              action: 'delivered', // Ação para concluir a entrega no iFood
+              deliveryCode: enteredCode, // PIN fornecido pelo cliente
+              clientId: apiCredentials.clientId,
+              clientSecret: apiCredentials.clientSecret
+            })
+          }).catch(err => console.warn('Erro ao notificar iFood:', err));
+        }
       }
 
       // Toca alarme sonoro comemorativo
@@ -4630,6 +4646,21 @@
         matchedIFood.status = 'concluido';
         saveOrders();
         renderKanban();
+
+        // Se for pedido real do iFood, notifica a API externa que o pedido foi concluído
+        if (matchedIFood.isRealIFood && matchedIFood.ifoodOrderId && apiCredentials.clientId) {
+          fetch(`${getApiBaseUrl()}/api/ifood/order-action`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ifoodOrderId: matchedIFood.ifoodOrderId,
+              action: 'delivered', // Ação para concluir a entrega no iFood
+              deliveryCode: ord.deliveryCode || '', // PIN de contingência (se houver)
+              clientId: apiCredentials.clientId,
+              clientSecret: apiCredentials.clientSecret
+            })
+          }).catch(err => console.warn('Erro ao notificar iFood:', err));
+        }
       }
 
       playDoubleBeepAlarm();
@@ -6684,7 +6715,7 @@
             }
           });
           if (changedKds && typeof saveOrders === 'function') {
-            saveOrders();
+            saveOrders(true); // pass true to skip Firebase write on local sync
             if (typeof renderKanban === 'function') renderKanban();
           }
 
