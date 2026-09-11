@@ -27,6 +27,11 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Estrutura Multi-Tenancy Isolada por Loja (stores/{tenantId}/**)
+    match /stores/{tenantId}/{allPaths=**} {
+      allow read, write: if true;
+    }
+
     // Coleção de Lojas do Sistema
     match /stores/{storeId} {
       allow read, write: if true;

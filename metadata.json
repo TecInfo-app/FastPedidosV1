@@ -1,6 +1,6 @@
 {
   "name": "Monitor de Pedidos iFood (Modo Teste)",
-  "description": "Sistema de Gestão de Pedidos (PDV) estilo Kanban para restaurantes com simulação de webhook iFood e alertas sonoros.",
+  "description": "Sistema de Gestão de Pedidos (PDV) multi-loja estilo Kanban com isolamento completo de dados por usuário, sincronização em tempo real multi-dispositivos via Firebase e portal do motoboy.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

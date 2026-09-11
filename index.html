@@ -82,7 +82,7 @@
     <div class="max-w-md w-full bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-800 shadow-2xl text-white relative animate-fade-in">
       
       <!-- Brand Header -->
-      <div class="text-center mb-8">
+      <div class="text-center mb-6">
         <div class="w-16 h-16 rounded-3xl bg-amber-500 mx-auto flex items-center justify-center text-3xl font-black text-slate-950 shadow-xl shadow-amber-500/20 mb-3 border border-amber-400">
           🍺
         </div>
@@ -90,16 +90,34 @@
         <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-amber-400/20 text-amber-400 border border-amber-400/30 uppercase tracking-widest mt-2">
           ⚡ ACESSO AO SISTEMA
         </span>
-        <p class="text-xs text-slate-400 mt-2 font-medium">
+        <p id="login-subtitle-text" class="text-xs text-slate-400 mt-2 font-medium">
           Acesse com seu usuário/email e senha cadastrados
         </p>
       </div>
 
-      <!-- Login Form -->
+      <!-- Auth Mode Switcher Tabs (Entrar vs Cadastrar Nova Loja) -->
+      <div class="grid grid-cols-2 p-1 bg-slate-800/80 rounded-2xl border border-slate-700/60 mb-5">
+        <button 
+          type="button" 
+          id="auth-tab-login"
+          onclick="switchAuthMode('login')"
+          class="py-2.5 rounded-xl text-xs font-bold transition bg-amber-500 text-slate-950 shadow-sm cursor-pointer">
+          Entrar na Loja
+        </button>
+        <button 
+          type="button" 
+          id="auth-tab-register"
+          onclick="switchAuthMode('register')"
+          class="py-2.5 rounded-xl text-xs font-bold transition text-slate-400 hover:text-white cursor-pointer">
+          + Criar Nova Loja
+        </button>
+      </div>
+
+      <!-- Login / Register Form -->
       <form id="login-form" onsubmit="handleAppLogin(event)" class="space-y-4">
         <div>
-          <label class="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-            Email ou Usuário:
+          <label id="login-email-label" class="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+            Email de Acesso:
           </label>
           <div class="relative">
             <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
@@ -109,7 +127,7 @@
               type="text" 
               id="login-username" 
               required
-              placeholder="ex: contato@loja.com.br ou admin"
+              placeholder="ex: contato@sualoja.com.br"
               class="w-full pl-11 pr-4 py-3 rounded-xl bg-slate-800/90 border border-slate-700 text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent font-medium transition"
             />
           </div>
@@ -149,13 +167,13 @@
           type="submit" 
           id="login-submit-btn"
           class="w-full py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-98 text-slate-950 font-black text-sm uppercase tracking-wider transition cursor-pointer shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 mt-2">
-          <span>Entrar no Sistema</span>
+          <span id="login-btn-text">Entrar no Sistema</span>
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
         </button>
       </form>
 
       <div class="mt-6 text-center pt-4 border-t border-slate-800/80 text-[11px] text-slate-500 font-medium">
-        🔥 Firebase Authentication & Firestore Encrypted Realtime Storage
+        🔥 Firebase Authentication & Firestore Encrypted Multi-Device Sync
       </div>
     </div>
   </div>
@@ -2130,7 +2148,41 @@
       'iFood Benefícios - Vale Refeição'
     ];
 
-    // --- STATE MANAGEMENT ---
+    // --- MULTI-TENANT STATE & STORAGE HELPERS ---
+    let currentTenantId = '';
+    let currentTenantEmail = '';
+
+    function getCurrentTenantId() {
+      if (currentTenantId) return currentTenantId;
+      const urlParams = new URLSearchParams(window.location.search);
+      const storeFromUrl = urlParams.get('store');
+      if (storeFromUrl) {
+        currentTenantId = storeFromUrl;
+        return storeFromUrl;
+      }
+      try {
+        const savedSession = localStorage.getItem('fast_pedidos_session_v1');
+        if (savedSession) {
+          const sess = JSON.parse(savedSession);
+          if (sess && sess.tenantId) {
+            currentTenantId = sess.tenantId;
+            return sess.tenantId;
+          }
+          if (sess && sess.username && sess.username.includes('@')) {
+            currentTenantId = sess.username.replace(/[^a-zA-Z0-9_-]/g, '_');
+            return currentTenantId;
+          }
+        }
+      } catch(e) {}
+      return '';
+    }
+    window.getCurrentTenantId = getCurrentTenantId;
+
+    function getTenantStorageKey(baseKey) {
+      const tenant = getCurrentTenantId();
+      return tenant ? `${tenant}_${baseKey}` : baseKey;
+    }
+
     const STORAGE_KEY = 'ifood_pdv_orders_v1';
     const CONFIG_KEY = 'ifood_api_credentials_v1';
     const STORES_KEY = 'cia_stores_list_v2';
@@ -2150,26 +2202,22 @@
     let apiCredentials = {
       clientId: '',
       clientSecret: '',
-      merchantId: ''
+      merchantId: '',
+      customApiUrl: '',
+      storeName: ''
     };
 
     // Stores List State (Lojas Próprias / Operação Interna)
     let storesList = [
-      { id: 'store-principal', name: 'Loja Principal', active: true }
+      { id: 'store-1', name: 'Loja Principal', active: true }
     ];
 
-    // Motoboys Team State
-    let motoboysList = [
-      { id: 'mb-felipe', name: 'FELIPE', phone: '(11) 98765-4321', plate: 'BRA-1234', active: true },
-      { id: 'mb-iranildo', name: 'IRANILDO', phone: '(11) 97654-3210', plate: 'ABC-5678', active: true },
-      { id: 'mb-jonas', name: 'JONAS', phone: '(11) 96543-2109', plate: 'XYZ-9012', active: true }
-    ];
+    // Motoboys Team State (Inicia limpo para cada nova loja)
+    let motoboysList = [];
 
     // Delivery Fees List State (Taxas Configuráveis)
     let deliveryFeesList = [
-      { id: 'fee-1', name: 'Taxa Fixa', value: 17.00 },
-      { id: 'fee-2', name: 'Taxa Fixa', value: 12.00 },
-      { id: 'fee-3', name: 'Taxa Fixa', value: 6.00 }
+      { id: 'fee-1', name: 'Taxa Padrão', value: 5.00 }
     ];
 
     // Pending Quick Order Data (during 2-step launch modal)
@@ -2430,30 +2478,32 @@
 
     // --- STORAGE & CREDENTIAL HELPERS ---
     function loadOrders() {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const storageKey = getTenantStorageKey('orders');
+      const saved = localStorage.getItem(storageKey);
       if (saved) {
         try {
           orders = JSON.parse(saved);
         } catch (e) {
-          orders = [...SEED_ORDERS];
+          orders = [];
         }
       } else {
-        orders = [...SEED_ORDERS];
-        saveOrders();
+        orders = [];
       }
     }
 
     function saveOrders() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
+      const tenantId = getCurrentTenantId();
+      const storageKey = getTenantStorageKey('orders');
+      localStorage.setItem(storageKey, JSON.stringify(orders));
       if (typeof renderMotoboySpreadsheet === 'function') {
         renderMotoboySpreadsheet();
       }
-      if (window.firebaseDb && window.firebaseSetDoc) {
+      if (tenantId && window.firebaseDb && window.firebaseSetDoc) {
         try {
           orders.forEach(ord => {
             const cleanId = String(ord.id || ord.displayId || Date.now()).replace(/[^a-zA-Z0-9_\-]/g, '_');
             const cleanPayload = JSON.parse(JSON.stringify(ord));
-            window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "orders", cleanId), cleanPayload, { merge: true }).catch(() => {});
+            window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "orders", cleanId), cleanPayload, { merge: true }).catch(() => {});
           });
         } catch(e) {
           console.warn("Erro ao sincronizar pedidos com Firebase:", e);
@@ -2472,7 +2522,8 @@
     }
 
     function loadCredentials() {
-      const saved = localStorage.getItem(CONFIG_KEY);
+      const storageKey = getTenantStorageKey('config');
+      const saved = localStorage.getItem(storageKey);
       if (saved) {
         try {
           apiCredentials = JSON.parse(saved);
@@ -2484,14 +2535,21 @@
           if (midInput) midInput.value = apiCredentials.merchantId || '';
 
           // Sync drawer form
+          const dStoreName = document.getElementById('drawer-cfg-store-name');
           const dCid = document.getElementById('drawer-cfg-client-id');
           const dCsec = document.getElementById('drawer-cfg-client-secret');
           const dMid = document.getElementById('drawer-cfg-merchant-id');
           const dUrl = document.getElementById('drawer-cfg-custom-url');
+          if (dStoreName) dStoreName.value = apiCredentials.storeName || '';
           if (dCid) dCid.value = apiCredentials.clientId || '';
           if (dCsec) dCsec.value = apiCredentials.clientSecret || '';
           if (dMid) dMid.value = apiCredentials.merchantId || '';
           if (dUrl) dUrl.value = apiCredentials.customApiUrl || (window.location.hostname.includes('github.io') ? 'https://ifood-integracao.iranildo-jobs.workers.dev' : '');
+
+          const mainHeaderName = document.getElementById('main-header-store-name');
+          if (mainHeaderName && apiCredentials.storeName) {
+            mainHeaderName.innerText = apiCredentials.storeName;
+          }
         } catch (e) {}
       } else if (window.location.hostname.includes('github.io')) {
         const dUrl = document.getElementById('drawer-cfg-custom-url');
@@ -2499,31 +2557,44 @@
       }
     }
 
+    function syncSettingsToFirebase() {
+      const tenantId = getCurrentTenantId();
+      if (!tenantId || !window.firebaseDb || !window.firebaseSetDoc) return;
+      try {
+        const payload = {
+          ...apiCredentials,
+          deliveryFeesList: deliveryFeesList,
+          storesList: storesList,
+          updatedAt: Date.now()
+        };
+        window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "config", "settings"), payload, { merge: true })
+          .then(() => console.log("🔥 [Firebase]: Configurações sincronizadas na nuvem."))
+          .catch(e => console.warn("Falha ao salvar na nuvem:", e));
+      } catch(e) {}
+    }
+
     function saveCredentials(cid, csec, mid, customUrl = '', storeName = '') {
+      const tenantId = getCurrentTenantId();
       apiCredentials = { clientId: cid, clientSecret: csec, merchantId: mid, customApiUrl: customUrl, storeName: storeName };
-      localStorage.setItem(CONFIG_KEY, JSON.stringify(apiCredentials));
+      const storageKey = getTenantStorageKey('config');
+      localStorage.setItem(storageKey, JSON.stringify(apiCredentials));
       loadCredentials();
       updateApiStatusUI();
       
-      // Sincroniza credenciais no Firebase
-      if (window.firebaseDb && window.firebaseSetDoc) {
-        try {
-          window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "config", "apiCredentials"), apiCredentials, { merge: true })
-            .then(() => {
-              console.log("Credenciais sincronizadas com a nuvem.");
-            })
-            .catch((e) => {
-              console.warn("Falha ao salvar na nuvem:", e);
-            });
-        } catch(e) {
-          console.warn("Erro ao sincronizar credenciais com Firebase:", e);
-        }
+      const mainHeaderName = document.getElementById('main-header-store-name');
+      if (mainHeaderName) {
+        mainHeaderName.innerText = storeName || 'FAST PEDIDOS';
       }
+
+      // Sincroniza configurações e credenciais no Firestore
+      syncSettingsToFirebase();
     }
 
     window.receiveCredentialsFromFirebase = function(creds) {
+      if (!creds) return;
       apiCredentials = creds;
-      localStorage.setItem(CONFIG_KEY, JSON.stringify(apiCredentials));
+      const storageKey = getTenantStorageKey('config');
+      localStorage.setItem(storageKey, JSON.stringify(apiCredentials));
       loadCredentials();
       updateApiStatusUI();
     };
@@ -3032,9 +3103,10 @@
     function removeOrder(orderId) {
       orders = orders.filter(o => o.id !== orderId);
       saveOrders();
-      if (window.firebaseDb && window.firebaseDeleteDoc) {
+      const tenantId = getCurrentTenantId();
+      if (tenantId && window.firebaseDb && window.firebaseDeleteDoc) {
         try {
-          window.firebaseDeleteDoc(window.firebaseDoc(window.firebaseDb, "orders", String(orderId)));
+          window.firebaseDeleteDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "orders", String(orderId)));
         } catch(e) {
           console.warn("Erro ao deletar pedido Kanban no Firebase:", e);
         }
@@ -3048,10 +3120,11 @@
         'Limpar Painel Kanban?',
         'Deseja realmente limpar todos os pedidos da tela?',
         () => {
-          if (window.firebaseDb && window.firebaseDeleteDoc) {
+          const tenantId = getCurrentTenantId();
+          if (tenantId && window.firebaseDb && window.firebaseDeleteDoc) {
             orders.forEach(order => {
               try {
-                window.firebaseDeleteDoc(window.firebaseDoc(window.firebaseDb, "orders", String(order.id)));
+                window.firebaseDeleteDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "orders", String(order.id)));
               } catch(e) {}
             });
           }
@@ -3556,7 +3629,8 @@
 
     // --- STORES MANAGEMENT (CARD 1 & DRAWER TAB 2) ---
     function loadStores() {
-      const saved = localStorage.getItem(STORES_KEY);
+      const storageKey = getTenantStorageKey('stores');
+      const saved = localStorage.getItem(storageKey);
       if (saved) {
         try { storesList = JSON.parse(saved); } catch(e) {}
       }
@@ -3570,10 +3644,12 @@
     }
 
     function saveStores() {
-      localStorage.setItem(STORES_KEY, JSON.stringify(storesList));
+      const storageKey = getTenantStorageKey('stores');
+      localStorage.setItem(storageKey, JSON.stringify(storesList));
       renderStoreChips();
       renderDrawerStores();
       updateActiveStoreDisplay();
+      syncSettingsToFirebase();
     }
 
     function selectActiveStore(storeId) {
@@ -3727,7 +3803,8 @@
 
     // --- DELIVERY FEES MANAGEMENT (DRAWER TAB 3 & SELECT) ---
     function loadDeliveryFees() {
-      const saved = localStorage.getItem(DELIVERY_FEES_KEY);
+      const storageKey = getTenantStorageKey('delivery_fees');
+      const saved = localStorage.getItem(storageKey);
       if (saved) {
         try { deliveryFeesList = JSON.parse(saved); } catch(e) {}
       }
@@ -3736,9 +3813,11 @@
     }
 
     function saveDeliveryFees() {
-      localStorage.setItem(DELIVERY_FEES_KEY, JSON.stringify(deliveryFeesList));
+      const storageKey = getTenantStorageKey('delivery_fees');
+      localStorage.setItem(storageKey, JSON.stringify(deliveryFeesList));
       renderDrawerFees();
       populateDeliveryFeeSelect();
+      syncSettingsToFirebase();
     }
 
     function renderDrawerFees() {
@@ -3854,7 +3933,8 @@
 
     // --- MOTOBOYS MANAGEMENT (DRAWER TAB 3 & SELECT) ---
     function loadMotoboys() {
-      const saved = localStorage.getItem(MOTOBOYS_KEY);
+      const storageKey = getTenantStorageKey('motoboys');
+      const saved = localStorage.getItem(storageKey);
       if (saved) {
         try { 
           motoboysList = JSON.parse(saved); 
@@ -3862,15 +3942,21 @@
           motoboysList.forEach(mb => {
             if (!mb.password) mb.password = '1234';
           });
-        } catch(e) {}
+        } catch(e) {
+          motoboysList = [];
+        }
+      } else {
+        motoboysList = [];
       }
       renderDrawerMotoboys();
       populateMotoboySelect();
       renderMotoboyMosaic();
     }
 
-    function saveMotoboys() {
-      localStorage.setItem(MOTOBOYS_KEY, JSON.stringify(motoboysList));
+    function saveMotoboys(deletedId = null) {
+      const tenantId = getCurrentTenantId();
+      const storageKey = getTenantStorageKey('motoboys');
+      localStorage.setItem(storageKey, JSON.stringify(motoboysList));
       renderDrawerMotoboys();
       populateMotoboySelect();
       renderMotoboyMosaic();
@@ -3878,6 +3964,21 @@
         renderPortalMotoboySelection();
         if (activePortalMotoboyId) {
           renderPortalDashboard(activePortalMotoboyId);
+        }
+      }
+      if (tenantId && window.firebaseDb && window.firebaseSetDoc) {
+        try {
+          motoboysList.forEach(mb => {
+            if (mb && mb.id) {
+              const cleanMb = JSON.parse(JSON.stringify(mb));
+              window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "motoboys", String(mb.id)), cleanMb, { merge: true }).catch(() => {});
+            }
+          });
+          if (deletedId && window.firebaseDeleteDoc) {
+            window.firebaseDeleteDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "motoboys", String(deletedId))).catch(() => {});
+          }
+        } catch(e) {
+          console.warn("Erro ao salvar motoboys no Firebase:", e);
         }
       }
     }
@@ -4053,7 +4154,7 @@
         `Deseja realmente remover o motoboy "${mb ? mb.name : ''}" da equipe?`,
         () => {
           motoboysList = motoboysList.filter(m => m.id !== id);
-          saveMotoboys();
+          saveMotoboys(id);
           renderDrawerMotoboys();
           renderMotoboyMosaic();
           showToast('Motoboy Removido', 'Motoboy excluído da lista.', 'info');
@@ -4088,15 +4189,17 @@
     }
 
     function copyMotoboyPortalLink() {
-      const url = window.location.origin + window.location.pathname + '?portal=motoboy';
+      const tenantId = getCurrentTenantId();
+      const storeParam = tenantId ? `&store=${encodeURIComponent(tenantId)}` : '';
+      const url = `${window.location.origin}${window.location.pathname}?portal=motoboy${storeParam}`;
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(url).then(() => {
-          showToast('Link Copiado!', 'Link do Portal do Motoboy copiado para a área de transferência.', 'success');
+          showToast('Link da Loja Copiado!', 'Link do Portal do Motoboy exclusivo da sua loja copiado!', 'success');
         }).catch(() => {
-          prompt('Copie o link de acesso ao portal do motoboy:', url);
+          prompt('Copie o link de acesso ao portal do motoboy da sua loja:', url);
         });
       } else {
-        prompt('Copie o link de acesso ao portal do motoboy:', url);
+        prompt('Copie o link de acesso ao portal do motoboy da sua loja:', url);
       }
     }
 
@@ -4588,7 +4691,8 @@
     }
 
     function loadMotoboyOrders() {
-      const saved = localStorage.getItem(MOTOBOY_ORDERS_KEY);
+      const storageKey = getTenantStorageKey('motoboy_orders');
+      const saved = localStorage.getItem(storageKey);
       if (saved) {
         try { 
           motoboyOrders = JSON.parse(saved); 
@@ -4599,23 +4703,25 @@
             }
           });
         } catch(e) {
-          motoboyOrders = [...SEED_MOTOBOY_ORDERS];
+          motoboyOrders = [];
         }
       } else {
-        motoboyOrders = [...SEED_MOTOBOY_ORDERS];
+        motoboyOrders = [];
       }
       renderMotoboyMosaic();
     }
 
     function saveMotoboyOrders() {
-      localStorage.setItem(MOTOBOY_ORDERS_KEY, JSON.stringify(motoboyOrders));
+      const tenantId = getCurrentTenantId();
+      const storageKey = getTenantStorageKey('motoboy_orders');
+      localStorage.setItem(storageKey, JSON.stringify(motoboyOrders));
       renderMotoboyMosaic();
-      if (window.firebaseDb && window.firebaseSetDoc) {
+      if (tenantId && window.firebaseDb && window.firebaseSetDoc) {
         try {
           motoboyOrders.forEach(ord => {
             if (ord.id) {
               const cleanPayload = JSON.parse(JSON.stringify(ord));
-              window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "motoboyOrders", String(ord.id)), cleanPayload, { merge: true }).catch(() => {});
+              window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "motoboyOrders", String(ord.id)), cleanPayload, { merge: true }).catch(() => {});
             }
           });
         } catch(e) {
@@ -5470,9 +5576,10 @@
         () => {
           motoboyOrders = motoboyOrders.filter(o => o.id !== orderId);
           saveMotoboyOrders();
-          if (window.firebaseDb && window.firebaseDeleteDoc) {
+          const tenantId = getCurrentTenantId();
+          if (tenantId && window.firebaseDb && window.firebaseDeleteDoc) {
             try {
-              window.firebaseDeleteDoc(window.firebaseDoc(window.firebaseDb, "motoboyOrders", String(orderId)));
+              window.firebaseDeleteDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "motoboyOrders", String(orderId)));
             } catch(e) {
               console.warn("Erro ao deletar pedido no Firebase:", e);
             }
@@ -5720,7 +5827,46 @@
       `;
     }
 
-    // --- AUTHENTICATION & LOGIN SCREEN LOGIC ---
+    // --- AUTHENTICATION & MULTI-TENANT LOGIN LOGIC ---
+    let currentAuthMode = 'login'; // 'login' or 'register'
+
+    function switchAuthMode(mode) {
+      currentAuthMode = mode;
+      const tabLogin = document.getElementById('auth-tab-login');
+      const tabReg = document.getElementById('auth-tab-register');
+      const emailLabel = document.getElementById('login-email-label');
+      const userInput = document.getElementById('login-username');
+      const subtitle = document.getElementById('login-subtitle-text');
+      const btnText = document.getElementById('login-btn-text');
+      const errBanner = document.getElementById('login-error-banner');
+
+      if (errBanner) errBanner.classList.add('hidden');
+
+      if (mode === 'register') {
+        if (tabReg) {
+          tabReg.className = 'py-2.5 rounded-xl text-xs font-bold transition bg-amber-500 text-slate-950 shadow-sm cursor-pointer';
+        }
+        if (tabLogin) {
+          tabLogin.className = 'py-2.5 rounded-xl text-xs font-bold transition text-slate-400 hover:text-white cursor-pointer';
+        }
+        if (emailLabel) emailLabel.textContent = 'Email da Nova Loja:';
+        if (userInput) userInput.placeholder = 'ex: contato@minhanovaloja.com.br';
+        if (subtitle) subtitle.textContent = 'Cadastre uma nova loja para iniciar com painel 100% zerado e exclusivo';
+        if (btnText) btnText.textContent = 'Criar Nova Loja e Começar';
+      } else {
+        if (tabLogin) {
+          tabLogin.className = 'py-2.5 rounded-xl text-xs font-bold transition bg-amber-500 text-slate-950 shadow-sm cursor-pointer';
+        }
+        if (tabReg) {
+          tabReg.className = 'py-2.5 rounded-xl text-xs font-bold transition text-slate-400 hover:text-white cursor-pointer';
+        }
+        if (emailLabel) emailLabel.textContent = 'Email de Acesso:';
+        if (userInput) userInput.placeholder = 'ex: contato@sualoja.com.br';
+        if (subtitle) subtitle.textContent = 'Acesse com seu usuário/email e senha cadastrados';
+        if (btnText) btnText.textContent = 'Entrar no Sistema';
+      }
+    }
+
     function toggleLoginPasswordVisibility() {
       const passInput = document.getElementById('login-password');
       if (!passInput) return;
@@ -5731,12 +5877,81 @@
       }
     }
 
+    function applyCleanStoreState(tenantId, storeEmail = '') {
+      currentTenantId = tenantId;
+      currentTenantEmail = storeEmail;
+
+      // Reseta 100% das variáveis para começar do zero
+      orders = [];
+      motoboyOrders = [];
+      motoboysList = [];
+      storesList = [
+        { id: 'store-1', name: 'Loja Principal', active: true }
+      ];
+      deliveryFeesList = [
+        { id: 'fee-1', name: 'Taxa Padrão', value: 5.00 }
+      ];
+      apiCredentials = {
+        clientId: '',
+        clientSecret: '',
+        merchantId: '',
+        customApiUrl: '',
+        storeName: 'Minha Loja'
+      };
+
+      // Salva estado zerado no localStorage escopado
+      localStorage.setItem(getTenantStorageKey('orders'), JSON.stringify([]));
+      localStorage.setItem(getTenantStorageKey('motoboy_orders'), JSON.stringify([]));
+      localStorage.setItem(getTenantStorageKey('motoboys'), JSON.stringify([]));
+      localStorage.setItem(getTenantStorageKey('stores'), JSON.stringify(storesList));
+      localStorage.setItem(getTenantStorageKey('delivery_fees'), JSON.stringify(deliveryFeesList));
+      localStorage.setItem(getTenantStorageKey('config'), JSON.stringify(apiCredentials));
+
+      // Sincroniza estado zerado no Firestore
+      syncSettingsToFirebase();
+
+      // Renderiza UI limpa
+      renderKanban();
+      renderMotoboyMosaic();
+      renderDrawerStores();
+      renderDrawerMotoboys();
+      renderDrawerFees();
+      updateActiveStoreDisplay();
+      updateApiStatusUI();
+    }
+    window.applyCleanStoreState = applyCleanStoreState;
+
+    function initTenantSession(tenantId, username = '') {
+      currentTenantId = tenantId;
+      currentTenantEmail = username;
+
+      // Carrega dados específicos desta loja
+      loadCredentials();
+      loadStores();
+      loadMotoboys();
+      loadDeliveryFees();
+      loadMotoboyOrders();
+      loadOrders();
+
+      renderKanban();
+      renderMotoboyMosaic();
+      updateApiStatusUI();
+      fetchAndRenderStoreStatus();
+
+      // Conecta listeners em tempo real do Firestore para esta loja
+      if (window.initTenantSync) {
+        window.initTenantSync(tenantId);
+      }
+    }
+    window.initTenantSession = initTenantSession;
+
     async function handleAppLogin(e) {
       if (e && e.preventDefault) e.preventDefault();
 
       const userEl = document.getElementById('login-username');
       const passEl = document.getElementById('login-password');
       const btnEl = document.getElementById('login-submit-btn');
+      const btnText = document.getElementById('login-btn-text');
       const errBanner = document.getElementById('login-error-banner');
       const errText = document.getElementById('login-error-text');
 
@@ -5745,39 +5960,114 @@
 
       if (!usernameVal || !passwordVal) {
         if (errBanner) errBanner.classList.remove('hidden');
-        if (errText) errText.textContent = 'Por favor, preencha o usuário/email e a senha.';
+        if (errText) errText.textContent = 'Por favor, preencha o email e a senha.';
         return;
       }
 
       if (btnEl) {
         btnEl.disabled = true;
-        btnEl.innerHTML = `
-          <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-          <span>Validando Credenciais...</span>
-        `;
+        if (btnText) btnText.textContent = currentAuthMode === 'register' ? 'Criando Loja...' : 'Conectando à Loja...';
       }
       if (errBanner) errBanner.classList.add('hidden');
 
+      // --- MODO CADASTRO DE NOVA LOJA ---
+      if (currentAuthMode === 'register') {
+        if (!usernameVal.includes('@')) {
+          if (errBanner) errBanner.classList.remove('hidden');
+          if (errText) errText.textContent = 'Por favor, informe um endereço de e-mail válido para a nova loja.';
+          if (btnEl) {
+            btnEl.disabled = false;
+            if (btnText) btnText.textContent = 'Criar Nova Loja e Começar';
+          }
+          return;
+        }
+
+        if (passwordVal.length < 6) {
+          if (errBanner) errBanner.classList.remove('hidden');
+          if (errText) errText.textContent = 'A senha deve ter no mínimo 6 caracteres.';
+          if (btnEl) {
+            btnEl.disabled = false;
+            if (btnText) btnText.textContent = 'Criar Nova Loja e Começar';
+          }
+          return;
+        }
+
+        try {
+          let tenantUid = '';
+          if (window.firebaseAuth && window.firebaseCreateUser) {
+            const userCredential = await window.firebaseCreateUser(window.firebaseAuth, usernameVal, passwordVal);
+            if (userCredential && userCredential.user) {
+              tenantUid = userCredential.user.uid;
+            }
+          } else {
+            tenantUid = 'store_' + usernameVal.replace(/[^a-zA-Z0-9_-]/g, '_');
+          }
+
+          if (tenantUid) {
+            // Inicializa a loja 100% zerada
+            applyCleanStoreState(tenantUid, usernameVal);
+            initTenantSession(tenantUid, usernameVal);
+
+            const sessionData = {
+              username: usernameVal,
+              tenantId: tenantUid,
+              loggedAt: new Date().toISOString(),
+              active: true
+            };
+            localStorage.setItem('fast_pedidos_session_v1', JSON.stringify(sessionData));
+
+            const overlay = document.getElementById('login-screen-overlay');
+            if (overlay) overlay.classList.add('hidden');
+
+            const logoutBtn = document.getElementById('header-logout-btn');
+            if (logoutBtn) logoutBtn.classList.remove('hidden');
+
+            showToast('Nova Loja Criada!', `Sua loja foi configurada com sucesso do zero. Bem-vindo(a), ${usernameVal}!`, 'success');
+            return;
+          }
+        } catch (regErr) {
+          console.warn("Erro ao cadastrar nova loja:", regErr);
+          let msg = 'Erro ao criar conta da loja.';
+          if (regErr.code === 'auth/email-already-in-use') {
+            msg = 'Este email já está cadastrado. Alterne para a aba "Entrar na Loja".';
+          } else if (regErr.code === 'auth/weak-password') {
+            msg = 'A senha escolhida é muito fraca. Use pelo menos 6 caracteres.';
+          } else if (regErr.message) {
+            msg = regErr.message;
+          }
+          if (errBanner) errBanner.classList.remove('hidden');
+          if (errText) errText.textContent = msg;
+        } finally {
+          if (btnEl) {
+            btnEl.disabled = false;
+            if (btnText) btnText.textContent = 'Criar Nova Loja e Começar';
+          }
+        }
+        return;
+      }
+
+      // --- MODO LOGIN ---
       let authenticated = false;
       let loggedUserName = usernameVal;
+      let tenantUid = '';
 
-      // 1. Tentar autenticação via Firebase Auth SDK (se for formato de e-mail)
+      // 1. Autenticação via Firebase Auth SDK
       if (window.firebaseAuth && window.firebaseSignIn && usernameVal.includes('@')) {
         try {
           const userCredential = await window.firebaseSignIn(window.firebaseAuth, usernameVal, passwordVal);
           if (userCredential && userCredential.user) {
             authenticated = true;
             loggedUserName = userCredential.user.email;
+            tenantUid = userCredential.user.uid;
           }
         } catch (fbErr) {
           console.warn("Tentativa de login via Firebase Auth falhou:", fbErr);
         }
       }
 
-      // 2. Tentar autenticação via Firestore ou banco de dados / motoboys
+      // 2. Fallback de login para motoboy direto
       if (!authenticated) {
-        // Procura na lista de motoboys cadastrados
-        const matchedMb = (window.motoboysList || []).find(mb => {
+        const matchedMb = (motoboysList || []).find(mb => {
           const nameMatch = (mb.name || '').toLowerCase() === usernameVal.toLowerCase() || (mb.phone || '').includes(usernameVal);
           const passMatch = mb.password ? mb.password === passwordVal : true;
           return nameMatch && passMatch;
@@ -5786,20 +6076,21 @@
         if (matchedMb) {
           authenticated = true;
           loggedUserName = matchedMb.name;
-        } else {
-          // Bloqueia acesso se não encontrou no Firebase Auth nem na lista de motoboys
-          authenticated = false;
+          tenantUid = getCurrentTenantId() || ('mb_session_' + matchedMb.id);
         }
       }
 
       if (btnEl) {
         btnEl.disabled = false;
-        btnEl.innerHTML = `<span>Entrar no Sistema</span><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>`;
+        if (btnText) btnText.textContent = 'Entrar no Sistema';
       }
 
-      if (authenticated) {
+      if (authenticated && tenantUid) {
+        initTenantSession(tenantUid, loggedUserName);
+
         const sessionData = {
           username: loggedUserName,
+          tenantId: tenantUid,
           loggedAt: new Date().toISOString(),
           active: true
         };
@@ -5811,19 +6102,40 @@
         const logoutBtn = document.getElementById('header-logout-btn');
         if (logoutBtn) logoutBtn.classList.remove('hidden');
 
-        showToast('Acesso Concedido!', `Bem-vindo(a) ao Fast Pedidos, ${loggedUserName}!`, 'success');
+        showToast('Acesso Concedido!', `Dados sincronizados em tempo real com a nuvem!`, 'success');
       } else {
         if (errBanner) errBanner.classList.remove('hidden');
-        if (errText) errText.textContent = 'Credenciais incorretas. Verifique o email/usuário e a senha informada.';
+        if (errText) errText.textContent = 'Email ou senha incorretos. Se ainda não possui conta, clique em "+ Criar Nova Loja".';
       }
     }
 
     function handleAppLogout() {
       showConfirmModal(
         'Sair do Sistema?',
-        'Deseja realmente encerrar sua sessão no Fast Pedidos?',
+        'Deseja realmente encerrar sua sessão e desvincular os dados desta loja na tela?',
         () => {
+          if (window.detachTenantSync) {
+            window.detachTenantSync();
+          }
+
           localStorage.removeItem('fast_pedidos_session_v1');
+          currentTenantId = '';
+          currentTenantEmail = '';
+
+          // Limpa completamente dados da memória para não vazar para outro usuário
+          orders = [];
+          motoboyOrders = [];
+          motoboysList = [];
+          storesList = [];
+          deliveryFeesList = [];
+          apiCredentials = { clientId: '', clientSecret: '', merchantId: '', customApiUrl: '', storeName: '' };
+
+          renderKanban();
+          renderMotoboyMosaic();
+
+          const mainHeaderName = document.getElementById('main-header-store-name');
+          if (mainHeaderName) mainHeaderName.innerText = 'FAST PEDIDOS';
+
           const overlay = document.getElementById('login-screen-overlay');
           if (overlay) overlay.classList.remove('hidden');
 
@@ -5835,7 +6147,7 @@
           if (userEl) userEl.value = '';
           if (passEl) passEl.value = '';
 
-          showToast('Sessão Encerrada', 'Você saiu da conta.', 'info');
+          showToast('Sessão Encerrada', 'Você saiu com segurança. O painel está limpo.', 'info');
         },
         false
       );
@@ -5845,6 +6157,7 @@
       try {
         const urlParams = new URLSearchParams(window.location.search);
         const isPortalMotoboy = urlParams.get('portal') === 'motoboy';
+        const storeFromUrl = urlParams.get('store');
 
         const savedSession = localStorage.getItem('fast_pedidos_session_v1');
         const overlay = document.getElementById('login-screen-overlay');
@@ -5853,19 +6166,35 @@
         if (isPortalMotoboy) {
           if (overlay) overlay.classList.add('hidden');
           if (logoutBtn) logoutBtn.classList.add('hidden');
+          if (storeFromUrl) {
+            initTenantSession(storeFromUrl, 'Portal Motoboy');
+          } else if (savedSession) {
+            const sess = JSON.parse(savedSession);
+            if (sess && sess.tenantId) {
+              initTenantSession(sess.tenantId, sess.username);
+            }
+          }
           return;
         }
 
         if (savedSession) {
           const sess = JSON.parse(savedSession);
-          if (sess && sess.active) {
+          if (sess && sess.active && sess.tenantId) {
             if (overlay) overlay.classList.add('hidden');
             if (logoutBtn) logoutBtn.classList.remove('hidden');
+            initTenantSession(sess.tenantId, sess.username);
             return;
           }
         }
+
+        // Sem sessão: tela de login visível e dados da tela zerados
         if (overlay) overlay.classList.remove('hidden');
         if (logoutBtn) logoutBtn.classList.add('hidden');
+        orders = [];
+        motoboyOrders = [];
+        motoboysList = [];
+        renderKanban();
+        renderMotoboyMosaic();
       } catch (e) {}
     }
 
@@ -6185,7 +6514,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getFirestore, collection, onSnapshot, setDoc, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-    import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBow5AERyHHi3_zpmPwiV9SKhHfW-ltCHY",
@@ -6204,6 +6533,7 @@
       window.firebaseDb = db;
       window.firebaseAuth = auth;
       window.firebaseSignIn = signInWithEmailAndPassword;
+      window.firebaseCreateUser = createUserWithEmailAndPassword;
       window.firebaseDoc = doc;
       window.firebaseSetDoc = setDoc;
       window.firebaseDeleteDoc = deleteDoc;
@@ -6214,84 +6544,140 @@
       // Update UI Badge
       const fbIndicator = document.getElementById('firebase-status-indicator');
       if (fbIndicator) {
-        fbIndicator.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> 🔥 Firebase Sync Ativo';
+        fbIndicator.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> 🔥 Multi-Loja Cloud Sync';
       }
 
-      // Realtime listener for Motoboy Orders
-      onSnapshot(collection(db, "motoboyOrders"), (snapshot) => {
-        const remoteOrders = [];
-        if (!snapshot.empty) {
-          snapshot.forEach(docSnap => {
-            remoteOrders.push(docSnap.data());
-          });
-          remoteOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-        }
-        window.motoboyOrders = remoteOrders;
-        localStorage.setItem('cia_motoboy_orders_v1', JSON.stringify(remoteOrders));
-        
-        // Sincroniza status com o Painel KDS em tempo real
-        let changedKds = false;
-        remoteOrders.forEach(mbOrd => {
-          if (mbOrd.status === 'entregue' && typeof findMatchingIFoodOrder === 'function') {
-            const matched = findMatchingIFoodOrder(mbOrd.orderNumber);
-            if (matched && matched.status !== 'concluido') {
-              matched.status = 'concluido';
-              changedKds = true;
+      let unsubMotoboyOrders = null;
+      let unsubOrders = null;
+      let unsubMotoboys = null;
+      let unsubSettings = null;
+
+      function detachTenantSync() {
+        if (unsubMotoboyOrders) { unsubMotoboyOrders(); unsubMotoboyOrders = null; }
+        if (unsubOrders) { unsubOrders(); unsubOrders = null; }
+        if (unsubMotoboys) { unsubMotoboys(); unsubMotoboys = null; }
+        if (unsubSettings) { unsubSettings(); unsubSettings = null; }
+        console.log("🔥 [Firebase]: Listeners da loja desconectados.");
+      }
+      window.detachTenantSync = detachTenantSync;
+
+      function initTenantSync(tenantId) {
+        if (!tenantId) return;
+        detachTenantSync();
+
+        console.log(`🔥 [Firebase]: Iniciando sincronização isolada para a loja [${tenantId}]...`);
+
+        // 1. Configurações da Loja: stores/${tenantId}/config/settings
+        unsubSettings = onSnapshot(doc(db, "stores", tenantId, "config", "settings"), (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data) {
+              if (typeof window.receiveCredentialsFromFirebase === 'function') {
+                window.receiveCredentialsFromFirebase(data);
+              }
+              if (Array.isArray(data.storesList) && data.storesList.length > 0) {
+                window.storesList = data.storesList;
+                if (typeof window.getTenantStorageKey === 'function') {
+                  localStorage.setItem(window.getTenantStorageKey('stores'), JSON.stringify(data.storesList));
+                }
+                if (typeof renderStoreChips === 'function') renderStoreChips();
+                if (typeof renderDrawerStores === 'function') renderDrawerStores();
+                if (typeof updateActiveStoreDisplay === 'function') updateActiveStoreDisplay();
+              }
+              if (Array.isArray(data.deliveryFeesList) && data.deliveryFeesList.length > 0) {
+                window.deliveryFeesList = data.deliveryFeesList;
+                if (typeof window.getTenantStorageKey === 'function') {
+                  localStorage.setItem(window.getTenantStorageKey('delivery_fees'), JSON.stringify(data.deliveryFeesList));
+                }
+                if (typeof renderDrawerFees === 'function') renderDrawerFees();
+                if (typeof populateDeliveryFeeSelect === 'function') populateDeliveryFeeSelect();
+              }
             }
           }
-        });
-        if (changedKds && typeof saveOrders === 'function') {
-          saveOrders();
-          if (typeof renderKanban === 'function') renderKanban();
-        }
+        }, (err) => console.warn("Firebase Settings error:", err));
 
-        if (typeof renderMotoboyMosaic === 'function') renderMotoboyMosaic();
-        if (window.activePortalMotoboyId && typeof renderPortalDashboard === 'function') {
-          renderPortalDashboard(window.activePortalMotoboyId);
-        }
-      }, (err) => console.warn("Firebase MotoboyOrders error:", err));
-
-      // Realtime listener for KDS iFood Orders
-      onSnapshot(collection(db, "orders"), (snapshot) => {
-        const remoteOrders = [];
-        if (!snapshot.empty) {
-          snapshot.forEach(docSnap => {
-            remoteOrders.push(docSnap.data());
-          });
-          remoteOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-        }
-        window.orders = remoteOrders;
-        localStorage.setItem('ifood_pdv_orders_v1', JSON.stringify(remoteOrders));
-        
-        if (typeof renderKanban === 'function') renderKanban();
-      }, (err) => console.warn("Firebase Orders error:", err));
-
-      // Realtime listener for Motoboys Team
-      onSnapshot(collection(db, "motoboys"), (snapshot) => {
-        const remoteMb = [];
-        if (!snapshot.empty) {
-          snapshot.forEach(docSnap => {
-            remoteMb.push(docSnap.data());
-          });
-        }
-        window.motoboysList = remoteMb;
-        localStorage.setItem('cia_motoboys_list_v2', JSON.stringify(remoteMb));
-        
-        if (typeof renderPortalMotoboySelection === 'function') renderPortalMotoboySelection();
-      }, (err) => console.warn("Firebase Motoboys error:", err));
-
-      // Realtime listener for API Credentials
-      onSnapshot(doc(db, "config", "apiCredentials"), (docSnap) => {
-        if (docSnap.exists()) {
-          console.log("Credenciais recebidas da nuvem.");
-          const remoteCreds = docSnap.data();
-          if (typeof window.receiveCredentialsFromFirebase === 'function') {
-            window.receiveCredentialsFromFirebase(remoteCreds);
+        // 2. Motoboys da Loja: stores/${tenantId}/motoboys
+        unsubMotoboys = onSnapshot(collection(db, "stores", tenantId, "motoboys"), (snapshot) => {
+          const remoteMb = [];
+          if (!snapshot.empty) {
+            snapshot.forEach(docSnap => {
+              remoteMb.push(docSnap.data());
+            });
           }
-        } else {
-          console.log("Nenhuma credencial encontrada na nuvem ainda.");
-        }
-      }, (err) => console.warn("Firebase Config error:", err));
+          window.motoboysList = remoteMb;
+          if (typeof window.getTenantStorageKey === 'function') {
+            localStorage.setItem(window.getTenantStorageKey('motoboys'), JSON.stringify(remoteMb));
+          }
+          
+          if (typeof renderDrawerMotoboys === 'function') renderDrawerMotoboys();
+          if (typeof populateMotoboySelect === 'function') populateMotoboySelect();
+          if (typeof renderMotoboyMosaic === 'function') renderMotoboyMosaic();
+          if (typeof renderPortalMotoboySelection === 'function') renderPortalMotoboySelection();
+          if (window.activePortalMotoboyId && typeof renderPortalDashboard === 'function') {
+            renderPortalDashboard(window.activePortalMotoboyId);
+          }
+        }, (err) => console.warn("Firebase Motoboys error:", err));
+
+        // 3. Pedidos dos Motoboys da Loja: stores/${tenantId}/motoboyOrders
+        unsubMotoboyOrders = onSnapshot(collection(db, "stores", tenantId, "motoboyOrders"), (snapshot) => {
+          const remoteOrders = [];
+          if (!snapshot.empty) {
+            snapshot.forEach(docSnap => {
+              remoteOrders.push(docSnap.data());
+            });
+            remoteOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+          }
+          window.motoboyOrders = remoteOrders;
+          if (typeof window.getTenantStorageKey === 'function') {
+            localStorage.setItem(window.getTenantStorageKey('motoboy_orders'), JSON.stringify(remoteOrders));
+          }
+          
+          // Sincroniza status com o Painel KDS em tempo real
+          let changedKds = false;
+          remoteOrders.forEach(mbOrd => {
+            if (mbOrd.status === 'entregue' && typeof findMatchingIFoodOrder === 'function') {
+              const matched = findMatchingIFoodOrder(mbOrd.orderNumber);
+              if (matched && matched.status !== 'concluido') {
+                matched.status = 'concluido';
+                changedKds = true;
+              }
+            }
+          });
+          if (changedKds && typeof saveOrders === 'function') {
+            saveOrders();
+            if (typeof renderKanban === 'function') renderKanban();
+          }
+
+          if (typeof renderMotoboyMosaic === 'function') renderMotoboyMosaic();
+          if (window.activePortalMotoboyId && typeof renderPortalDashboard === 'function') {
+            renderPortalDashboard(window.activePortalMotoboyId);
+          }
+        }, (err) => console.warn("Firebase MotoboyOrders error:", err));
+
+        // 4. Pedidos iFood KDS da Loja: stores/${tenantId}/orders
+        unsubOrders = onSnapshot(collection(db, "stores", tenantId, "orders"), (snapshot) => {
+          const remoteOrders = [];
+          if (!snapshot.empty) {
+            snapshot.forEach(docSnap => {
+              remoteOrders.push(docSnap.data());
+            });
+            remoteOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+          }
+          window.orders = remoteOrders;
+          if (typeof window.getTenantStorageKey === 'function') {
+            localStorage.setItem(window.getTenantStorageKey('orders'), JSON.stringify(remoteOrders));
+          }
+          
+          if (typeof renderKanban === 'function') renderKanban();
+        }, (err) => console.warn("Firebase Orders error:", err));
+      }
+      window.initTenantSync = initTenantSync;
+
+      // Auto-inicia sync se já houver tenantId ativo
+      const activeTenant = typeof window.getCurrentTenantId === 'function' ? window.getCurrentTenantId() : '';
+      if (activeTenant) {
+        initTenantSync(activeTenant);
+      }
 
     } catch (e) {
       console.error("Erro ao inicializar o Firebase:", e);
