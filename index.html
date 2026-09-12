@@ -2533,7 +2533,13 @@
           orders.forEach(ord => {
             const cleanId = String(ord.id || ord.displayId || Date.now()).replace(/[^a-zA-Z0-9_\-]/g, '_');
             const cleanPayload = JSON.parse(JSON.stringify(ord));
-            window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "orders", cleanId), cleanPayload, { merge: true }).catch(() => {});
+            const payloadStr = JSON.stringify(cleanPayload);
+            // Só envia para a nuvem se o conteúdo REALMENTE mudou
+            if (window._firebaseLastSynced && window._firebaseLastSynced[cleanId] !== payloadStr) {
+               window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "orders", cleanId), cleanPayload, { merge: true }).then(() => {
+                  window._firebaseLastSynced[cleanId] = payloadStr;
+               }).catch(() => {});
+            }
           });
         } catch(e) {
           console.warn("Erro ao sincronizar pedidos com Firebase:", e);
@@ -4036,7 +4042,12 @@
           motoboysList.forEach(mb => {
             if (mb && mb.id) {
               const cleanMb = JSON.parse(JSON.stringify(mb));
-              window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "motoboys", String(mb.id)), cleanMb, { merge: true }).catch(() => {});
+              const payloadStr = JSON.stringify(cleanMb);
+              if (window._firebaseLastSynced && window._firebaseLastSynced[String(mb.id)] !== payloadStr) {
+                 window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "motoboys", String(mb.id)), cleanMb, { merge: true }).then(() => {
+                    window._firebaseLastSynced[String(mb.id)] = payloadStr;
+                 }).catch(() => {});
+              }
             }
           });
           if (deletedId && window.firebaseDeleteDoc) {
@@ -4911,7 +4922,13 @@
           motoboyOrders.forEach(ord => {
             if (ord.id) {
               const cleanPayload = JSON.parse(JSON.stringify(ord));
-              window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "motoboyOrders", String(ord.id)), cleanPayload, { merge: true }).catch(() => {});
+              const payloadStr = JSON.stringify(cleanPayload);
+              // Só envia para a nuvem se o conteúdo REALMENTE mudou
+              if (window._firebaseLastSynced && window._firebaseLastSynced[String(ord.id)] !== payloadStr) {
+                window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "motoboyOrders", String(ord.id)), cleanPayload, { merge: true }).then(() => {
+                   window._firebaseLastSynced[String(ord.id)] = payloadStr;
+                }).catch(() => {});
+              }
             }
           });
         } catch(e) {
@@ -6434,7 +6451,7 @@
       loadOrders();
       
       cleanupOldOrders();
-      // setInterval(cleanupOldOrders, 300000); // Removido temporariamente para depuração
+      setInterval(cleanupOldOrders, 300000); // 5 minutos
 
       renderKanban();
       updateApiStatusUI();
@@ -6761,8 +6778,47 @@
       window.firebaseSignIn = signInWithEmailAndPassword;
       window.firebaseCreateUser = createUserWithEmailAndPassword;
       window.firebaseDoc = doc;
-      window.firebaseSetDoc = setDoc;
-      window.firebaseDeleteDoc = deleteDoc;
+      
+      window.firebaseQuotaExceeded = false;
+      window.handleQuotaExceeded = () => {
+        if (!window.firebaseQuotaExceeded) {
+          window.firebaseQuotaExceeded = true;
+          if (typeof window.detachTenantSync === 'function') {
+             window.detachTenantSync();
+          }
+          const fbIndicator = document.getElementById('firebase-status-indicator');
+          if (fbIndicator) {
+            fbIndicator.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span> ⚠️ MODO OFFLINE (Cota Nuvem)';
+          }
+          if (typeof showToast === 'function') {
+            showToast('Alerta (Firebase)', 'A cota diária na nuvem foi excedida. Entramos em MODO OFFLINE para que você não perca pedidos. Os registros continuam salvos no seu aparelho!', 'warning');
+          }
+        }
+      };
+
+      window.firebaseSetDoc = function(...args) {
+          if (window.firebaseQuotaExceeded) return Promise.resolve();
+          return setDoc(...args).catch(e => {
+             if (e && e.message && (e.message.includes('quota') || e.message.includes('Quota') || e.message.includes('resource-exhausted'))) {
+                window.handleQuotaExceeded();
+             }
+             throw e;
+          });
+      };
+      
+      window.firebaseDeleteDoc = function(...args) {
+          if (window.firebaseQuotaExceeded) return Promise.resolve();
+          return deleteDoc(...args).catch(e => {
+             if (e && e.message && (e.message.includes('quota') || e.message.includes('Quota') || e.message.includes('resource-exhausted'))) {
+                window.handleQuotaExceeded();
+             }
+             throw e;
+          });
+      };
+
+      // Otimização: Cache local de hashes para evitar sobreescrever a nuvem com dados repetidos
+      window._firebaseLastSynced = {};
+
       window.firebaseCollection = collection;
 
       console.log("🔥 [Firebase]: Conectado ao projeto fastpedidos-abde5 com sucesso!");
@@ -6831,7 +6887,9 @@
           const remoteMb = [];
           if (!snapshot.empty) {
             snapshot.forEach(docSnap => {
-              remoteMb.push(docSnap.data());
+              const data = docSnap.data();
+              remoteMb.push(data);
+              if (window._firebaseLastSynced) window._firebaseLastSynced[String(data.id)] = JSON.stringify(data);
             });
           }
           if (typeof window.setMotoboysList === 'function') window.setMotoboysList(remoteMb);
@@ -6855,7 +6913,9 @@
           const remoteOrders = [];
           if (!snapshot.empty) {
             snapshot.forEach(docSnap => {
-              remoteOrders.push(docSnap.data());
+              const data = docSnap.data();
+              remoteOrders.push(data);
+              if (window._firebaseLastSynced) window._firebaseLastSynced[String(data.id)] = JSON.stringify(data);
             });
             remoteOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
           }
@@ -6893,7 +6953,10 @@
           const remoteOrders = [];
           if (!snapshot.empty) {
             snapshot.forEach(docSnap => {
-              remoteOrders.push(docSnap.data());
+              const data = docSnap.data();
+              remoteOrders.push(data);
+              const cleanId = String(data.id || data.displayId || Date.now()).replace(/[^a-zA-Z0-9_\-]/g, '_');
+              if (window._firebaseLastSynced) window._firebaseLastSynced[cleanId] = JSON.stringify(data);
             });
             remoteOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
           }
