@@ -3432,6 +3432,41 @@
       const despachadoCol = document.getElementById('column-despachado');
       const concluidoCol = document.getElementById('column-concluido');
       const canceladoCol = document.getElementById('column-cancelado');
+      
+      const secNovo = document.getElementById('col-section-novo');
+      const secConfirmado = document.getElementById('col-section-confirmado');
+      const secDespachado = document.getElementById('col-section-despachado');
+      const secConcluido = document.getElementById('col-section-concluido');
+      const secCancelado = document.getElementById('col-section-cancelado');
+
+      // Update Column Visibility Based on Status Filter
+      if (currentStatusFilter === 'todos') {
+        if (secNovo) secNovo.classList.remove('hidden');
+        if (secConfirmado) secConfirmado.classList.remove('hidden');
+        if (secDespachado) secDespachado.classList.remove('hidden');
+        if (secConcluido) secConcluido.classList.remove('hidden');
+        if (secCancelado) secCancelado.classList.remove('hidden');
+        
+        // Return to default grid
+        const kanbanContainer = secNovo ? secNovo.parentElement : null;
+        if (kanbanContainer) {
+          kanbanContainer.className = 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5 flex-1 items-start';
+        }
+      } else {
+        const normFilter = (currentStatusFilter === 'pendente' ? 'novo' : (currentStatusFilter === 'preparando' ? 'confirmado' : currentStatusFilter));
+        
+        if (secNovo) secNovo.classList.toggle('hidden', normFilter !== 'novo');
+        if (secConfirmado) secConfirmado.classList.toggle('hidden', normFilter !== 'confirmado');
+        if (secDespachado) secDespachado.classList.toggle('hidden', normFilter !== 'despachado');
+        if (secConcluido) secConcluido.classList.toggle('hidden', normFilter !== 'concluido');
+        if (secCancelado) secCancelado.classList.toggle('hidden', normFilter !== 'cancelado');
+        
+        // Single column layout for focused view
+        const kanbanContainer = secNovo ? secNovo.parentElement : null;
+        if (kanbanContainer) {
+          kanbanContainer.className = 'grid grid-cols-1 gap-3.5 flex-1 items-start max-w-lg mx-auto w-full';
+        }
+      }
 
       // Update Status Filter Tab counters
       const countTodos = orders.length;
@@ -3450,15 +3485,7 @@
 
       // Filter orders by active status tab and text search query
       const filtered = orders.filter(o => {
-        const normStatus = (o.status === 'pendente' ? 'novo' : (o.status === 'preparando' ? 'confirmado' : o.status));
-
-        // 1. Status Filter Tab
-        if (currentStatusFilter !== 'todos') {
-          const normFilter = (currentStatusFilter === 'pendente' ? 'novo' : (currentStatusFilter === 'preparando' ? 'confirmado' : currentStatusFilter));
-          if (normStatus !== normFilter) return false;
-        }
-
-        // 2. Search query (ID, Customer Name, Payment, Items)
+        // 1. Search query (ID, Customer Name, Payment, Items)
         if (searchQuery) {
           const q = searchQuery.toLowerCase();
           const matchId = (o.id || '').toLowerCase().includes(q) || (o.ifoodOrderId || '').toLowerCase().includes(q);
@@ -3467,7 +3494,6 @@
           const matchItem = o.items && o.items.some(i => (i.name || '').toLowerCase().includes(q));
           if (!matchId && !matchCustomer && !matchPayment && !matchItem) return false;
         }
-
         return true;
       });
 
@@ -5968,7 +5994,7 @@
               </div>
 
               <!-- Lista de Pedidos (Mosaico vertical deste motoboy) -->
-              <div class="space-y-2.5">
+              <div class="space-y-2.5 overflow-y-auto max-h-[300px] pr-1 kanban-scroll">
                 ${ordersTilesHtml}
               </div>
             </div>
