@@ -416,10 +416,23 @@
           <button 
             type="button" 
             onclick="confirmClearMotoboyOrders()" 
-            class="w-full py-2.5 px-3 bg-red-50 hover:bg-red-100 active:scale-98 border border-red-200 rounded-xl text-red-700 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-2xs">
+            class="w-full py-2.5 px-3 bg-red-50 hover:bg-red-100 active:scale-98 border border-red-200 rounded-xl text-red-700 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-2xs mb-2">
             <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
             <span>Fechar o Dia / Limpar Planilha</span>
           </button>
+
+          <!-- Botões de Backup -->
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" onclick="exportMotoboyOrdersBackup()" class="w-full py-2 px-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-slate-700 text-[11px] font-bold flex items-center justify-center gap-1 transition cursor-pointer">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+              Exportar
+            </button>
+            <label class="w-full py-2 px-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-slate-700 text-[11px] font-bold flex items-center justify-center gap-1 transition cursor-pointer m-0">
+              <input type="file" accept=".json" class="hidden" onchange="importMotoboyOrdersBackup(event)">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+              Importar
+            </label>
+          </div>
         </div>
       </div>
 
@@ -1939,6 +1952,8 @@
           <div class="relative flex-1 w-full">
             <input 
               type="text" 
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="quick-order-input" 
               autocomplete="off"
               oninput="handleQuickOrderInput(this.value)"
@@ -4786,6 +4801,59 @@
       );
     }
 
+    function exportMotoboyOrdersBackup() {
+      if (!motoboyOrders || motoboyOrders.length === 0) {
+        showToast('Aviso', 'Não há pedidos na planilha para exportar.', 'info');
+        return;
+      }
+      const dataStr = JSON.stringify(motoboyOrders, null, 2);
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const today = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
+      a.download = `backup_planilha_motoboys_${today}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('Backup Exportado', 'O arquivo de backup foi baixado com sucesso.', 'success');
+    }
+
+    function importMotoboyOrdersBackup(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const importedOrders = JSON.parse(e.target.result);
+          if (Array.isArray(importedOrders)) {
+            const currentIds = new Set(motoboyOrders.map(o => o.id));
+            let addedCount = 0;
+            importedOrders.forEach(ord => {
+              if (!currentIds.has(ord.id)) {
+                motoboyOrders.push(ord);
+                currentIds.add(ord.id);
+                addedCount++;
+              }
+            });
+            
+            motoboyOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            saveMotoboyOrders();
+            
+            showToast('Backup Importado', `Recuperados ${addedCount} pedido(s) do backup com sucesso.`, 'success');
+          } else {
+            showToast('Erro de Importação', 'O formato do arquivo de backup é inválido.', 'error');
+          }
+        } catch (err) {
+          console.error(err);
+          showToast('Erro de Importação', 'Não foi possível ler o arquivo de backup.', 'error');
+        }
+        event.target.value = ''; // Reset input
+      };
+      reader.readAsText(file);
+    }
+
     function loadMotoboyOrders() {
       const storageKey = getTenantStorageKey('motoboy_orders');
       const saved = localStorage.getItem(storageKey);
@@ -6300,6 +6368,35 @@
     // Compatibilidade reversa para chamadas antigas
     const renderMotoboySpreadsheet = renderMotoboyMosaic;
 
+    // --- AUTO-CLEANUP ---
+    function cleanupOldOrders() {
+      const SIX_HOURS = 6 * 60 * 60 * 1000;
+      const now = Date.now();
+      const tenantId = getCurrentTenantId();
+      let hasDeleted = false;
+      const validOrders = [];
+
+      orders.forEach(ord => {
+        if (now - (ord.timestamp || 0) > SIX_HOURS) {
+          hasDeleted = true;
+          // Delete completely from Firebase
+          if (tenantId && window.firebaseDb && window.firebaseDeleteDoc) {
+            try {
+              window.firebaseDeleteDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "orders", String(ord.id))).catch(()=>{});
+            } catch(e) {}
+          }
+        } else {
+          validOrders.push(ord);
+        }
+      });
+
+      if (hasDeleted) {
+        orders = validOrders;
+        saveOrders(true);
+        renderKanban();
+      }
+    }
+
     // --- EVENT LISTENERS & INITIALIZATION ---
     document.addEventListener('DOMContentLoaded', () => {
       checkAuthStateOnLoad();
@@ -6309,6 +6406,10 @@
       loadDeliveryFees();
       loadMotoboyOrders();
       loadOrders();
+      
+      cleanupOldOrders();
+      setInterval(cleanupOldOrders, 300000); // 5 minutos
+
       renderKanban();
       updateApiStatusUI();
       fetchAndRenderStoreStatus();
