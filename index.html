@@ -4241,7 +4241,7 @@
     // ==========================================
     // --- PORTAL DO MOTOBOY (ENGINE COMPLETO) ---
     // ==========================================
-    let activePortalMotoboyId = null;
+    let activePortalMotoboyId = localStorage.getItem('activePortalMotoboyId') || null;
     let selectedPortalAuthMbId = null;
 
     function openMotoboyPortal() {
@@ -4404,6 +4404,7 @@
 
       if (enteredPass === correctPass) {
         activePortalMotoboyId = mb.id;
+        localStorage.setItem('activePortalMotoboyId', mb.id);
         renderPortalDashboard(mb.id);
         showToast('Login Efetuado!', `Bem-vindo ao portal, ${mb.name}!`, 'success');
       } else {
@@ -4782,6 +4783,7 @@
 
     function logoutMotoboyPortal() {
       activePortalMotoboyId = null;
+      localStorage.removeItem('activePortalMotoboyId');
       selectedPortalAuthMbId = null;
       renderPortalMotoboySelection();
       showToast('Sessão Encerrada', 'Você saiu do portal do entregador.', 'info');
