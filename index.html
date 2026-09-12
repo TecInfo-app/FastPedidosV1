@@ -4901,12 +4901,12 @@
       renderMotoboyMosaic();
     }
 
-    function saveMotoboyOrders() {
+    function saveMotoboyOrders(skipFirebase = false) {
       const tenantId = getCurrentTenantId();
       const storageKey = getTenantStorageKey('motoboy_orders');
       localStorage.setItem(storageKey, JSON.stringify(motoboyOrders));
       renderMotoboyMosaic();
-      if (tenantId && window.firebaseDb && window.firebaseSetDoc) {
+      if (!skipFirebase && tenantId && window.firebaseDb && window.firebaseSetDoc) {
         try {
           motoboyOrders.forEach(ord => {
             if (ord.id) {
@@ -6434,7 +6434,7 @@
       loadOrders();
       
       cleanupOldOrders();
-      setInterval(cleanupOldOrders, 300000); // 5 minutos
+      // setInterval(cleanupOldOrders, 300000); // Removido temporariamente para depuração
 
       renderKanban();
       updateApiStatusUI();
