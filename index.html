@@ -412,13 +412,13 @@
             </button>
           </div>
 
-          <!-- Botão Limpar Planilha -->
+          <!-- Botão Fechar o Dia -->
           <button 
             type="button" 
             onclick="confirmClearMotoboyOrders()" 
             class="w-full py-2.5 px-3 bg-red-50 hover:bg-red-100 active:scale-98 border border-red-200 rounded-xl text-red-700 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-2xs">
             <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-            <span>Limpar Planilha de Motoboys</span>
+            <span>Fechar o Dia / Limpar Planilha</span>
           </button>
         </div>
       </div>
@@ -2030,6 +2030,17 @@
         
         <!-- Controls: Botão da Lupa & Campo de Busca Expansível -->
         <div class="flex items-center gap-2 shrink-0">
+          
+          <!-- Botão Fechar o Dia -->
+          <button 
+            type="button" 
+            onclick="confirmClearMotoboyOrders()" 
+            title="Fechar o Dia e Limpar Planilha" 
+            class="px-2.5 h-9 sm:h-10 rounded-xl bg-red-50 hover:bg-red-100 active:scale-95 text-red-700 hover:text-red-900 flex items-center justify-center gap-1.5 font-bold text-xs border border-red-200 transition cursor-pointer shadow-2xs">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            <span class="hidden sm:inline">Fechar o Dia</span>
+          </button>
+
           <!-- Botão da Lupa (Visível por padrão) -->
           <button 
             type="button" 
@@ -4744,14 +4755,33 @@
         return;
       }
       showConfirmModal(
-        'Limpar Planilha dos Motoboys?',
-        'Deseja realmente remover todos os pedidos lançados para os motoboys? Esta ação é exclusiva da planilha e não afetará os pedidos do iFood.',
+        'Fechar o Dia dos Motoboys?',
+        'Deseja fechar o dia e limpar a planilha? Isso salvará os pedidos de hoje no histórico e deixará a tela limpa para um novo dia.',
         () => {
+          const tenantId = getCurrentTenantId();
+          
+          // 1. Salvar no histórico local (de acordo com a data atual)
+          const today = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
+          const historyKey = getTenantStorageKey('history_motoboys_' + today);
+          const existingHistory = JSON.parse(localStorage.getItem(historyKey) || '[]');
+          localStorage.setItem(historyKey, JSON.stringify([...existingHistory, ...motoboyOrders]));
+
+          // 2. Apagar do Firebase um por um (para sincronizar em todos os painéis e celulares)
+          if (tenantId && window.firebaseDb && window.firebaseDeleteDoc) {
+            motoboyOrders.forEach(ord => {
+               try {
+                 window.firebaseDeleteDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "motoboyOrders", String(ord.id))).catch(() => {});
+               } catch(e) {}
+            });
+          }
+
+          // 3. Limpar a tela localmente
           motoboyOrders = [];
           lastLaunchedMotoboyId = null;
           motoboyFilterMode = 'auto';
           saveMotoboyOrders();
-          showToast('Planilha Limpa', 'Todos os pedidos dos motoboys foram removidos.', 'info');
+          
+          showToast('Dia Fechado', 'A planilha foi limpa e o histórico do dia foi salvo.', 'success');
         }
       );
     }
