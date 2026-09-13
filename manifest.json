@@ -2,12 +2,28 @@
   "name": "Fast Pedidos - Monitor & Entregadores",
   "short_name": "FastPedidos",
   "description": "Sistema de gestão de pedidos KDS e portal em tempo real para entregadores com alertas e notificações push.",
-  "start_url": "./?portal=motoboy",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#090d16",
   "theme_color": "#f59e0b",
+  "shortcuts": [
+    {
+      "name": "Painel de Pedidos",
+      "short_name": "Painel",
+      "description": "Acessar painel do restaurante e gestão de pedidos",
+      "url": "./",
+      "icons": [{ "src": "./icon.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Portal do Entregador",
+      "short_name": "Entregadores",
+      "description": "Acessar portal direto de entregas do motoboy",
+      "url": "./?portal=motoboy",
+      "icons": [{ "src": "./icon.svg", "sizes": "192x192" }]
+    }
+  ],
   "icons": [
     {
       "src": "./icon.svg",

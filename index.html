@@ -80,10 +80,24 @@
 </head>
 <body class="bg-slate-100 font-sans text-slate-800 min-h-screen flex flex-col antialiased selection:bg-ifood-red selection:text-white">
 
-  <!-- PREVENT LOGIN & MAIN INTERFACE FLASH FOR MOTOBOY PORTAL -->
+  <!-- SCOPED STYLING FOR MOTOBOY PORTAL MODE -->
+  <style id="portal-motoboy-style">
+    body.in-portal-mode #login-screen-overlay { display: none !important; }
+    body.in-portal-mode #portal-motoboy-view { display: flex !important; }
+    body.in-portal-mode #portal-motoboy-view header { display: flex !important; }
+    body.in-portal-mode #portal-motoboy-view main { display: flex !important; }
+    body.in-portal-mode > header,
+    body.in-portal-mode > main,
+    body.in-portal-mode > footer,
+    body.in-portal-mode #settings-drawer,
+    body.in-portal-mode #drawer-backdrop { display: none !important; }
+  </style>
   <script>
     if (window.location.search.includes('portal=motoboy')) {
-      document.write('<style>#login-screen-overlay { display: none !important; } #portal-motoboy-view { display: flex !important; } #portal-motoboy-view header { display: flex !important; } #portal-motoboy-view main { display: flex !important; } body > header, body > main, body > footer, #settings-drawer, #drawer-backdrop { display: none !important; }</style>');
+      document.documentElement.classList.add('in-portal-mode');
+      window.addEventListener('DOMContentLoaded', () => {
+        document.body.classList.add('in-portal-mode');
+      });
     }
   </script>
 
@@ -1572,6 +1586,13 @@
       <div class="flex items-center gap-2">
         <button 
           type="button" 
+          onclick="exitPortalToMainApp()" 
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-95 border border-amber-400 text-xs font-black text-slate-950 shadow-sm transition cursor-pointer"
+          title="Acessar o Painel de Gerenciamento da Loja">
+          <span>🏪 Painel da Loja</span>
+        </button>
+        <button 
+          type="button" 
           onclick="requestPortalNotificationPermission()" 
           id="portal-alert-status-btn"
           class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700/80 text-xs font-bold text-amber-300 shadow-sm transition cursor-pointer"
@@ -2145,6 +2166,48 @@
       
       <!-- Store Chips Container (Tamanho Uniforme & Grid Responsivo para Celular e Desktop) -->
       <div id="store-selector-chips" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 w-full">
+        <!-- Rendered dynamically via JS -->
+      </div>
+    </div>
+
+    <!-- CARD 2: EQUIPE DE ENTREGADORES (MOTOBOYS) -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 sm:p-5 space-y-3">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2 border-b border-slate-100">
+        <div class="flex items-center gap-2.5">
+          <span class="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center text-base font-black shrink-0">
+            🛵
+          </span>
+          <div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <h3 class="text-sm sm:text-base font-black text-slate-900 uppercase tracking-tight">Equipe de Entregadores</h3>
+              <span id="card2-motoboys-count-badge" class="px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 text-[10px] font-black border border-amber-200">
+                0 Ativos
+              </span>
+            </div>
+            <p class="text-[11px] text-slate-400 font-medium">Entregadores cadastrados e disponíveis para entregas</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 self-end sm:self-auto">
+          <button 
+            type="button" 
+            onclick="openCreateMotoboyModal()" 
+            class="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm transition cursor-pointer">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
+            <span>+ Novo Motoboy</span>
+          </button>
+          <button 
+            type="button" 
+            onclick="openMotoboyPortal()" 
+            class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+            title="Abrir o Portal do Entregador">
+            <span>🔗 Portal</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Container Dinâmico dos Motoboys no Card 2 -->
+      <div id="main-motoboys-list" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
         <!-- Rendered dynamically via JS -->
       </div>
     </div>
@@ -4344,6 +4407,7 @@
         motoboysList = [];
       }
       renderDrawerMotoboys();
+      renderMainMotoboyList();
       populateMotoboySelect();
       renderMotoboyMosaic();
     }
@@ -4352,6 +4416,7 @@
       const targetIndex = index + delta;
       if (targetIndex < 0 || targetIndex >= motoboysList.length) return;
       const [item] = motoboysList.splice(index, 1);
+      deliveryFeesList = deliveryFeesList || [];
       motoboysList.splice(targetIndex, 0, item);
       saveMotoboys();
       showToast('Ordem Alterada', `Motoboy "${item.name}" movido para a posição ${targetIndex + 1}.`, 'info');
@@ -4363,6 +4428,7 @@
       motoboysList.forEach((mb, idx) => { mb.order = idx; });
       localStorage.setItem(storageKey, JSON.stringify(motoboysList));
       renderDrawerMotoboys();
+      renderMainMotoboyList();
       populateMotoboySelect();
       renderMotoboyMosaic();
       if (!document.getElementById('portal-motoboy-view')?.classList.contains('hidden')) {
@@ -4471,6 +4537,93 @@
         </div>
       `).join('');
     }
+
+    // Renderiza a lista de motoboys no CARD 2 da tela principal
+    function renderMainMotoboyList() {
+      const container = document.getElementById('main-motoboys-list');
+      const badgeCount = document.getElementById('card2-motoboys-count-badge');
+      if (!container) return;
+
+      const totalMbs = motoboysList ? motoboysList.length : 0;
+      if (badgeCount) {
+        badgeCount.innerText = `${totalMbs} Cadastrado${totalMbs !== 1 ? 's' : ''}`;
+      }
+
+      if (!motoboysList || motoboysList.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full p-6 sm:p-8 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl text-center space-y-3">
+            <div class="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center text-xl mx-auto shadow-inner">
+              🛵
+            </div>
+            <div>
+              <p class="text-xs sm:text-sm font-bold text-slate-800">Nenhum entregador cadastrado nesta loja</p>
+              <p class="text-[11px] text-slate-400 mt-0.5">Cadastre seus motoboys para associar pedidos e acompanhar entregas em tempo real.</p>
+            </div>
+            <button 
+              type="button" 
+              onclick="openCreateMotoboyModal()" 
+              class="px-4 py-2 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 text-xs font-black rounded-xl inline-flex items-center gap-1.5 shadow-sm transition cursor-pointer">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
+              <span>+ Cadastrar Primeiro Motoboy</span>
+            </button>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = motoboysList.map(mb => {
+        const assignedOrders = (motoboyOrders || []).filter(o => o.motoboyId === mb.id);
+        const deliveredOrders = assignedOrders.filter(o => o.status === 'entregue');
+        const totalFees = assignedOrders.reduce((acc, o) => acc + (Number(o.deliveryFee) || 0), 0);
+        const initial = mb.name ? mb.name.charAt(0).toUpperCase() : 'M';
+        
+        return `
+          <div class="bg-slate-50 hover:bg-amber-50/40 border border-slate-200 hover:border-amber-300 rounded-2xl p-3 flex flex-col justify-between transition group shadow-2xs">
+            <div class="space-y-2">
+              <div class="flex items-center justify-between gap-1.5">
+                <div class="w-8 h-8 rounded-xl bg-amber-500 text-slate-950 font-black text-xs flex items-center justify-center shadow-xs shrink-0">
+                  ${initial}
+                </div>
+                <div class="flex items-center gap-1">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Disponível"></span>
+                  <span class="text-[10px] font-bold text-slate-500">Ativo</span>
+                </div>
+              </div>
+              <div>
+                <h4 class="text-xs font-black text-slate-900 truncate uppercase" title="${escapeHtml(mb.name)}">
+                  ${escapeHtml(mb.name)}
+                </h4>
+                <p class="text-[10px] text-slate-400 font-medium truncate">
+                  ${mb.phone ? escapeHtml(mb.phone) : (mb.plate ? 'Placa: ' + escapeHtml(mb.plate) : 'Entregador')}
+                </p>
+              </div>
+              <div class="p-1.5 bg-white rounded-xl border border-slate-200/80 flex items-center justify-between text-[11px]">
+                <span class="text-slate-500 font-bold">${assignedOrders.length} ped.</span>
+                <span class="font-black text-emerald-700 font-mono">${formatCurrency(totalFees)}</span>
+              </div>
+            </div>
+
+            <div class="pt-2 mt-2 border-t border-slate-200/60 flex items-center gap-1.5">
+              <button 
+                type="button" 
+                onclick="quickSelectMotoboyForOrder('${mb.id}')"
+                class="flex-1 py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-lg text-[10px] font-black tracking-tight transition cursor-pointer flex items-center justify-center gap-1 shadow-2xs"
+                title="Lançar pedido para ${escapeHtml(mb.name)}">
+                <span>+ Pedido</span>
+              </button>
+              <button 
+                type="button" 
+                onclick="openEditMotoboyModal('${mb.id}')"
+                class="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-lg transition cursor-pointer"
+                title="Editar dados ou senha">
+                ✏️
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+    window.renderMainMotoboyList = renderMainMotoboyList;
 
     function openCreateMotoboyModal() {
       const modal = document.getElementById('modal-create-motoboy');
@@ -4654,15 +4807,39 @@
     window.openMotoboyPortal = openMotoboyPortal;
 
     function closeMotoboyPortal() {
-      // Bloqueio de Segurança: Nunca permite fechar o portal se acessado via link do motoboy
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get('portal') === 'motoboy') {
-        console.warn('Tentativa de fechar portal do entregador bloqueada por segurança.');
-        return;
-      }
+      exitPortalToMainApp();
+    }
+
+    function exitPortalToMainApp() {
+      document.documentElement.classList.remove('in-portal-mode');
+      document.body.classList.remove('in-portal-mode');
       const portalView = document.getElementById('portal-motoboy-view');
       if (portalView) portalView.classList.add('hidden');
+
+      // Limpar parâmetro portal da URL sem recarregar a página
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('portal');
+        window.history.replaceState(null, '', url.pathname + (url.search ? url.search : ''));
+      } catch(e) {}
+
+      // Verifica autenticação para exibir dashboard ou tela de login
+      checkAuthStateOnLoad();
+      showToast('Painel Principal', 'Alternado para o painel de pedidos da loja.', 'info');
     }
+    window.exitPortalToMainApp = exitPortalToMainApp;
+
+    function promptConnectStoreInPortal() {
+      const codeOrEmail = prompt('Digite o e-mail ou código de identificação da sua loja:');
+      if (!codeOrEmail || !codeOrEmail.trim()) return;
+      const clean = codeOrEmail.trim().toLowerCase();
+      const derivedTenantId = clean.includes('@') ? ('store_' + clean.replace(/[^a-zA-Z0-9_-]/g, '_')) : clean;
+      localStorage.setItem('last_tenant_id', derivedTenantId);
+      localStorage.setItem('last_tenant_email', clean);
+      initTenantSession(derivedTenantId, clean);
+      showToast('Conectando...', `Carregando dados da loja "${clean}"...`, 'info');
+    }
+    window.promptConnectStoreInPortal = promptConnectStoreInPortal;
 
     function copyMotoboyPortalLink() {
       const tenantId = getCurrentTenantId();
@@ -4697,9 +4874,28 @@
 
       if (!motoboysList || motoboysList.length === 0) {
         grid.innerHTML = `
-          <div class="p-8 bg-slate-900 border border-slate-800 rounded-3xl text-center space-y-3">
-            <p class="text-sm font-semibold text-slate-400">Nenhum motoboy cadastrado no momento.</p>
-            <p class="text-xs text-slate-500">Cadastre motoboys através do Menu Painel de Gerenciamento.</p>
+          <div class="p-6 sm:p-8 bg-slate-900 border border-slate-800 rounded-3xl text-center space-y-4 shadow-xl">
+            <div class="w-14 h-14 rounded-2xl bg-amber-500/15 text-amber-400 flex items-center justify-center text-2xl mx-auto shadow-inner">
+              🛵
+            </div>
+            <div>
+              <h3 class="text-base font-black text-white">Nenhum entregador encontrado</h3>
+              <p class="text-xs text-slate-400 mt-1">Se você é o gestor do restaurante, entre com seu email e senha para carregar seus entregadores e pedidos.</p>
+            </div>
+            <div class="flex flex-col gap-2.5 pt-2">
+              <button 
+                type="button" 
+                onclick="exitPortalToMainApp()" 
+                class="w-full py-3.5 px-4 bg-amber-500 hover:bg-amber-400 active:scale-98 text-slate-950 font-black text-xs uppercase tracking-wider rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition cursor-pointer">
+                <span>🔑 Entrar como Gestor da Loja</span>
+              </button>
+              <button 
+                type="button" 
+                onclick="promptConnectStoreInPortal()" 
+                class="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition cursor-pointer border border-slate-700">
+                Conectar Loja por Código / Email
+              </button>
+            </div>
           </div>
         `;
         return;
@@ -6821,12 +7017,18 @@
 
     // Pré-selecionar motoboy no formulário rápido
     function quickSelectMotoboyForOrder(motoboyId) {
+      window.preSelectedMotoboyId = motoboyId;
+      const select = document.getElementById('quick-motoboy-select');
+      if (select && motoboyId) {
+        select.value = motoboyId;
+      }
+      const mb = (motoboysList || []).find(m => m.id === motoboyId);
       const input = document.getElementById('quick-order-input');
       if (input) {
         input.focus();
         input.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
-      showToast('Lançar Pedido', 'Digite o número do pedido para vincular ao motoboy.', 'info');
+      showToast('Entregador Selecionado', `Lançando pedido para ${mb ? mb.name : 'o entregador'}. Digite o número ou dados do pedido.`, 'info');
     }
 
     // Renderiza a Planilha em MOSAICO Agrupada por Motoboys (Conforme layout das imagens)
@@ -6835,32 +7037,42 @@
       const hintEl = document.getElementById('motoboy-view-hint');
       if (!container) return;
 
-      // Estado vazio inicial
-      if (!motoboyOrders || motoboyOrders.length === 0) {
-        if (hintEl) hintEl.innerText = 'Nenhum pedido lançado na planilha.';
+      if (!motoboysList || motoboysList.length === 0) {
+        if (hintEl) hintEl.innerText = 'Nenhum entregador cadastrado.';
         container.innerHTML = `
-          <div class="py-14 text-center text-slate-400 text-xs font-semibold">
-            Nenhum pedido registrado ainda.
+          <div class="py-12 px-4 text-center space-y-3">
+            <div class="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center text-xl mx-auto shadow-inner">
+              🛵
+            </div>
+            <p class="text-xs sm:text-sm font-bold text-slate-700">Nenhum motoboy cadastrado nesta loja</p>
+            <p class="text-[11px] text-slate-400">Cadastre seus entregadores para acompanhar entregas e lançar pedidos.</p>
+            <button 
+              type="button" 
+              onclick="openCreateMotoboyModal()" 
+              class="px-4 py-2 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 text-xs font-black rounded-xl inline-flex items-center gap-1.5 shadow-sm transition cursor-pointer">
+              <span>+ Cadastrar Primeiro Motoboy</span>
+            </button>
           </div>
         `;
         return;
       }
 
-      // Motoboys que possuem pelo menos 1 pedido lançado na planilha
-      const motoboysWithOrders = motoboysList.filter(mb => 
-        motoboyOrders.some(o => o.motoboyId === mb.id)
-      );
-
-      let displayedMotoboys = [...motoboysWithOrders];
+      // Ordena: motoboys com pedidos primeiro, e depois os disponíveis para receber pedidos
+      let displayedMotoboys = [...motoboysList].sort((a, b) => {
+        const countA = (motoboyOrders || []).filter(o => o.motoboyId === a.id).length;
+        const countB = (motoboyOrders || []).filter(o => o.motoboyId === b.id).length;
+        if (countA > 0 && countB === 0) return -1;
+        if (countA === 0 && countB > 0) return 1;
+        return (a.order ?? 0) - (b.order ?? 0);
+      });
 
       // Atualiza o subtítulo/dica
+      const totalOrdersCount = (motoboyOrders || []).length;
       if (hintEl) {
         if (motoboySearchFilter) {
           hintEl.innerText = `Filtrando por: "${motoboySearchFilter}"`;
-        } else if (displayedMotoboys.length === 1) {
-          hintEl.innerText = `Exibindo: ${displayedMotoboys[0].name}`;
         } else {
-          hintEl.innerText = `Exibindo ${displayedMotoboys.length} motoboy(s) com pedidos`;
+          hintEl.innerText = `${displayedMotoboys.length} entregador(es) &bull; ${totalOrdersCount} pedido(s) lançado(s)`;
         }
       }
 
@@ -6901,8 +7113,14 @@
         let ordersTilesHtml = '';
         if (assignedOrders.length === 0) {
           ordersTilesHtml = `
-            <div class="p-6 text-center text-slate-400 text-xs font-medium bg-slate-50/60 rounded-2xl border border-dashed border-slate-200">
-              Nenhum pedido lançado para ${mb.name}.
+            <div class="p-5 text-center text-slate-400 text-xs font-medium bg-slate-50/70 rounded-2xl border border-dashed border-slate-200 space-y-2">
+              <p>Nenhum pedido lançado para ${escapeHtml(mb.name)}.</p>
+              <button 
+                type="button" 
+                onclick="quickSelectMotoboyForOrder('${mb.id}')" 
+                class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-xl text-[11px] font-black inline-flex items-center gap-1 shadow-2xs transition cursor-pointer">
+                <span>+ Lançar Pedido</span>
+              </button>
             </div>
           `;
         } else {
@@ -7245,6 +7463,8 @@
               active: true
             };
             localStorage.setItem('fast_pedidos_session_v1', JSON.stringify(sessionData));
+            localStorage.setItem('last_tenant_id', tenantUid);
+            localStorage.setItem('last_tenant_email', usernameVal);
 
             const overlay = document.getElementById('login-screen-overlay');
             if (overlay) overlay.classList.add('hidden');
@@ -7325,6 +7545,8 @@
           active: true
         };
         localStorage.setItem('fast_pedidos_session_v1', JSON.stringify(sessionData));
+        localStorage.setItem('last_tenant_id', tenantUid);
+        localStorage.setItem('last_tenant_email', loggedUserName);
 
         const overlay = document.getElementById('login-screen-overlay');
         if (overlay) overlay.classList.add('hidden');
@@ -7362,6 +7584,7 @@
 
           renderKanban();
           renderMotoboyMosaic();
+          renderMainMotoboyList();
 
           const mainHeaderName = document.getElementById('main-header-store-name');
           if (mainHeaderName) mainHeaderName.innerText = 'FAST PEDIDOS';
@@ -7405,6 +7628,12 @@
             if (sess && sess.tenantId) {
               initTenantSession(sess.tenantId, sess.username);
             }
+          } else {
+            const lastTenant = localStorage.getItem('last_tenant_id');
+            const lastEmail = localStorage.getItem('last_tenant_email') || 'Portal Motoboy';
+            if (lastTenant) {
+              initTenantSession(lastTenant, lastEmail);
+            }
           }
           const savedMbId = activePortalMotoboyId || window.activePortalMotoboyId || localStorage.getItem('activePortalMotoboyId');
           if (savedMbId && typeof renderPortalDashboard === 'function') {
@@ -7433,6 +7662,7 @@
         motoboysList = [];
         renderKanban();
         renderMotoboyMosaic();
+        renderMainMotoboyList();
       } catch (e) {}
     }
 
@@ -7789,7 +8019,7 @@
   <!-- FIREBASE FIRESTORE REAL-TIME MULTI-DEVICE SYNC & AUTH MODULE -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, collection, onSnapshot, setDoc, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getFirestore, collection, onSnapshot, setDoc, doc, deleteDoc, query, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
     const firebaseConfig = {
@@ -7936,6 +8166,7 @@
           }
           
           if (typeof renderDrawerMotoboys === 'function') renderDrawerMotoboys();
+          if (typeof renderMainMotoboyList === 'function') renderMainMotoboyList();
           if (typeof populateMotoboySelect === 'function') populateMotoboySelect();
           if (typeof renderMotoboyMosaic === 'function') renderMotoboyMosaic();
           
@@ -7949,10 +8180,16 @@
               renderPortalMotoboySelection();
             }
           }
-        }, (err) => console.warn("Firebase Motoboys error:", err));
+        }, (err) => {
+          console.warn("Firebase Motoboys error:", err);
+          if (err && err.message && (err.message.includes('quota') || err.message.includes('Quota') || err.message.includes('resource-exhausted'))) {
+            window.handleQuotaExceeded();
+          }
+        });
 
-        // 3. Pedidos dos Motoboys da Loja: stores/${tenantId}/motoboyOrders
-        unsubMotoboyOrders = onSnapshot(collection(db, "stores", tenantId, "motoboyOrders"), (snapshot) => {
+        // 3. Pedidos dos Motoboys da Loja: stores/${tenantId}/motoboyOrders (Limitado a 100 mais recentes para reduzir consumo de leituras)
+        const motoboyOrdersQuery = query(collection(db, "stores", tenantId, "motoboyOrders"), limit(100));
+        unsubMotoboyOrders = onSnapshot(motoboyOrdersQuery, (snapshot) => {
           const remoteOrders = [];
           if (!snapshot.empty) {
             snapshot.forEach(docSnap => {
@@ -7988,6 +8225,8 @@
           }
 
           if (typeof renderMotoboyMosaic === 'function') renderMotoboyMosaic();
+          if (typeof renderMainMotoboyList === 'function') renderMainMotoboyList();
+
           const activePortalMb = window.activePortalMotoboyId || (typeof window.getActivePortalMotoboyId === 'function' ? window.getActivePortalMotoboyId() : localStorage.getItem('activePortalMotoboyId'));
           if (activePortalMb) {
             if (typeof renderPortalDashboard === 'function') {
@@ -8011,10 +8250,16 @@
               }
             }
           }
-        }, (err) => console.warn("Firebase MotoboyOrders error:", err));
+        }, (err) => {
+          console.warn("Firebase MotoboyOrders error:", err);
+          if (err && err.message && (err.message.includes('quota') || err.message.includes('Quota') || err.message.includes('resource-exhausted'))) {
+            window.handleQuotaExceeded();
+          }
+        });
 
-        // 4. Pedidos iFood KDS da Loja: stores/${tenantId}/orders
-        unsubOrders = onSnapshot(collection(db, "stores", tenantId, "orders"), (snapshot) => {
+        // 4. Pedidos iFood KDS da Loja: stores/${tenantId}/orders (Limitado a 100 mais recentes para reduzir consumo de leituras)
+        const ordersQuery = query(collection(db, "stores", tenantId, "orders"), limit(100));
+        unsubOrders = onSnapshot(ordersQuery, (snapshot) => {
           const remoteOrders = [];
           if (!snapshot.empty) {
             snapshot.forEach(docSnap => {
@@ -8035,7 +8280,12 @@
           }
           
           if (typeof renderKanban === 'function') renderKanban();
-        }, (err) => console.warn("Firebase Orders error:", err));
+        }, (err) => {
+          console.warn("Firebase Orders error:", err);
+          if (err && err.message && (err.message.includes('quota') || err.message.includes('Quota') || err.message.includes('resource-exhausted'))) {
+            window.handleQuotaExceeded();
+          }
+        });
       }
       window.initTenantSync = initTenantSync;
 
