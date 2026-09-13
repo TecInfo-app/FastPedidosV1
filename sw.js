@@ -1,9 +1,11 @@
 // Fast Pedidos - Service Worker com Suporte a Web Push & PWA Offline
-const CACHE_NAME = 'fastpedidos-v3';
+const CACHE_NAME = 'fastpedidos-v4';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
+  './motoboy.html',
   './manifest.json',
+  './manifest-motoboy.json',
   './icon.svg'
 ];
 

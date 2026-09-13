@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Portal do Entregador - Fast Pedidos</title>
   
-  <!-- PWA & Mobile Web App Meta -->
-  <link rel="manifest" href="./manifest.json">
+  <!-- PWA & Mobile Web App Meta (DEDICADO AO MOTOBOY) -->
+  <link rel="manifest" href="./manifest-motoboy.json">
   <link rel="apple-touch-icon" href="./apple-touch-icon.png">
   <link rel="icon" type="image/svg+xml" href="./icon.svg">
   <meta name="theme-color" content="#f59e0b">
@@ -14,6 +14,43 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Entregador">
+  
+  <!-- Dynamic PWA Manifest com Loja Vinculada para Instalação no Celular -->
+  <script>
+    (function() {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const storeId = urlParams.get('store') || localStorage.getItem('portal_last_store_id') || '';
+        const startUrl = storeId ? `./motoboy.html?store=${encodeURIComponent(storeId)}` : './motoboy.html';
+        
+        const dynamicManifest = {
+          name: "Portal do Entregador - Fast Pedidos",
+          short_name: "Entregador",
+          description: "Acompanhamento de entregas e taxas",
+          start_url: startUrl,
+          scope: "./",
+          display: "standalone",
+          orientation: "portrait",
+          background_color: "#020617",
+          theme_color: "#f59e0b",
+          icons: [
+            { "src": "./icon.svg", "sizes": "192x192 512x512 any", "type": "image/svg+xml", "purpose": "any" },
+            { "src": "./icon.svg", "sizes": "512x512 any", "type": "image/svg+xml", "purpose": "maskable" },
+            { "src": "./pwa-192x192.png", "sizes": "192x192", "type": "image/png" },
+            { "src": "./pwa-512x512.png", "sizes": "512x512", "type": "image/png" }
+          ]
+        };
+        const blob = new Blob([JSON.stringify(dynamicManifest)], { type: 'application/json' });
+        const manifestURL = URL.createObjectURL(blob);
+        const manifestEl = document.querySelector('link[rel="manifest"]');
+        if (manifestEl) {
+          manifestEl.setAttribute('href', manifestURL);
+        }
+      } catch (e) {
+        console.warn('Fallback manifest-motoboy:', e);
+      }
+    })();
+  </script>
   
   <!-- Tailwind CSS via CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -1243,6 +1280,19 @@
 
     } catch (e) {
       console.error("Erro no Firebase do Portal do Motoboy:", e);
+    }
+
+    // Registro do Service Worker dedicado para o PWA do Motoboy
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then((reg) => {
+            console.log('[Portal Motoboy] Service Worker registrado com sucesso:', reg.scope);
+          })
+          .catch((err) => {
+            console.warn('[Portal Motoboy] Falha ao registrar Service Worker:', err);
+          });
+      });
     }
   </script>
 </body>

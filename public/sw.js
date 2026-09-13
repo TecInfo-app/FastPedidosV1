@@ -1,9 +1,11 @@
 // Fast Pedidos - Service Worker com Suporte a Web Push & PWA Offline
-const CACHE_NAME = 'fastpedidos-v3';
+const CACHE_NAME = 'fastpedidos-v4';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
+  './motoboy.html',
   './manifest.json',
+  './manifest-motoboy.json',
   './icon.svg'
 ];
 
@@ -38,7 +40,7 @@ self.addEventListener('push', (event) => {
     title: '🛵 Novo Pedido para Entrega!',
     body: 'Você recebeu um novo pedido para entrega.',
     orderId: 'novo',
-    url: '/?portal=motoboy'
+    url: './motoboy.html'
   };
 
   if (event.data) {
@@ -53,14 +55,14 @@ self.addEventListener('push', (event) => {
   const notificationTitle = data.title || '🛵 Novo Pedido Chegou!';
   const notificationOptions = {
     body: data.body || 'Um novo pedido foi atribuído a você no Fast Pedidos.',
-    icon: '/pwa-192x192.png',
-    badge: '/pwa-192x192.png',
+    icon: './pwa-192x192.png',
+    badge: './pwa-192x192.png',
     tag: data.tag || `order-${data.orderId || Date.now()}`,
     renotify: true,
     requireInteraction: true,
     vibrate: [350, 100, 350, 100, 600],
     data: {
-      url: data.url || '/?portal=motoboy',
+      url: data.url || './motoboy.html',
       orderId: data.orderId
     },
     actions: [
@@ -82,13 +84,13 @@ self.addEventListener('notificationclick', (event) => {
 
   const targetUrl = (event.notification.data && event.notification.data.url) 
     ? event.notification.data.url 
-    : '/?portal=motoboy';
+    : './motoboy.html';
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
       for (let i = 0; i < windowClients.length; i++) {
         const client = windowClients[i];
-        if (client.url.includes('portal=motoboy') && 'focus' in client) {
+        if (client.url.includes('motoboy') && 'focus' in client) {
           return client.focus();
         }
       }
