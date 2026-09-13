@@ -194,6 +194,19 @@
           <span id="login-btn-text">Entrar no Sistema</span>
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
         </button>
+
+        <div class="relative flex py-1 items-center">
+          <div class="flex-grow border-t border-slate-800"></div>
+          <span class="flex-shrink mx-3 text-[10px] text-slate-500 font-bold uppercase">Ou Acesso Rápido</span>
+          <div class="flex-grow border-t border-slate-800"></div>
+        </div>
+
+        <button 
+          type="button" 
+          onclick="openMotoboyPortal()"
+          class="w-full py-3 rounded-xl bg-slate-800/90 hover:bg-slate-750 active:scale-98 text-amber-400 border border-amber-500/30 font-black text-xs uppercase tracking-wider transition cursor-pointer flex items-center justify-center gap-2 shadow-sm">
+          <span>🛵 Sou Entregador (Acessar Portal)</span>
+        </button>
       </form>
 
       <div class="mt-6 text-center pt-4 border-t border-slate-800/80 text-[11px] text-slate-500 font-medium">
@@ -1564,6 +1577,55 @@
     </div>
   </div>
 
+  <!-- MODAL SELETOR DE LOJA NO PORTAL DO MOTOBOY -->
+  <div id="modal-portal-store-selector" style="z-index: 99999;" class="fixed inset-0 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm hidden animate-fade-in" onclick="if(event.target === this) closePortalStoreSelectorModal()">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl text-slate-100 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-400/30 text-amber-400 flex items-center justify-center text-2xl font-black shadow-inner">
+            🏪
+          </div>
+          <div>
+            <h3 class="text-base font-black text-white">Conectar Loja</h3>
+            <p class="text-xs text-slate-400">Selecione o estabelecimento</p>
+          </div>
+        </div>
+        <button type="button" onclick="closePortalStoreSelectorModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-sm cursor-pointer">
+          ✕
+        </button>
+      </div>
+
+      <div class="space-y-3">
+        <label class="block text-xs font-bold uppercase tracking-wider text-slate-300">
+          Lojas Disponíveis:
+        </label>
+        <div id="portal-modal-stores-list" class="space-y-2 max-h-48 overflow-y-auto pr-1">
+          <!-- Rendered via JS -->
+        </div>
+
+        <div class="relative flex py-1 items-center">
+          <div class="flex-grow border-t border-slate-800"></div>
+          <span class="flex-shrink mx-3 text-[10px] text-slate-500 font-bold uppercase">Ou digite o código/email</span>
+          <div class="flex-grow border-t border-slate-800"></div>
+        </div>
+
+        <form onsubmit="handlePortalManualStoreSubmit(event)" class="space-y-3">
+          <input 
+            type="text" 
+            id="portal-manual-store-input" 
+            placeholder="ex: ciadochopp.contato@gmail.com" 
+            class="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-amber-400"
+          />
+          <button 
+            type="submit" 
+            class="w-full py-3 bg-amber-500 hover:bg-amber-400 active:scale-98 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl transition cursor-pointer shadow-md">
+            Conectar Loja
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <!-- PORTAL DO MOTOBOY (VIEW DEDICADA / FULLSCREEN MODAL COM LOGIN POR SENHA) -->
   <div id="portal-motoboy-view" style="z-index: 99998;" class="fixed inset-0 bg-slate-950 text-slate-100 flex flex-col hidden overflow-y-auto animate-fade-in">
     <!-- Header do Portal -->
@@ -1641,8 +1703,36 @@
             <div class="w-14 h-14 mx-auto rounded-3xl bg-amber-500/20 border border-amber-400/30 text-amber-400 flex items-center justify-center text-2xl shadow-inner mb-2">
               🛵
             </div>
-            <h2 class="text-xl font-black text-white">Quem é você?</h2>
-            <p class="text-xs text-slate-400">Selecione seu nome abaixo para entrar e consultar suas entregas</p>
+            <h2 class="text-xl font-black text-white">Portal do Entregador</h2>
+            <p class="text-xs text-slate-400">Selecione seu nome na lista para entrar e acessar suas entregas</p>
+          </div>
+
+          <!-- Store Info Bar -->
+          <div class="px-3.5 py-2.5 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between gap-3 shadow-xs">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="text-base shrink-0">🏪</span>
+              <div class="min-w-0">
+                <span class="text-[10px] uppercase font-bold text-slate-400 block leading-none">Estabelecimento</span>
+                <span id="portal-current-store-name" class="text-xs font-black text-amber-400 truncate block leading-tight mt-0.5">Carregando Loja...</span>
+              </div>
+            </div>
+            <button 
+              type="button" 
+              onclick="openPortalStoreSelectorModal()" 
+              class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white text-[11px] font-bold border border-slate-700 transition shrink-0 cursor-pointer">
+              Trocar Loja
+            </button>
+          </div>
+
+          <!-- Search Motoboy Input -->
+          <div class="relative">
+            <input 
+              type="text" 
+              id="portal-motoboy-search-input"
+              oninput="filterPortalMotoboySelection(this.value)"
+              placeholder="🔍 Buscar entregador na lista..." 
+              class="w-full px-4 py-2.5 rounded-2xl bg-slate-900 border border-slate-800 text-white placeholder-slate-500 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-transparent transition"
+            />
           </div>
 
           <div id="portal-motoboys-selection-grid" class="space-y-2.5">
@@ -2170,49 +2260,7 @@
       </div>
     </div>
 
-    <!-- CARD 2: EQUIPE DE ENTREGADORES (MOTOBOYS) -->
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 sm:p-5 space-y-3">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2 border-b border-slate-100">
-        <div class="flex items-center gap-2.5">
-          <span class="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center text-base font-black shrink-0">
-            🛵
-          </span>
-          <div>
-            <div class="flex items-center gap-2 flex-wrap">
-              <h3 class="text-sm sm:text-base font-black text-slate-900 uppercase tracking-tight">Equipe de Entregadores</h3>
-              <span id="card2-motoboys-count-badge" class="px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 text-[10px] font-black border border-amber-200">
-                0 Ativos
-              </span>
-            </div>
-            <p class="text-[11px] text-slate-400 font-medium">Entregadores cadastrados e disponíveis para entregas</p>
-          </div>
-        </div>
-
-        <div class="flex items-center gap-2 self-end sm:self-auto">
-          <button 
-            type="button" 
-            onclick="openCreateMotoboyModal()" 
-            class="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm transition cursor-pointer">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
-            <span>+ Novo Motoboy</span>
-          </button>
-          <button 
-            type="button" 
-            onclick="openMotoboyPortal()" 
-            class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer"
-            title="Abrir o Portal do Entregador">
-            <span>🔗 Portal</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- Container Dinâmico dos Motoboys no Card 2 -->
-      <div id="main-motoboys-list" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
-        <!-- Rendered dynamically via JS -->
-      </div>
-    </div>
-
-    <!-- CARD 3: LANÇAMENTO RÁPIDO DE PEDIDO -->
+    <!-- CARD 2: LANÇAMENTO RÁPIDO DE PEDIDO -->
     <div class="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 sm:p-5 space-y-3">
       <div class="flex items-center justify-between gap-2 mb-1">
         <div class="flex items-center gap-2">
@@ -2472,6 +2520,16 @@
           }
         }
       } catch(e) {}
+      const portalStore = localStorage.getItem('portal_last_store_id');
+      if (portalStore) {
+        currentTenantId = portalStore;
+        return portalStore;
+      }
+      const lastTenant = localStorage.getItem('last_tenant_id');
+      if (lastTenant) {
+        currentTenantId = lastTenant;
+        return lastTenant;
+      }
       return '';
     }
     window.getCurrentTenantId = getCurrentTenantId;
@@ -4391,7 +4449,28 @@
     // --- MOTOBOYS MANAGEMENT (DRAWER TAB 3 & SELECT) ---
     function loadMotoboys() {
       const storageKey = getTenantStorageKey('motoboys');
-      const saved = localStorage.getItem(storageKey);
+      let saved = localStorage.getItem(storageKey);
+
+      // Se não encontrou no tenant atual, busca em chaves alternativas salvas anteriormente
+      if (!saved || saved === '[]') {
+        const globalSaved = localStorage.getItem('cia_motoboys_list_v2');
+        if (globalSaved && globalSaved !== '[]') {
+          saved = globalSaved;
+        }
+      }
+      if (!saved || saved === '[]') {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.endsWith('_motoboys') && k !== storageKey) {
+            const candidate = localStorage.getItem(k);
+            if (candidate && candidate !== '[]') {
+              saved = candidate;
+              break;
+            }
+          }
+        }
+      }
+
       if (saved) {
         try { 
           motoboysList = JSON.parse(saved); 
@@ -4406,10 +4485,21 @@
       } else {
         motoboysList = [];
       }
+
       renderDrawerMotoboys();
       renderMainMotoboyList();
       populateMotoboySelect();
       renderMotoboyMosaic();
+
+      const portalView = document.getElementById('portal-motoboy-view');
+      if (portalView && !portalView.classList.contains('hidden')) {
+        const curMbId = activePortalMotoboyId || window.activePortalMotoboyId || localStorage.getItem('activePortalMotoboyId');
+        if (curMbId && motoboysList.some(m => m.id === curMbId)) {
+          renderPortalDashboard(curMbId);
+        } else {
+          renderPortalMotoboySelection();
+        }
+      }
     }
 
     function moveMotoboyOrder(index, delta) {
@@ -4538,91 +4628,8 @@
       `).join('');
     }
 
-    // Renderiza a lista de motoboys no CARD 2 da tela principal
-    function renderMainMotoboyList() {
-      const container = document.getElementById('main-motoboys-list');
-      const badgeCount = document.getElementById('card2-motoboys-count-badge');
-      if (!container) return;
-
-      const totalMbs = motoboysList ? motoboysList.length : 0;
-      if (badgeCount) {
-        badgeCount.innerText = `${totalMbs} Cadastrado${totalMbs !== 1 ? 's' : ''}`;
-      }
-
-      if (!motoboysList || motoboysList.length === 0) {
-        container.innerHTML = `
-          <div class="col-span-full p-6 sm:p-8 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl text-center space-y-3">
-            <div class="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center text-xl mx-auto shadow-inner">
-              🛵
-            </div>
-            <div>
-              <p class="text-xs sm:text-sm font-bold text-slate-800">Nenhum entregador cadastrado nesta loja</p>
-              <p class="text-[11px] text-slate-400 mt-0.5">Cadastre seus motoboys para associar pedidos e acompanhar entregas em tempo real.</p>
-            </div>
-            <button 
-              type="button" 
-              onclick="openCreateMotoboyModal()" 
-              class="px-4 py-2 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 text-xs font-black rounded-xl inline-flex items-center gap-1.5 shadow-sm transition cursor-pointer">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
-              <span>+ Cadastrar Primeiro Motoboy</span>
-            </button>
-          </div>
-        `;
-        return;
-      }
-
-      container.innerHTML = motoboysList.map(mb => {
-        const assignedOrders = (motoboyOrders || []).filter(o => o.motoboyId === mb.id);
-        const deliveredOrders = assignedOrders.filter(o => o.status === 'entregue');
-        const totalFees = assignedOrders.reduce((acc, o) => acc + (Number(o.deliveryFee) || 0), 0);
-        const initial = mb.name ? mb.name.charAt(0).toUpperCase() : 'M';
-        
-        return `
-          <div class="bg-slate-50 hover:bg-amber-50/40 border border-slate-200 hover:border-amber-300 rounded-2xl p-3 flex flex-col justify-between transition group shadow-2xs">
-            <div class="space-y-2">
-              <div class="flex items-center justify-between gap-1.5">
-                <div class="w-8 h-8 rounded-xl bg-amber-500 text-slate-950 font-black text-xs flex items-center justify-center shadow-xs shrink-0">
-                  ${initial}
-                </div>
-                <div class="flex items-center gap-1">
-                  <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Disponível"></span>
-                  <span class="text-[10px] font-bold text-slate-500">Ativo</span>
-                </div>
-              </div>
-              <div>
-                <h4 class="text-xs font-black text-slate-900 truncate uppercase" title="${escapeHtml(mb.name)}">
-                  ${escapeHtml(mb.name)}
-                </h4>
-                <p class="text-[10px] text-slate-400 font-medium truncate">
-                  ${mb.phone ? escapeHtml(mb.phone) : (mb.plate ? 'Placa: ' + escapeHtml(mb.plate) : 'Entregador')}
-                </p>
-              </div>
-              <div class="p-1.5 bg-white rounded-xl border border-slate-200/80 flex items-center justify-between text-[11px]">
-                <span class="text-slate-500 font-bold">${assignedOrders.length} ped.</span>
-                <span class="font-black text-emerald-700 font-mono">${formatCurrency(totalFees)}</span>
-              </div>
-            </div>
-
-            <div class="pt-2 mt-2 border-t border-slate-200/60 flex items-center gap-1.5">
-              <button 
-                type="button" 
-                onclick="quickSelectMotoboyForOrder('${mb.id}')"
-                class="flex-1 py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-lg text-[10px] font-black tracking-tight transition cursor-pointer flex items-center justify-center gap-1 shadow-2xs"
-                title="Lançar pedido para ${escapeHtml(mb.name)}">
-                <span>+ Pedido</span>
-              </button>
-              <button 
-                type="button" 
-                onclick="openEditMotoboyModal('${mb.id}')"
-                class="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-lg transition cursor-pointer"
-                title="Editar dados ou senha">
-                ✏️
-              </button>
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
+    // Compatibilidade no-op
+    function renderMainMotoboyList() {}
     window.renderMainMotoboyList = renderMainMotoboyList;
 
     function openCreateMotoboyModal() {
@@ -4771,34 +4778,43 @@
       }
     };
     let selectedPortalAuthMbId = null;
+    let portalMotoboyFilterQuery = '';
+
+    function filterPortalMotoboySelection(query) {
+      portalMotoboyFilterQuery = (query || '').trim().toLowerCase();
+      renderPortalMotoboySelection();
+    }
+    window.filterPortalMotoboySelection = filterPortalMotoboySelection;
 
     function openMotoboyPortal() {
-      const tenantId = getCurrentTenantId();
-      const storeParam = tenantId ? `&store=${encodeURIComponent(tenantId)}` : '';
-      const portalUrl = `${window.location.origin}${window.location.pathname}?portal=motoboy${storeParam}`;
-
-      // Se acionado a partir do painel administrativo, tenta abrir em nova aba
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get('portal') !== 'motoboy') {
-        try {
-          const win = window.open(portalUrl, '_blank');
-          if (win) {
-            closeDrawer();
-            showToast('Portal Aberto', 'O Portal do Entregador foi aberto em uma nova aba isolada.', 'info');
-            return;
-          }
-        } catch (e) {}
-      }
-
       const portalView = document.getElementById('portal-motoboy-view');
-      if (!portalView) return;
+      const overlay = document.getElementById('login-screen-overlay');
+      if (overlay) overlay.classList.add('hidden');
+      if (portalView) portalView.classList.remove('hidden');
+
+      document.documentElement.classList.add('in-portal-mode');
+      document.body.classList.add('in-portal-mode');
+      localStorage.setItem('preferred_app_mode', 'portal');
 
       closeDrawer();
-      portalView.classList.remove('hidden');
+
+      let tenantId = getCurrentTenantId();
+      if (!tenantId) {
+        tenantId = localStorage.getItem('portal_last_store_id') || localStorage.getItem('last_tenant_id');
+      }
+      if (tenantId) {
+        initTenantSession(tenantId, localStorage.getItem('last_tenant_email') || 'Portal Motoboy');
+      } else {
+        if (typeof autoConnectOrPromptPortalStore === 'function') {
+          autoConnectOrPromptPortalStore();
+        }
+      }
+
+      loadMotoboys();
 
       // Se já houver um motoboy ativo logado na sessão atual
       const savedMbId = activePortalMotoboyId || window.activePortalMotoboyId || localStorage.getItem('activePortalMotoboyId');
-      if (savedMbId) {
+      if (savedMbId && (motoboysList || []).some(m => m.id === savedMbId)) {
         renderPortalDashboard(savedMbId);
       } else {
         renderPortalMotoboySelection();
@@ -4813,6 +4829,11 @@
     function exitPortalToMainApp() {
       document.documentElement.classList.remove('in-portal-mode');
       document.body.classList.remove('in-portal-mode');
+      localStorage.removeItem('preferred_app_mode');
+      localStorage.removeItem('activePortalMotoboyId');
+      activePortalMotoboyId = null;
+      window.activePortalMotoboyId = null;
+
       const portalView = document.getElementById('portal-motoboy-view');
       if (portalView) portalView.classList.add('hidden');
 
@@ -4829,15 +4850,175 @@
     }
     window.exitPortalToMainApp = exitPortalToMainApp;
 
+    function openPortalStoreSelectorModal() {
+      const modal = document.getElementById('modal-portal-store-selector');
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      renderPortalModalStoresList();
+    }
+    window.openPortalStoreSelectorModal = openPortalStoreSelectorModal;
+
+    function closePortalStoreSelectorModal() {
+      const modal = document.getElementById('modal-portal-store-selector');
+      if (modal) modal.classList.add('hidden');
+    }
+    window.closePortalStoreSelectorModal = closePortalStoreSelectorModal;
+
+    async function renderPortalModalStoresList() {
+      const listEl = document.getElementById('portal-modal-stores-list');
+      if (!listEl) return;
+
+      listEl.innerHTML = `
+        <div class="py-4 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+          <svg class="w-4 h-4 animate-spin text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10" stroke-width="3" stroke-dasharray="32" stroke-linecap="round"></circle></svg>
+          <span>Buscando lojas cadastradas...</span>
+        </div>
+      `;
+
+      const foundStores = [];
+
+      // 1. Lojas em storesList
+      if (Array.isArray(storesList) && storesList.length > 0) {
+        storesList.forEach(s => {
+          if (s && s.id && !foundStores.some(x => x.id === s.id)) {
+            foundStores.push({ id: s.id, name: s.name || 'Loja Principal', source: 'local' });
+          }
+        });
+      }
+
+      // 2. Lojas em Firestore stores_directory
+      if (window.firebaseGetDocs && window.firebaseCollection && window.firebaseDb) {
+        try {
+          const snap = await window.firebaseGetDocs(window.firebaseCollection(window.firebaseDb, "stores_directory"));
+          if (snap && !snap.empty) {
+            snap.forEach(docSnap => {
+              const data = docSnap.data();
+              if (data && data.id && !foundStores.some(x => x.id === data.id)) {
+                foundStores.push({ id: data.id, name: data.name || data.id, source: 'cloud' });
+              }
+            });
+          }
+        } catch(e) {}
+      }
+
+      // 3. Histórico recente
+      const last = localStorage.getItem('last_tenant_id');
+      if (last && !foundStores.some(x => x.id === last)) {
+        foundStores.push({ id: last, name: localStorage.getItem('last_tenant_email') || last, source: 'history' });
+      }
+
+      // 4. Se ainda vazio, busca qualquer chave de motoboy
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.endsWith('_motoboys')) {
+          const tid = k.replace('_motoboys', '');
+          if (tid && !foundStores.some(x => x.id === tid)) {
+            foundStores.push({ id: tid, name: tid, source: 'cache' });
+          }
+        }
+      }
+
+      if (foundStores.length === 0) {
+        listEl.innerHTML = `
+          <div class="p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-center text-xs text-slate-400">
+            Nenhuma outra loja encontrada. Digite o e-mail da loja abaixo para conectar.
+          </div>
+        `;
+        return;
+      }
+
+      const current = getCurrentTenantId();
+      listEl.innerHTML = foundStores.map(s => {
+        const isSelected = s.id === current;
+        return `
+          <button 
+            type="button" 
+            onclick="selectStoreForPortal('${escapeHtml(s.id)}', '${escapeHtml(s.name)}')"
+            class="w-full p-3 rounded-2xl flex items-center justify-between transition cursor-pointer text-left border ${
+              isSelected 
+                ? 'bg-amber-500/15 border-amber-500/60 text-amber-300 shadow-sm' 
+                : 'bg-slate-950/60 hover:bg-slate-800 border-slate-800 hover:border-slate-700 text-white'
+            }">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="text-base shrink-0">🏪</span>
+              <div class="min-w-0">
+                <span class="text-xs font-bold truncate block">${escapeHtml(s.name)}</span>
+                <span class="text-[10px] text-slate-500 truncate block font-mono">ID: ${escapeHtml(s.id)}</span>
+              </div>
+            </div>
+            ${isSelected ? '<span class="text-[10px] font-black px-2 py-0.5 rounded-md bg-amber-400 text-slate-950 uppercase">Ativa</span>' : '<span class="text-xs text-slate-400">Conectar →</span>'}
+          </button>
+        `;
+      }).join('');
+    }
+    window.renderPortalModalStoresList = renderPortalModalStoresList;
+
+    function selectStoreForPortal(storeId, storeName) {
+      if (!storeId) return;
+      localStorage.setItem('portal_last_store_id', storeId);
+      localStorage.setItem('last_tenant_id', storeId);
+      if (storeName) localStorage.setItem('last_tenant_email', storeName);
+      currentTenantId = storeId;
+      initTenantSession(storeId, storeName || storeId);
+      closePortalStoreSelectorModal();
+      showToast('Loja Conectada', `Conectado a ${storeName || storeId}! Carregando entregadores...`, 'success');
+      loadMotoboys();
+      renderPortalMotoboySelection();
+    }
+    window.selectStoreForPortal = selectStoreForPortal;
+
+    function handlePortalManualStoreSubmit(e) {
+      if (e) e.preventDefault();
+      const input = document.getElementById('portal-manual-store-input');
+      const val = input ? input.value.trim() : '';
+      if (!val) return;
+      const clean = val.toLowerCase();
+      const derivedId = clean.includes('@') ? ('store_' + clean.replace(/[^a-zA-Z0-9_-]/g, '_')) : clean;
+      selectStoreForPortal(derivedId, val);
+      if (input) input.value = '';
+    }
+    window.handlePortalManualStoreSubmit = handlePortalManualStoreSubmit;
+
+    async function autoConnectOrPromptPortalStore() {
+      // Tenta recuperar do Firestore stores_directory
+      if (window.firebaseGetDocs && window.firebaseCollection && window.firebaseDb) {
+        try {
+          const snap = await window.firebaseGetDocs(window.firebaseCollection(window.firebaseDb, "stores_directory"));
+          if (snap && !snap.empty) {
+            const list = [];
+            snap.forEach(d => {
+              const data = d.data();
+              if (data && data.id) list.push(data);
+            });
+            if (list.length === 1) {
+              selectStoreForPortal(list[0].id, list[0].name || list[0].id);
+              return;
+            } else if (list.length > 1) {
+              openPortalStoreSelectorModal();
+              return;
+            }
+          }
+        } catch(e) {}
+      }
+
+      // Tenta chave salva
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.endsWith('_motoboys')) {
+          const tid = k.replace('_motoboys', '');
+          if (tid) {
+            selectStoreForPortal(tid, 'Minha Loja');
+            return;
+          }
+        }
+      }
+
+      openPortalStoreSelectorModal();
+    }
+    window.autoConnectOrPromptPortalStore = autoConnectOrPromptPortalStore;
+
     function promptConnectStoreInPortal() {
-      const codeOrEmail = prompt('Digite o e-mail ou código de identificação da sua loja:');
-      if (!codeOrEmail || !codeOrEmail.trim()) return;
-      const clean = codeOrEmail.trim().toLowerCase();
-      const derivedTenantId = clean.includes('@') ? ('store_' + clean.replace(/[^a-zA-Z0-9_-]/g, '_')) : clean;
-      localStorage.setItem('last_tenant_id', derivedTenantId);
-      localStorage.setItem('last_tenant_email', clean);
-      initTenantSession(derivedTenantId, clean);
-      showToast('Conectando...', `Carregando dados da loja "${clean}"...`, 'info');
+      openPortalStoreSelectorModal();
     }
     window.promptConnectStoreInPortal = promptConnectStoreInPortal;
 
@@ -4849,10 +5030,10 @@
         navigator.clipboard.writeText(url).then(() => {
           showToast('Link da Loja Copiado!', 'Link do Portal do Motoboy exclusivo da sua loja copiado!', 'success');
         }).catch(() => {
-          prompt('Copie o link de acesso ao portal do motoboy da sua loja:', url);
+          openPortalStoreSelectorModal();
         });
       } else {
-        prompt('Copie o link de acesso ao portal do motoboy da sua loja:', url);
+        openPortalStoreSelectorModal();
       }
     }
 
@@ -4862,6 +5043,7 @@
       const selectListBox = document.getElementById('portal-auth-select-list');
       const passBox = document.getElementById('portal-auth-password-box');
       const grid = document.getElementById('portal-motoboys-selection-grid');
+      const storeNameEl = document.getElementById('portal-current-store-name');
 
       if (!authScreen || !grid) return;
 
@@ -4872,6 +5054,19 @@
 
       selectedPortalAuthMbId = null;
 
+      // Atualiza nome da loja na barra de informações do portal
+      if (storeNameEl) {
+        const currentTenant = getCurrentTenantId();
+        const activeStore = (storesList && storesList.find(s => s.active)) || (storesList && storesList[0]);
+        const storeLabel = (activeStore && activeStore.name) || localStorage.getItem('last_tenant_email') || currentTenant || 'Minha Loja';
+        storeNameEl.innerText = storeLabel;
+      }
+
+      let listToRender = (motoboysList || []);
+      if (portalMotoboyFilterQuery) {
+        listToRender = listToRender.filter(m => m.name && m.name.toLowerCase().includes(portalMotoboyFilterQuery));
+      }
+
       if (!motoboysList || motoboysList.length === 0) {
         grid.innerHTML = `
           <div class="p-6 sm:p-8 bg-slate-900 border border-slate-800 rounded-3xl text-center space-y-4 shadow-xl">
@@ -4880,20 +5075,26 @@
             </div>
             <div>
               <h3 class="text-base font-black text-white">Nenhum entregador encontrado</h3>
-              <p class="text-xs text-slate-400 mt-1">Se você é o gestor do restaurante, entre com seu email e senha para carregar seus entregadores e pedidos.</p>
+              <p class="text-xs text-slate-400 mt-1">Conecte a sua loja para carregar a equipe de entregadores e os pedidos em tempo real.</p>
             </div>
             <div class="flex flex-col gap-2.5 pt-2">
               <button 
                 type="button" 
-                onclick="exitPortalToMainApp()" 
+                onclick="openPortalStoreSelectorModal()" 
                 class="w-full py-3.5 px-4 bg-amber-500 hover:bg-amber-400 active:scale-98 text-slate-950 font-black text-xs uppercase tracking-wider rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition cursor-pointer">
-                <span>🔑 Entrar como Gestor da Loja</span>
+                <span>🏪 Conectar Loja / Estabelecimento</span>
               </button>
               <button 
                 type="button" 
-                onclick="promptConnectStoreInPortal()" 
+                onclick="loadMotoboys(); showToast('Atualizando...', 'Sincronizando entregadores...', 'info');" 
                 class="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition cursor-pointer border border-slate-700">
-                Conectar Loja por Código / Email
+                🔄 Tentar Novamente
+              </button>
+              <button 
+                type="button" 
+                onclick="exitPortalToMainApp()" 
+                class="w-full py-2.5 px-3 text-slate-500 hover:text-slate-300 text-xs font-semibold transition cursor-pointer">
+                🔑 Entrar no Painel do Gestor
               </button>
             </div>
           </div>
@@ -4901,30 +5102,39 @@
         return;
       }
 
-      grid.innerHTML = motoboysList.map(mb => {
+      if (listToRender.length === 0) {
+        grid.innerHTML = `
+          <div class="p-5 bg-slate-900 border border-slate-800 rounded-2xl text-center text-xs text-slate-400">
+            Nenhum entregador encontrado com o nome "<strong>${escapeHtml(portalMotoboyFilterQuery)}</strong>".
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = listToRender.map(mb => {
         const assignedOrders = (motoboyOrders || []).filter(o => o.motoboyId === mb.id);
         const initial = mb.name ? mb.name.charAt(0).toUpperCase() : 'M';
         return `
           <button 
             type="button" 
             onclick="selectMotoboyForPortalAuth('${mb.id}')"
-            class="w-full p-4 bg-slate-900 hover:bg-slate-800/90 active:scale-98 border border-slate-800 hover:border-amber-400/60 rounded-3xl flex items-center justify-between transition cursor-pointer text-left shadow-md group">
-            <div class="flex items-center gap-3.5">
+            class="w-full p-4 bg-slate-900 hover:bg-slate-850 active:scale-[0.99] border border-slate-800 hover:border-amber-400/60 rounded-3xl flex items-center justify-between transition cursor-pointer text-left shadow-md group">
+            <div class="flex items-center gap-3.5 min-w-0">
               <div class="w-12 h-12 rounded-2xl bg-amber-400 text-slate-950 font-black text-lg flex items-center justify-center shadow-md group-hover:scale-105 transition-transform shrink-0">
                 ${initial}
               </div>
-              <div>
-                <span class="block text-sm font-black text-white group-hover:text-amber-400 uppercase tracking-wide transition-colors">${escapeHtml(mb.name)}</span>
+              <div class="min-w-0">
+                <span class="block text-sm font-black text-white group-hover:text-amber-400 uppercase tracking-wide transition-colors truncate">${escapeHtml(mb.name)}</span>
                 <span class="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
-                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                  <span>Trabalhando</span>
+                  <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                  <span class="text-emerald-400 font-bold text-[11px]">Disponível</span>
                   <span>&bull;</span>
-                  <span class="text-slate-500">${assignedOrders.length} pedido${assignedOrders.length !== 1 ? 's' : ''}</span>
+                  <span class="text-slate-400 text-[11px]">${assignedOrders.length} pedido${assignedOrders.length !== 1 ? 's' : ''}</span>
                 </span>
               </div>
             </div>
-            <div class="flex items-center gap-2">
-              <span class="px-3 py-1 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-bold group-hover:bg-amber-500 group-hover:text-slate-950 transition">
+            <div class="flex items-center gap-2 shrink-0 ml-2">
+              <span class="px-3.5 py-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-bold group-hover:bg-amber-500 group-hover:text-slate-950 transition">
                 Entrar →
               </span>
             </div>
@@ -7609,7 +7819,7 @@
     function checkAuthStateOnLoad() {
       try {
         const urlParams = new URLSearchParams(window.location.search);
-        const isPortalMotoboy = urlParams.get('portal') === 'motoboy';
+        const isPortalMotoboy = urlParams.get('portal') === 'motoboy' || localStorage.getItem('preferred_app_mode') === 'portal' || window.location.hash.includes('portal');
         const storeFromUrl = urlParams.get('store');
 
         const savedSession = localStorage.getItem('fast_pedidos_session_v1');
@@ -7621,22 +7831,31 @@
           if (logoutBtn) logoutBtn.classList.add('hidden');
           const portalView = document.getElementById('portal-motoboy-view');
           if (portalView) portalView.classList.remove('hidden');
-          if (storeFromUrl) {
-            initTenantSession(storeFromUrl, 'Portal Motoboy');
-          } else if (savedSession) {
-            const sess = JSON.parse(savedSession);
-            if (sess && sess.tenantId) {
-              initTenantSession(sess.tenantId, sess.username);
-            }
+          document.documentElement.classList.add('in-portal-mode');
+          document.body.classList.add('in-portal-mode');
+
+          let targetStore = storeFromUrl;
+          if (!targetStore && savedSession) {
+            try {
+              const sess = JSON.parse(savedSession);
+              if (sess && sess.tenantId) targetStore = sess.tenantId;
+            } catch(e) {}
+          }
+          if (!targetStore) {
+            targetStore = localStorage.getItem('portal_last_store_id') || localStorage.getItem('last_tenant_id');
+          }
+
+          if (targetStore) {
+            initTenantSession(targetStore, localStorage.getItem('last_tenant_email') || 'Portal Motoboy');
           } else {
-            const lastTenant = localStorage.getItem('last_tenant_id');
-            const lastEmail = localStorage.getItem('last_tenant_email') || 'Portal Motoboy';
-            if (lastTenant) {
-              initTenantSession(lastTenant, lastEmail);
+            if (typeof autoConnectOrPromptPortalStore === 'function') {
+              autoConnectOrPromptPortalStore();
             }
           }
+
+          loadMotoboys();
           const savedMbId = activePortalMotoboyId || window.activePortalMotoboyId || localStorage.getItem('activePortalMotoboyId');
-          if (savedMbId && typeof renderPortalDashboard === 'function') {
+          if (savedMbId && (motoboysList || []).some(m => m.id === savedMbId) && typeof renderPortalDashboard === 'function') {
             renderPortalDashboard(savedMbId);
           } else if (typeof renderPortalMotoboySelection === 'function') {
             renderPortalMotoboySelection();
@@ -8019,7 +8238,7 @@
   <!-- FIREBASE FIRESTORE REAL-TIME MULTI-DEVICE SYNC & AUTH MODULE -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, collection, onSnapshot, setDoc, doc, deleteDoc, query, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getFirestore, collection, onSnapshot, setDoc, doc, deleteDoc, query, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
     const firebaseConfig = {
@@ -8041,6 +8260,8 @@
       window.firebaseSignIn = signInWithEmailAndPassword;
       window.firebaseCreateUser = createUserWithEmailAndPassword;
       window.firebaseDoc = doc;
+      window.firebaseGetDocs = getDocs;
+      window.firebaseCollection = collection;
       
       window.firebaseQuotaExceeded = false;
       window.handleQuotaExceeded = () => {
@@ -8111,6 +8332,15 @@
         detachTenantSync();
 
         console.log(`🔥 [Firebase]: Iniciando sincronização isolada para a loja [${tenantId}]...`);
+
+        try {
+          const storeName = (window.storesList && window.storesList.find(s=>s.active)?.name) || window.currentTenantEmail || tenantId;
+          setDoc(doc(db, "stores_directory", tenantId), {
+            id: tenantId,
+            name: storeName,
+            updatedAt: Date.now()
+          }, { merge: true }).catch(() => {});
+        } catch(e) {}
 
         // 1. Configurações da Loja: stores/${tenantId}/config/settings
         unsubSettings = onSnapshot(doc(db, "stores", tenantId, "config", "settings"), (docSnap) => {
