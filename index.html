@@ -7450,10 +7450,15 @@
       orders.forEach(ord => {
         if (now - (ord.timestamp || 0) > SIX_HOURS) {
           hasDeleted = true;
-          // Delete completely from Firebase
-          if (tenantId && window.firebaseDb && window.firebaseDeleteDoc) {
+          // Soft-delete no Firebase para economizar 100% da cota de exclusões
+          if (tenantId && window.firebaseDb && window.firebaseSetDoc) {
             try {
-              window.firebaseDeleteDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "orders", String(ord.id))).catch(()=>{});
+              const cleanId = String(ord.id || ord.displayId || Date.now()).replace(/[^a-zA-Z0-9_\-]/g, '_');
+              window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "orders", cleanId), {
+                ...ord,
+                archived: true,
+                archivedAt: Date.now()
+              }, { merge: true }).catch(()=>{});
             } catch(e) {}
           }
         } else {
