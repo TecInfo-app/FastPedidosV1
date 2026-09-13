@@ -1515,13 +1515,43 @@
       </div>
 
       <div class="flex items-center gap-2">
-        <div class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800/90 border border-slate-700/80 text-xs font-bold text-slate-300 shadow-sm">
-          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span class="hidden sm:inline">Área Exclusiva do Entregador</span>
-          <span class="sm:hidden">Entregador</span>
+        <button 
+          type="button" 
+          onclick="requestPortalNotificationPermission()" 
+          id="portal-alert-status-btn"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700/80 text-xs font-bold text-amber-300 shadow-sm transition cursor-pointer"
+          title="Clique para testar som e permitir notificações">
+          <span id="portal-alert-status-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span id="portal-alert-status-label">🔔 Alertas Sonoros</span>
+        </button>
+        <div class="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/90 border border-slate-700/80 text-xs font-bold text-slate-300 shadow-sm">
+          <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+          <span>Online</span>
         </div>
       </div>
     </header>
+
+    <!-- BANNER FLUTUANTE DE NOVO PEDIDO RECEBIDO (ALERTA VISUAL E SONORO) -->
+    <div id="portal-new-order-alert-banner" class="hidden fixed top-16 left-4 right-4 max-w-lg mx-auto z-50 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-950 p-4 rounded-2xl shadow-2xl border-2 border-amber-200">
+      <div class="flex items-center justify-between gap-3">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-11 h-11 rounded-2xl bg-slate-950 text-amber-400 flex items-center justify-center text-2xl font-black shrink-0 shadow-md">
+            🛵
+          </div>
+          <div class="min-w-0">
+            <span class="text-[10px] font-black uppercase tracking-wider bg-slate-950/20 px-2 py-0.5 rounded-md inline-block mb-0.5">🚨 NOVO PEDIDO LANÇADO!</span>
+            <h4 id="portal-alert-order-title" class="text-sm sm:text-base font-black truncate leading-tight">Pedido #1024</h4>
+            <p id="portal-alert-order-subtitle" class="text-xs font-semibold text-slate-900 truncate">Taxa: R$ 8,00</p>
+          </div>
+        </div>
+        <button 
+          type="button" 
+          onclick="dismissPortalNewOrderBanner()" 
+          class="px-3.5 py-2 bg-slate-950 hover:bg-slate-850 text-amber-400 active:scale-95 rounded-xl text-xs font-black shrink-0 cursor-pointer shadow-md transition">
+          OK, Ver!
+        </button>
+      </div>
+    </div>
 
     <!-- Main Container -->
     <main class="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 flex flex-col justify-start">
@@ -1635,7 +1665,14 @@
             </div>
           </div>
 
-          <div class="flex items-center gap-2 w-full sm:w-auto">
+          <div class="flex items-center gap-2 w-full sm:w-auto flex-wrap sm:flex-nowrap">
+            <button 
+              type="button" 
+              onclick="testMotoboyAlertSound()" 
+              class="flex-1 sm:flex-none px-3.5 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 active:scale-98 text-amber-300 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer border border-amber-500/40"
+              title="Testar som do alarme e vibração">
+              <span>🔔 Testar Alarme</span>
+            </button>
             <button 
               type="button" 
               onclick="refreshPortalDashboard()" 
@@ -4608,7 +4645,24 @@
         activePortalMotoboyId = mb.id;
         window.activePortalMotoboyId = mb.id;
         localStorage.setItem('activePortalMotoboyId', mb.id);
+
+        // Desbloqueia contexto de áudio móvel
+        getMotoboyAudioContext();
+
+        // Solicita permissão para notificações na tela caso ainda não concedida
+        if ('Notification' in window && Notification.permission === 'default') {
+          Notification.requestPermission().then(() => {
+            if (typeof updatePortalNotificationBadge === 'function') updatePortalNotificationBadge();
+          }).catch(() => {});
+        }
+
+        // Armazena pedidos já existentes para não disparar alerta de pedidos antigos no login
+        const existingMbOrders = (window.motoboyOrders || motoboyOrders || []).filter(o => o.motoboyId === mb.id);
+        window._knownMotoboyOrderIds = new Set(existingMbOrders.map(o => String(o.id)));
+        window._initialMotoboySyncDone = true;
+
         renderPortalDashboard(mb.id);
+        if (typeof updatePortalNotificationBadge === 'function') updatePortalNotificationBadge();
         showToast('Login Efetuado!', `Bem-vindo ao portal, ${mb.name}!`, 'success');
       } else {
         showToast('Senha Incorreta', 'A senha digitada está incorreta. Tente novamente ou solicite ao gerente.', 'warning');
@@ -4668,6 +4722,7 @@
       if (totalOrdersEl) totalOrdersEl.innerText = assignedOrders.length;
       if (totalFeesEl) totalFeesEl.innerText = formatCurrency(totalFees);
       if (ordersBadgeEl) ordersBadgeEl.innerText = `${assignedOrders.length} pedido${assignedOrders.length !== 1 ? 's' : ''}`;
+      if (typeof updatePortalNotificationBadge === 'function') updatePortalNotificationBadge();
 
       // Detalhamento por Loja
       if (breakdownEl) {
@@ -5013,6 +5068,242 @@
       if (!activePortalMotoboyId) return;
       printMotoboyDeliveriesList(activePortalMotoboyId);
     }
+
+    // =========================================================================
+    // --- MOTOR DE NOTIFICAÇÃO, SOM E VIBRAÇÃO EM TEMPO REAL PARA O MOTOBOY ---
+    // =========================================================================
+    let motoboyAudioCtx = null;
+    window._knownMotoboyOrderIds = new Set();
+    window._initialMotoboySyncDone = false;
+
+    function getMotoboyAudioContext() {
+      if (!motoboyAudioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+          motoboyAudioCtx = new AudioContextClass();
+        }
+      }
+      if (motoboyAudioCtx && motoboyAudioCtx.state === 'suspended') {
+        motoboyAudioCtx.resume().catch(() => {});
+      }
+      return motoboyAudioCtx;
+    }
+
+    // Desbloqueia contexto de áudio em gestos do usuário no dispositivo móvel
+    document.addEventListener('click', function unlockAudioOnUserGesture() {
+      try {
+        const ctx = getMotoboyAudioContext();
+        if (ctx && ctx.state === 'suspended') ctx.resume();
+      } catch (e) {}
+    }, { passive: true });
+
+    document.addEventListener('touchstart', function unlockAudioOnTouchGesture() {
+      try {
+        const ctx = getMotoboyAudioContext();
+        if (ctx && ctx.state === 'suspended') ctx.resume();
+      } catch (e) {}
+    }, { passive: true });
+
+    function playMotoboyAlertSound() {
+      return new Promise((resolve) => {
+        try {
+          const ctx = getMotoboyAudioContext();
+          if (!ctx) {
+            resolve();
+            return;
+          }
+          if (ctx.state === 'suspended') {
+            ctx.resume().catch(() => {});
+          }
+
+          const now = ctx.currentTime;
+          const masterGain = ctx.createGain();
+          masterGain.gain.setValueAtTime(0.55, now);
+          masterGain.connect(ctx.destination);
+
+          // Sequência sonora expressiva e vibrante de despacho (D5, A5, D6 - 2 repetições rápidas)
+          const notes = [
+            { freq: 587.33, start: 0.00, dur: 0.12 },
+            { freq: 880.00, start: 0.14, dur: 0.12 },
+            { freq: 1174.66, start: 0.28, dur: 0.32 },
+            { freq: 587.33, start: 0.55, dur: 0.12 },
+            { freq: 880.00, start: 0.69, dur: 0.12 },
+            { freq: 1174.66, start: 0.83, dur: 0.45 }
+          ];
+
+          notes.forEach(n => {
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(n.freq, now + n.start);
+
+            g.gain.setValueAtTime(0.0001, now + n.start);
+            g.gain.linearRampToValueAtTime(0.50, now + n.start + 0.03);
+            g.gain.exponentialRampToValueAtTime(0.0001, now + n.start + n.dur);
+
+            osc.connect(g);
+            g.connect(masterGain);
+            osc.start(now + n.start);
+            osc.stop(now + n.start + n.dur + 0.05);
+          });
+
+          setTimeout(() => {
+            resolve();
+          }, 1400);
+        } catch (e) {
+          console.warn('Erro ao reproduzir alerta sonoro do motoboy:', e);
+          resolve();
+        }
+      });
+    }
+
+    function triggerMotoboyVibration() {
+      try {
+        if ('vibrate' in navigator) {
+          // Padrão de vibração potente no celular: vibra 350ms, pausa 100ms, vibra 350ms, pausa 100ms, vibra 600ms
+          navigator.vibrate([350, 100, 350, 100, 600]);
+        }
+      } catch (e) {}
+    }
+
+    function triggerMotoboySystemNotification(order) {
+      if (!('Notification' in window)) return;
+      if (Notification.permission !== 'granted') return;
+
+      try {
+        const orderNum = order.orderNumber || order.id || 'Novo';
+        const feeFormatted = typeof formatCurrency === 'function' ? formatCurrency(Number(order.deliveryFee) || 0) : `R$ ${order.deliveryFee}`;
+        const title = `🛵 Pedido #${orderNum} Chegou!`;
+        const bodyText = `Nova entrega vinculada!\nTaxa: ${feeFormatted} • Cliente: ${order.customerName || 'Cliente'}\nEndereço: ${order.customerAddress || 'Ver rota no portal'}`;
+
+        const notif = new Notification(title, {
+          body: bodyText,
+          icon: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="48" fill="%23f59e0b"/><text x="50" y="65" font-size="45" text-anchor="middle">🛵</text></svg>',
+          tag: `motoboy-order-${order.id || Date.now()}`,
+          renotify: true,
+          requireInteraction: true
+        });
+
+        notif.onclick = function() {
+          window.focus();
+          this.close();
+        };
+      } catch (e) {
+        console.warn('Erro ao disparar notificação nativa:', e);
+      }
+    }
+
+    function showPortalNewOrderBanner(order) {
+      const banner = document.getElementById('portal-new-order-alert-banner');
+      const titleEl = document.getElementById('portal-alert-order-title');
+      const subEl = document.getElementById('portal-alert-order-subtitle');
+      if (!banner) return;
+
+      const orderNum = order.orderNumber || order.id || 'Novo';
+      const feeFormatted = typeof formatCurrency === 'function' ? formatCurrency(Number(order.deliveryFee) || 0) : `R$ ${order.deliveryFee}`;
+      const custName = order.customerName ? ` - ${order.customerName}` : '';
+      const custAddr = order.customerAddress ? ` • 📍 ${order.customerAddress}` : '';
+
+      if (titleEl) titleEl.innerText = `Pedido #${orderNum}${custName}`;
+      if (subEl) subEl.innerText = `Taxa: ${feeFormatted}${custAddr}`;
+
+      banner.classList.remove('hidden');
+
+      if (window._portalBannerTimeout) clearTimeout(window._portalBannerTimeout);
+      window._portalBannerTimeout = setTimeout(() => {
+        banner.classList.add('hidden');
+      }, 15000);
+    }
+
+    function dismissPortalNewOrderBanner() {
+      const banner = document.getElementById('portal-new-order-alert-banner');
+      if (banner) banner.classList.add('hidden');
+      if (window._portalBannerTimeout) clearTimeout(window._portalBannerTimeout);
+    }
+
+    function triggerMotoboyNewOrderAlert(order) {
+      // 1. Som melódico alto
+      playMotoboyAlertSound();
+
+      // 2. Vibração do smartphone
+      triggerMotoboyVibration();
+
+      // 3. Notificação nativa do sistema / navegador
+      triggerMotoboySystemNotification(order);
+
+      // 4. Banner visual vibrante no topo do portal
+      showPortalNewOrderBanner(order);
+
+      // 5. Toast do sistema
+      if (typeof showToast === 'function') {
+        const feeFormatted = typeof formatCurrency === 'function' ? formatCurrency(Number(order.deliveryFee) || 0) : `R$ ${order.deliveryFee}`;
+        showToast(
+          '🛵 Novo Pedido Atribuído!',
+          `Pedido #${order.orderNumber} vinculado a você (${feeFormatted})!`,
+          'success'
+        );
+      }
+    }
+    window.triggerMotoboyNewOrderAlert = triggerMotoboyNewOrderAlert;
+    window.dismissPortalNewOrderBanner = dismissPortalNewOrderBanner;
+
+    function requestPortalNotificationPermission() {
+      getMotoboyAudioContext();
+
+      if ('Notification' in window) {
+        Notification.requestPermission().then((permission) => {
+          updatePortalNotificationBadge();
+          if (permission === 'granted') {
+            playMotoboyAlertSound();
+            triggerMotoboyVibration();
+            showToast('Notificações Ativadas!', 'Você receberá avisos sonoros, vibração e notificações na tela a cada novo pedido.', 'success');
+          } else if (permission === 'denied') {
+            playMotoboyAlertSound();
+            showToast('Aviso', 'Notificações foram bloqueadas no navegador. Os alarmes sonoros e vibração continuarão funcionando quando o portal estiver aberto.', 'warning');
+          } else {
+            playMotoboyAlertSound();
+            showToast('Alerta Testado', 'Alarme sonoro e vibração acionados com sucesso.', 'info');
+          }
+        }).catch(() => {
+          playMotoboyAlertSound();
+          showToast('Alerta Testado', 'Alarme sonoro acionado.', 'info');
+        });
+      } else {
+        playMotoboyAlertSound();
+        showToast('Alerta Sonoro', 'Alarme sonoro disparado com sucesso.', 'info');
+      }
+    }
+    window.requestPortalNotificationPermission = requestPortalNotificationPermission;
+
+    function testMotoboyAlertSound() {
+      triggerMotoboyNewOrderAlert({
+        id: 'teste-' + Date.now(),
+        orderNumber: '108',
+        customerName: 'Cliente Demonstração',
+        deliveryFee: 10.00,
+        customerAddress: 'Av. Paulista, 1000 - Apto 42'
+      });
+    }
+    window.testMotoboyAlertSound = testMotoboyAlertSound;
+
+    function updatePortalNotificationBadge() {
+      const dot = document.getElementById('portal-alert-status-dot');
+      const label = document.getElementById('portal-alert-status-label');
+      if (!label) return;
+
+      if ('Notification' in window && Notification.permission === 'granted') {
+        if (dot) {
+          dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
+        }
+        label.innerText = '🔔 Alertas Ativos';
+      } else {
+        if (dot) {
+          dot.className = 'w-2 h-2 rounded-full bg-amber-400';
+        }
+        label.innerText = '🔔 Ativar Alertas';
+      }
+    }
+    window.updatePortalNotificationBadge = updatePortalNotificationBadge;
 
     // --- MOTOBOY ORDERS & MOSAIC (CARD 3 & CARD 4) ---
     let lastLaunchedMotoboyId = null;
@@ -5576,6 +5867,17 @@
 
       lastLaunchedMotoboyId = pendingOrderData.motoboyId;
       saveMotoboyOrders();
+
+      // Se o motoboy estiver com o portal aberto no mesmo navegador, notifica imediatamente
+      const currentActiveMb = window.activePortalMotoboyId || (typeof window.getActivePortalMotoboyId === 'function' ? window.getActivePortalMotoboyId() : null);
+      if (currentActiveMb && String(currentActiveMb) === String(lastLaunchedMotoboyId)) {
+        createdOrders.forEach(item => {
+          if (window._knownMotoboyOrderIds) window._knownMotoboyOrderIds.add(String(item.order.id));
+          if (typeof triggerMotoboyNewOrderAlert === 'function') {
+            triggerMotoboyNewOrderAlert(item.order);
+          }
+        });
+      }
 
       // Reset modal e dados temporários
       closeFeeModal();
@@ -7214,8 +7516,27 @@
 
           if (typeof renderMotoboyMosaic === 'function') renderMotoboyMosaic();
           const activePortalMb = window.activePortalMotoboyId || (typeof window.getActivePortalMotoboyId === 'function' ? window.getActivePortalMotoboyId() : localStorage.getItem('activePortalMotoboyId'));
-          if (activePortalMb && typeof renderPortalDashboard === 'function') {
-            renderPortalDashboard(activePortalMb);
+          if (activePortalMb) {
+            if (typeof renderPortalDashboard === 'function') {
+              renderPortalDashboard(activePortalMb);
+            }
+
+            // DETECÇÃO DE NOVO PEDIDO EM TEMPO REAL VIA FIREBASE
+            const myOrders = remoteOrders.filter(o => String(o.motoboyId) === String(activePortalMb));
+            if (!window._initialMotoboySyncDone) {
+              window._knownMotoboyOrderIds = new Set(myOrders.map(o => String(o.id)));
+              window._initialMotoboySyncDone = true;
+            } else {
+              const incomingNewOrders = myOrders.filter(o => !window._knownMotoboyOrderIds.has(String(o.id)));
+              if (incomingNewOrders.length > 0) {
+                incomingNewOrders.forEach(ord => {
+                  window._knownMotoboyOrderIds.add(String(ord.id));
+                  if (typeof triggerMotoboyNewOrderAlert === 'function') {
+                    triggerMotoboyNewOrderAlert(ord);
+                  }
+                });
+              }
+            }
           }
         }, (err) => console.warn("Firebase MotoboyOrders error:", err));
 
