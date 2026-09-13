@@ -7389,6 +7389,10 @@
     function initTenantSession(tenantId, username = '') {
       currentTenantId = tenantId;
       currentTenantEmail = username;
+      if (tenantId) {
+        localStorage.setItem('portal_last_store_id', tenantId);
+        localStorage.setItem('last_tenant_id', tenantId);
+      }
 
       // Carrega dados específicos desta loja
       loadCredentials();

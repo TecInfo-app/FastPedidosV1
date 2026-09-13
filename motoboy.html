@@ -182,10 +182,18 @@
         </div>
 
         <!-- Store Info Bar -->
-        <div class="px-3.5 py-2 rounded-2xl bg-slate-900/70 border border-slate-800 flex items-center justify-center gap-2 shadow-xs text-center">
-          <span class="text-xs">🏪</span>
-          <span class="text-[11px] font-bold text-slate-400">Estabelecimento:</span>
-          <span id="portal-current-store-name" class="text-xs font-black text-amber-400 truncate">Carregando Loja...</span>
+        <div class="px-3.5 py-2.5 rounded-2xl bg-slate-900/70 border border-slate-800 flex items-center justify-between gap-2 shadow-xs">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="text-xs">🏪</span>
+            <span class="text-[11px] font-bold text-slate-400 shrink-0">Loja:</span>
+            <span id="portal-current-store-name" class="text-xs font-black text-amber-400 truncate">Carregando Loja...</span>
+          </div>
+          <button 
+            type="button" 
+            onclick="promptSwitchPortalStore()" 
+            class="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-amber-400 border border-slate-700/80 text-[10px] font-bold cursor-pointer transition shrink-0">
+            Trocar Loja 🔄
+          </button>
         </div>
 
         <!-- Search Motoboy Input -->
@@ -1149,14 +1157,82 @@
       container.classList.add('hidden');
     }
 
+    // Conectar ou Trocar Loja
+    function extractStoreId(input) {
+      if (!input) return '';
+      let str = input.trim();
+      if (str.includes('store=')) {
+        try {
+          const u = new URL(str, window.location.origin);
+          return u.searchParams.get('store') || '';
+        } catch (e) {
+          const match = str.match(/store=([^&]+)/);
+          if (match) return decodeURIComponent(match[1]);
+        }
+      }
+      return str;
+    }
+
+    function connectPortalToStore(rawInput) {
+      const storeId = extractStoreId(rawInput);
+      if (!storeId) {
+        showToast('Código Inválido', 'Por favor, digite ou cole o código ou link da loja.', 'warning');
+        return;
+      }
+
+      currentTenantId = storeId;
+      localStorage.setItem('portal_last_store_id', storeId);
+      localStorage.setItem('last_tenant_id', storeId);
+
+      // Atualiza URL no navegador
+      try {
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.set('store', storeId);
+        window.history.replaceState({}, '', newUrl.toString());
+      } catch (e) {}
+
+      showToast('Conectando...', 'Buscando dados da loja...', 'info');
+
+      if (window.startPortalSync) {
+        window.startPortalSync(storeId);
+      } else {
+        window.location.search = `?store=${encodeURIComponent(storeId)}`;
+      }
+    }
+    window.connectPortalToStore = connectPortalToStore;
+
+    function handleManualStoreConnect() {
+      const input = document.getElementById('portal-connect-store-input');
+      if (input) {
+        connectPortalToStore(input.value);
+      }
+    }
+    window.handleManualStoreConnect = handleManualStoreConnect;
+
+    function promptSwitchPortalStore() {
+      const current = currentTenantId || localStorage.getItem('portal_last_store_id') || '';
+      const entered = prompt('Digite ou cole o novo Código da Loja (ou Link do Portal):', current);
+      if (entered !== null && entered.trim() !== '') {
+        activePortalMotoboyId = null;
+        localStorage.removeItem('activePortalMotoboyId');
+        connectPortalToStore(entered.trim());
+      }
+    }
+    window.promptSwitchPortalStore = promptSwitchPortalStore;
+
     // Inicialização ao carregar
     window.addEventListener('DOMContentLoaded', () => {
       const urlParams = new URLSearchParams(window.location.search);
-      currentTenantId = urlParams.get('store') || localStorage.getItem('last_tenant_id') || '';
+      currentTenantId = urlParams.get('store') || localStorage.getItem('portal_last_store_id') || localStorage.getItem('last_tenant_id') || '';
+
+      if (urlParams.get('store')) {
+        localStorage.setItem('portal_last_store_id', urlParams.get('store'));
+        localStorage.setItem('last_tenant_id', urlParams.get('store'));
+      }
 
       const storeNameEl = document.getElementById('portal-current-store-name');
       if (storeNameEl) {
-        storeNameEl.innerText = localStorage.getItem('portal_store_name') || currentTenantId || 'Minha Loja';
+        storeNameEl.innerText = localStorage.getItem('portal_store_name') || currentTenantId || 'Aguardando Loja';
       }
     });
   </script>
@@ -1175,6 +1251,9 @@
       appId: "1:780977340389:web:e5aa31d6a4aea8b98b390c"
     };
 
+    let unsubMotoboys = null;
+    let unsubOrders = null;
+
     try {
       const app = initializeApp(firebaseConfig);
       const db = getFirestore(app);
@@ -1183,15 +1262,61 @@
       window.firebaseDoc = doc;
       window.firebaseSetDoc = setDoc;
 
-      const urlParams = new URLSearchParams(window.location.search);
-      let tenantId = urlParams.get('store');
-      if (!tenantId) {
-        tenantId = localStorage.getItem('last_tenant_id') || localStorage.getItem('portal_last_store_id');
-      }
+      function renderStoreNotConnectedCard() {
+        const grid = document.getElementById('portal-motoboys-selection-grid');
+        const storeNameEl = document.getElementById('portal-current-store-name');
+        if (storeNameEl) storeNameEl.innerText = 'Loja não conectada';
 
-      if (tenantId) {
+        if (grid) {
+          grid.innerHTML = `
+            <div class="p-6 bg-slate-900 border border-amber-500/40 rounded-3xl text-center space-y-4 shadow-2xl">
+              <div class="w-14 h-14 mx-auto rounded-3xl bg-amber-500/20 border border-amber-400/30 text-amber-400 flex items-center justify-center text-2xl shadow-inner">
+                🏪
+              </div>
+              <div class="space-y-1">
+                <h3 class="text-base font-black text-white">Conectar ao Estabelecimento</h3>
+                <p class="text-xs text-slate-400">Digite o código ou cole o link do portal da loja:</p>
+              </div>
+
+              <div class="space-y-2.5">
+                <input 
+                  type="text" 
+                  id="portal-connect-store-input"
+                  placeholder="Cole o código ou link da loja..."
+                  class="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-2xl text-center text-xs font-mono text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+                <button 
+                  type="button" 
+                  onclick="handleManualStoreConnect()"
+                  class="w-full py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 active:scale-98 text-slate-950 font-black text-xs sm:text-sm rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition cursor-pointer">
+                  <span>Conectar e Carregar Entregadores 🚀</span>
+                </button>
+              </div>
+
+              <p class="text-[11px] text-slate-500">
+                Peça ao gerente no caixa para clicar em <strong>"Copiar Link do Portal"</strong> e enviar pelo WhatsApp.
+              </p>
+            </div>
+          `;
+        }
+      }
+      window.renderStoreNotConnectedCard = renderStoreNotConnectedCard;
+
+      function startPortalSync(tenantId) {
+        if (!tenantId) {
+          renderStoreNotConnectedCard();
+          return;
+        }
+
         currentTenantId = tenantId;
-        console.log(`🔥 [Portal Motoboy]: Conectado ao Firebase da loja [${tenantId}]`);
+        localStorage.setItem('portal_last_store_id', tenantId);
+        localStorage.setItem('last_tenant_id', tenantId);
+
+        console.log(`🔥 [Portal Motoboy]: Conectando ao Firebase da loja [${tenantId}]`);
+
+        // Cancela listeners anteriores se houver
+        if (unsubMotoboys) unsubMotoboys();
+        if (unsubOrders) unsubOrders();
 
         // Busca nome da loja
         getDoc(doc(db, "stores", tenantId, "config", "settings")).then(snap => {
@@ -1208,7 +1333,7 @@
         }).catch(() => {});
 
         // 1. Escuta lista de Motoboys em tempo real
-        onSnapshot(collection(db, "stores", tenantId, "motoboys"), (snapshot) => {
+        unsubMotoboys = onSnapshot(collection(db, "stores", tenantId, "motoboys"), (snapshot) => {
           const list = [];
           if (!snapshot.empty) {
             snapshot.forEach(docSnap => {
@@ -1230,7 +1355,7 @@
 
         // 2. Escuta lista de Pedidos dos Motoboys em tempo real
         const ordersQuery = query(collection(db, "stores", tenantId, "motoboyOrders"), limit(100));
-        onSnapshot(ordersQuery, (snapshot) => {
+        unsubOrders = onSnapshot(ordersQuery, (snapshot) => {
           const orders = [];
           if (!snapshot.empty) {
             snapshot.forEach(docSnap => {
@@ -1264,18 +1389,17 @@
             renderPortalMotoboySelection();
           }
         }, (err) => console.warn('Erro ao sincronizar pedidos:', err));
+      }
+      window.startPortalSync = startPortalSync;
 
+      // Executa inicialização
+      const urlParams = new URLSearchParams(window.location.search);
+      let initialTenantId = urlParams.get('store') || localStorage.getItem('portal_last_store_id') || localStorage.getItem('last_tenant_id');
+      
+      if (initialTenantId) {
+        startPortalSync(initialTenantId);
       } else {
-        const grid = document.getElementById('portal-motoboys-selection-grid');
-        if (grid) {
-          grid.innerHTML = `
-            <div class="p-6 bg-slate-900 border border-slate-800 rounded-3xl text-center space-y-3 shadow-xl">
-              <div class="text-3xl">⚠️</div>
-              <h3 class="text-sm font-black text-white">Identificador da loja não fornecido</h3>
-              <p class="text-xs text-slate-400">Solicite ao gerente o link completo do portal com o código da loja.</p>
-            </div>
-          `;
-        }
+        renderStoreNotConnectedCard();
       }
 
     } catch (e) {
