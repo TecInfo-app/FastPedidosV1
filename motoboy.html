@@ -21,23 +21,32 @@
       try {
         const urlParams = new URLSearchParams(window.location.search);
         const storeId = urlParams.get('store') || localStorage.getItem('portal_last_store_id') || '';
-        const startUrl = storeId ? `./motoboy.html?store=${encodeURIComponent(storeId)}` : './motoboy.html';
         
+        const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
+        const origin = window.location.origin;
+        const startUrl = storeId 
+          ? `${origin}${basePath}motoboy.html?store=${encodeURIComponent(storeId)}` 
+          : `${origin}${basePath}motoboy.html`;
+        const scopeUrl = `${origin}${basePath}`;
+        const iconSvgUrl = `${origin}${basePath}icon.svg`;
+        const iconPng192Url = `${origin}${basePath}pwa-192x192.png`;
+        const iconPng512Url = `${origin}${basePath}pwa-512x512.png`;
+
         const dynamicManifest = {
           name: "Portal do Entregador - Fast Pedidos",
           short_name: "Entregador",
-          description: "Acompanhamento de entregas e taxas",
+          description: "Acompanhamento de entregas e taxas em tempo real",
           start_url: startUrl,
-          scope: "./",
+          scope: scopeUrl,
           display: "standalone",
           orientation: "portrait",
           background_color: "#020617",
           theme_color: "#f59e0b",
           icons: [
-            { "src": "./icon.svg", "sizes": "192x192 512x512 any", "type": "image/svg+xml", "purpose": "any" },
-            { "src": "./icon.svg", "sizes": "512x512 any", "type": "image/svg+xml", "purpose": "maskable" },
-            { "src": "./pwa-192x192.png", "sizes": "192x192", "type": "image/png" },
-            { "src": "./pwa-512x512.png", "sizes": "512x512", "type": "image/png" }
+            { src: iconSvgUrl, sizes: "192x192 512x512 any", type: "image/svg+xml", purpose: "any" },
+            { src: iconSvgUrl, sizes: "512x512 any", type: "image/svg+xml", purpose: "maskable" },
+            { src: iconPng192Url, sizes: "192x192", type: "image/png" },
+            { src: iconPng512Url, sizes: "512x512", type: "image/png" }
           ]
         };
         const blob = new Blob([JSON.stringify(dynamicManifest)], { type: 'application/json' });
