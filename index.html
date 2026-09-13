@@ -1577,55 +1577,6 @@
     </div>
   </div>
 
-  <!-- MODAL SELETOR DE LOJA NO PORTAL DO MOTOBOY -->
-  <div id="modal-portal-store-selector" style="z-index: 99999;" class="fixed inset-0 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm hidden animate-fade-in" onclick="if(event.target === this) closePortalStoreSelectorModal()">
-    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl text-slate-100 space-y-4">
-      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
-        <div class="flex items-center gap-3">
-          <div class="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-400/30 text-amber-400 flex items-center justify-center text-2xl font-black shadow-inner">
-            🏪
-          </div>
-          <div>
-            <h3 class="text-base font-black text-white">Conectar Loja</h3>
-            <p class="text-xs text-slate-400">Selecione o estabelecimento</p>
-          </div>
-        </div>
-        <button type="button" onclick="closePortalStoreSelectorModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-sm cursor-pointer">
-          ✕
-        </button>
-      </div>
-
-      <div class="space-y-3">
-        <label class="block text-xs font-bold uppercase tracking-wider text-slate-300">
-          Lojas Disponíveis:
-        </label>
-        <div id="portal-modal-stores-list" class="space-y-2 max-h-48 overflow-y-auto pr-1">
-          <!-- Rendered via JS -->
-        </div>
-
-        <div class="relative flex py-1 items-center">
-          <div class="flex-grow border-t border-slate-800"></div>
-          <span class="flex-shrink mx-3 text-[10px] text-slate-500 font-bold uppercase">Ou digite o código/email</span>
-          <div class="flex-grow border-t border-slate-800"></div>
-        </div>
-
-        <form onsubmit="handlePortalManualStoreSubmit(event)" class="space-y-3">
-          <input 
-            type="text" 
-            id="portal-manual-store-input" 
-            placeholder="ex: ciadochopp.contato@gmail.com" 
-            class="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-amber-400"
-          />
-          <button 
-            type="submit" 
-            class="w-full py-3 bg-amber-500 hover:bg-amber-400 active:scale-98 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl transition cursor-pointer shadow-md">
-            Conectar Loja
-          </button>
-        </form>
-      </div>
-    </div>
-  </div>
-
   <!-- PORTAL DO MOTOBOY (VIEW DEDICADA / FULLSCREEN MODAL COM LOGIN POR SENHA) -->
   <div id="portal-motoboy-view" style="z-index: 99998;" class="fixed inset-0 bg-slate-950 text-slate-100 flex flex-col hidden overflow-y-auto animate-fade-in">
     <!-- Header do Portal -->
@@ -1648,16 +1599,9 @@
       <div class="flex items-center gap-2">
         <button 
           type="button" 
-          onclick="exitPortalToMainApp()" 
-          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-95 border border-amber-400 text-xs font-black text-slate-950 shadow-sm transition cursor-pointer"
-          title="Acessar o Painel de Gerenciamento da Loja">
-          <span>🏪 Painel da Loja</span>
-        </button>
-        <button 
-          type="button" 
           onclick="requestPortalNotificationPermission()" 
           id="portal-alert-status-btn"
-          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700/80 text-xs font-bold text-amber-300 shadow-sm transition cursor-pointer"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-750 border border-slate-700/80 text-xs font-bold text-amber-300 shadow-sm transition cursor-pointer"
           title="Clique para testar som e permitir notificações">
           <span id="portal-alert-status-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
           <span id="portal-alert-status-label">🔔 Alertas Sonoros</span>
@@ -1708,20 +1652,10 @@
           </div>
 
           <!-- Store Info Bar -->
-          <div class="px-3.5 py-2.5 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between gap-3 shadow-xs">
-            <div class="flex items-center gap-2.5 min-w-0">
-              <span class="text-base shrink-0">🏪</span>
-              <div class="min-w-0">
-                <span class="text-[10px] uppercase font-bold text-slate-400 block leading-none">Estabelecimento</span>
-                <span id="portal-current-store-name" class="text-xs font-black text-amber-400 truncate block leading-tight mt-0.5">Carregando Loja...</span>
-              </div>
-            </div>
-            <button 
-              type="button" 
-              onclick="openPortalStoreSelectorModal()" 
-              class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white text-[11px] font-bold border border-slate-700 transition shrink-0 cursor-pointer">
-              Trocar Loja
-            </button>
+          <div class="px-3.5 py-2 rounded-2xl bg-slate-900/70 border border-slate-800 flex items-center justify-center gap-2 shadow-xs text-center">
+            <span class="text-xs">🏪</span>
+            <span class="text-[11px] font-bold text-slate-400">Estabelecimento:</span>
+            <span id="portal-current-store-name" class="text-xs font-black text-amber-400 truncate">Minha Loja</span>
           </div>
 
           <!-- Search Motoboy Input -->
@@ -4850,108 +4784,11 @@
     }
     window.exitPortalToMainApp = exitPortalToMainApp;
 
-    function openPortalStoreSelectorModal() {
-      const modal = document.getElementById('modal-portal-store-selector');
-      if (!modal) return;
-      modal.classList.remove('hidden');
-      renderPortalModalStoresList();
-    }
+    function openPortalStoreSelectorModal() {}
     window.openPortalStoreSelectorModal = openPortalStoreSelectorModal;
 
-    function closePortalStoreSelectorModal() {
-      const modal = document.getElementById('modal-portal-store-selector');
-      if (modal) modal.classList.add('hidden');
-    }
+    function closePortalStoreSelectorModal() {}
     window.closePortalStoreSelectorModal = closePortalStoreSelectorModal;
-
-    async function renderPortalModalStoresList() {
-      const listEl = document.getElementById('portal-modal-stores-list');
-      if (!listEl) return;
-
-      listEl.innerHTML = `
-        <div class="py-4 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-          <svg class="w-4 h-4 animate-spin text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10" stroke-width="3" stroke-dasharray="32" stroke-linecap="round"></circle></svg>
-          <span>Buscando lojas cadastradas...</span>
-        </div>
-      `;
-
-      const foundStores = [];
-
-      // 1. Lojas em storesList
-      if (Array.isArray(storesList) && storesList.length > 0) {
-        storesList.forEach(s => {
-          if (s && s.id && !foundStores.some(x => x.id === s.id)) {
-            foundStores.push({ id: s.id, name: s.name || 'Loja Principal', source: 'local' });
-          }
-        });
-      }
-
-      // 2. Lojas em Firestore stores_directory
-      if (window.firebaseGetDocs && window.firebaseCollection && window.firebaseDb) {
-        try {
-          const snap = await window.firebaseGetDocs(window.firebaseCollection(window.firebaseDb, "stores_directory"));
-          if (snap && !snap.empty) {
-            snap.forEach(docSnap => {
-              const data = docSnap.data();
-              if (data && data.id && !foundStores.some(x => x.id === data.id)) {
-                foundStores.push({ id: data.id, name: data.name || data.id, source: 'cloud' });
-              }
-            });
-          }
-        } catch(e) {}
-      }
-
-      // 3. Histórico recente
-      const last = localStorage.getItem('last_tenant_id');
-      if (last && !foundStores.some(x => x.id === last)) {
-        foundStores.push({ id: last, name: localStorage.getItem('last_tenant_email') || last, source: 'history' });
-      }
-
-      // 4. Se ainda vazio, busca qualquer chave de motoboy
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k && k.endsWith('_motoboys')) {
-          const tid = k.replace('_motoboys', '');
-          if (tid && !foundStores.some(x => x.id === tid)) {
-            foundStores.push({ id: tid, name: tid, source: 'cache' });
-          }
-        }
-      }
-
-      if (foundStores.length === 0) {
-        listEl.innerHTML = `
-          <div class="p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-center text-xs text-slate-400">
-            Nenhuma outra loja encontrada. Digite o e-mail da loja abaixo para conectar.
-          </div>
-        `;
-        return;
-      }
-
-      const current = getCurrentTenantId();
-      listEl.innerHTML = foundStores.map(s => {
-        const isSelected = s.id === current;
-        return `
-          <button 
-            type="button" 
-            onclick="selectStoreForPortal('${escapeHtml(s.id)}', '${escapeHtml(s.name)}')"
-            class="w-full p-3 rounded-2xl flex items-center justify-between transition cursor-pointer text-left border ${
-              isSelected 
-                ? 'bg-amber-500/15 border-amber-500/60 text-amber-300 shadow-sm' 
-                : 'bg-slate-950/60 hover:bg-slate-800 border-slate-800 hover:border-slate-700 text-white'
-            }">
-            <div class="flex items-center gap-2.5 min-w-0">
-              <span class="text-base shrink-0">🏪</span>
-              <div class="min-w-0">
-                <span class="text-xs font-bold truncate block">${escapeHtml(s.name)}</span>
-                <span class="text-[10px] text-slate-500 truncate block font-mono">ID: ${escapeHtml(s.id)}</span>
-              </div>
-            </div>
-            ${isSelected ? '<span class="text-[10px] font-black px-2 py-0.5 rounded-md bg-amber-400 text-slate-950 uppercase">Ativa</span>' : '<span class="text-xs text-slate-400">Conectar →</span>'}
-          </button>
-        `;
-      }).join('');
-    }
-    window.renderPortalModalStoresList = renderPortalModalStoresList;
 
     function selectStoreForPortal(storeId, storeName) {
       if (!storeId) return;
@@ -4960,27 +4797,13 @@
       if (storeName) localStorage.setItem('last_tenant_email', storeName);
       currentTenantId = storeId;
       initTenantSession(storeId, storeName || storeId);
-      closePortalStoreSelectorModal();
-      showToast('Loja Conectada', `Conectado a ${storeName || storeId}! Carregando entregadores...`, 'success');
       loadMotoboys();
       renderPortalMotoboySelection();
     }
     window.selectStoreForPortal = selectStoreForPortal;
 
-    function handlePortalManualStoreSubmit(e) {
-      if (e) e.preventDefault();
-      const input = document.getElementById('portal-manual-store-input');
-      const val = input ? input.value.trim() : '';
-      if (!val) return;
-      const clean = val.toLowerCase();
-      const derivedId = clean.includes('@') ? ('store_' + clean.replace(/[^a-zA-Z0-9_-]/g, '_')) : clean;
-      selectStoreForPortal(derivedId, val);
-      if (input) input.value = '';
-    }
-    window.handlePortalManualStoreSubmit = handlePortalManualStoreSubmit;
-
     async function autoConnectOrPromptPortalStore() {
-      // Tenta recuperar do Firestore stores_directory
+      // Conecta automaticamente à loja disponível sem solicitar seleção
       if (window.firebaseGetDocs && window.firebaseCollection && window.firebaseDb) {
         try {
           const snap = await window.firebaseGetDocs(window.firebaseCollection(window.firebaseDb, "stores_directory"));
@@ -4990,18 +4813,15 @@
               const data = d.data();
               if (data && data.id) list.push(data);
             });
-            if (list.length === 1) {
+            if (list.length > 0) {
               selectStoreForPortal(list[0].id, list[0].name || list[0].id);
-              return;
-            } else if (list.length > 1) {
-              openPortalStoreSelectorModal();
               return;
             }
           }
         } catch(e) {}
       }
 
-      // Tenta chave salva
+      // Tenta chave salva no localStorage
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
         if (k && k.endsWith('_motoboys')) {
@@ -5012,14 +4832,10 @@
           }
         }
       }
-
-      openPortalStoreSelectorModal();
     }
     window.autoConnectOrPromptPortalStore = autoConnectOrPromptPortalStore;
 
-    function promptConnectStoreInPortal() {
-      openPortalStoreSelectorModal();
-    }
+    function promptConnectStoreInPortal() {}
     window.promptConnectStoreInPortal = promptConnectStoreInPortal;
 
     function copyMotoboyPortalLink() {
@@ -5028,12 +4844,8 @@
       const url = `${window.location.origin}${window.location.pathname}?portal=motoboy${storeParam}`;
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(url).then(() => {
-          showToast('Link da Loja Copiado!', 'Link do Portal do Motoboy exclusivo da sua loja copiado!', 'success');
-        }).catch(() => {
-          openPortalStoreSelectorModal();
-        });
-      } else {
-        openPortalStoreSelectorModal();
+          showToast('Link Copiado!', 'Link direto do Portal do Entregador copiado com sucesso!', 'success');
+        }).catch(() => {});
       }
     }
 
@@ -5075,26 +4887,14 @@
             </div>
             <div>
               <h3 class="text-base font-black text-white">Nenhum entregador encontrado</h3>
-              <p class="text-xs text-slate-400 mt-1">Conecte a sua loja para carregar a equipe de entregadores e os pedidos em tempo real.</p>
+              <p class="text-xs text-slate-400 mt-1">Aguardando o estabelecimento cadastrar a equipe de entregadores.</p>
             </div>
             <div class="flex flex-col gap-2.5 pt-2">
               <button 
                 type="button" 
-                onclick="openPortalStoreSelectorModal()" 
-                class="w-full py-3.5 px-4 bg-amber-500 hover:bg-amber-400 active:scale-98 text-slate-950 font-black text-xs uppercase tracking-wider rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition cursor-pointer">
-                <span>🏪 Conectar Loja / Estabelecimento</span>
-              </button>
-              <button 
-                type="button" 
                 onclick="loadMotoboys(); showToast('Atualizando...', 'Sincronizando entregadores...', 'info');" 
-                class="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition cursor-pointer border border-slate-700">
-                🔄 Tentar Novamente
-              </button>
-              <button 
-                type="button" 
-                onclick="exitPortalToMainApp()" 
-                class="w-full py-2.5 px-3 text-slate-500 hover:text-slate-300 text-xs font-semibold transition cursor-pointer">
-                🔑 Entrar no Painel do Gestor
+                class="w-full py-3 px-4 bg-amber-500 hover:bg-amber-400 active:scale-98 text-slate-950 font-black text-xs uppercase tracking-wider rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition cursor-pointer">
+                <span>🔄 Sincronizar / Atualizar</span>
               </button>
             </div>
           </div>
@@ -7267,23 +7067,25 @@
         return;
       }
 
-      // Ordena: motoboys com pedidos primeiro, e depois os disponíveis para receber pedidos
-      let displayedMotoboys = [...motoboysList].sort((a, b) => {
-        const countA = (motoboyOrders || []).filter(o => o.motoboyId === a.id).length;
-        const countB = (motoboyOrders || []).filter(o => o.motoboyId === b.id).length;
-        if (countA > 0 && countB === 0) return -1;
-        if (countA === 0 && countB > 0) return 1;
-        return (a.order ?? 0) - (b.order ?? 0);
-      });
+      // Filtra estritamente apenas motoboys QUE POSSUEM ENTREGAS (pedidos atribuídos)
+      // "MOTOBOYS SEM ENTREGAS, NÃO É PRA ABRIR MOSAICO OK."
+      let displayedMotoboys = [...motoboysList].filter(mb => {
+        const assignedOrders = (motoboyOrders || []).filter(o => o.motoboyId === mb.id);
+        return assignedOrders.length > 0;
+      }).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
-      // Atualiza o subtítulo/dica
-      const totalOrdersCount = (motoboyOrders || []).length;
-      if (hintEl) {
-        if (motoboySearchFilter) {
-          hintEl.innerText = `Filtrando por: "${motoboySearchFilter}"`;
-        } else {
-          hintEl.innerText = `${displayedMotoboys.length} entregador(es) &bull; ${totalOrdersCount} pedido(s) lançado(s)`;
-        }
+      if (displayedMotoboys.length === 0) {
+        if (hintEl) hintEl.innerText = 'Nenhum entregador com entregas no momento.';
+        container.innerHTML = `
+          <div class="py-12 px-4 text-center space-y-3 bg-white/70 rounded-3xl border border-dashed border-slate-200">
+            <div class="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center text-xl mx-auto shadow-inner">
+              🛵
+            </div>
+            <p class="text-xs sm:text-sm font-bold text-slate-700">Nenhum motoboy com entregas ativas</p>
+            <p class="text-[11px] text-slate-400">O mosaico exibe apenas os entregadores que possuem pedidos em rota ou despachados.</p>
+          </div>
+        `;
+        return;
       }
 
       // Filtrar motoboys se busca ativa
@@ -7303,12 +7105,23 @@
       }
 
       if (displayedMotoboys.length === 0) {
+        if (hintEl) hintEl.innerText = `Filtrando por: "${motoboySearchFilter}"`;
         container.innerHTML = `
           <div class="py-12 text-center text-slate-400 text-xs font-semibold">
-            Nenhum pedido encontrado para "${motoboySearchFilter}".
+            Nenhum entregador com entregas encontrado para "${escapeHtml(motoboySearchFilter)}".
           </div>
         `;
         return;
+      }
+
+      // Atualiza o subtítulo/dica
+      const totalOrdersCount = (motoboyOrders || []).filter(o => displayedMotoboys.some(mb => mb.id === o.motoboyId)).length;
+      if (hintEl) {
+        if (motoboySearchFilter) {
+          hintEl.innerText = `Filtrando por: "${motoboySearchFilter}" (${displayedMotoboys.length} entregador(es))`;
+        } else {
+          hintEl.innerText = `${displayedMotoboys.length} entregador(es) com entregas &bull; ${totalOrdersCount} pedido(s) lançado(s)`;
+        }
       }
 
       const todayFormatted = new Date().toLocaleDateString('pt-BR');
