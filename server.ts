@@ -1,11 +1,16 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
+import webpush from 'web-push';
 import { createServer as createViteServer } from 'vite';
 
 const app = express();
 const PORT = 3000;
 
 app.use(express.json());
+
+// Serve static assets from public folder (manifest.json, sw.js, icons)
+app.use(express.static(path.join(process.cwd(), 'public')));
 
 // In-memory token cache per clientId
 const tokenCache: Record<string, { accessToken: string; expiresAt: number }> = {};
@@ -828,6 +833,199 @@ app.get('/api/ifood/driver-tracking', async (req, res) => {
     }
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message || 'Erro interno no tracking de entregador.' });
+  }
+});
+
+// ============================================================================
+// --- SERVIÇO DE WEB PUSH & NOTIFICAÇÕES EM SEGUNDO PLANO (MOTOBOY PWA) ---
+// ============================================================================
+interface VapidKeys {
+  publicKey: string;
+  privateKey: string;
+}
+
+const VAPID_KEYS_FILE = path.join(process.cwd(), 'vapid-keys.json');
+let activeVapidKeys: VapidKeys;
+
+// Se o usuário configurar suas chaves customizadas ou se existir no .env
+if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  activeVapidKeys = {
+    publicKey: process.env.VAPID_PUBLIC_KEY,
+    privateKey: process.env.VAPID_PRIVATE_KEY
+  };
+} else if (fs.existsSync(VAPID_KEYS_FILE)) {
+  try {
+    activeVapidKeys = JSON.parse(fs.readFileSync(VAPID_KEYS_FILE, 'utf-8'));
+  } catch (e) {
+    activeVapidKeys = webpush.generateVAPIDKeys();
+    fs.writeFileSync(VAPID_KEYS_FILE, JSON.stringify(activeVapidKeys, null, 2));
+  }
+} else {
+  // Gera par de chaves VAPID automaticamente para funcionamento imediato sem necessidade de setup manual
+  activeVapidKeys = webpush.generateVAPIDKeys();
+  try {
+    fs.writeFileSync(VAPID_KEYS_FILE, JSON.stringify(activeVapidKeys, null, 2));
+    console.log('[WebPush] Par de chaves VAPID gerado e salvo em vapid-keys.json');
+  } catch (e) {
+    console.warn('[WebPush] Não foi possível salvar vapid-keys.json:', e);
+  }
+}
+
+try {
+  webpush.setVapidDetails(
+    'mailto:ciadochopp.contato@gmail.com',
+    activeVapidKeys.publicKey,
+    activeVapidKeys.privateKey
+  );
+  console.log('[WebPush] Chaves VAPID ativas. Chave Pública:', activeVapidKeys.publicKey.substring(0, 16) + '...');
+} catch (err) {
+  console.error('[WebPush] Erro ao configurar VAPID details:', err);
+}
+
+// Arquivo de persistência de inscrições dos motoboys
+const SUBSCRIPTIONS_FILE = path.join(process.cwd(), 'motoboy-subscriptions.json');
+let motoboySubscriptions: Record<string, webpush.PushSubscription[]> = {};
+
+try {
+  if (fs.existsSync(SUBSCRIPTIONS_FILE)) {
+    motoboySubscriptions = JSON.parse(fs.readFileSync(SUBSCRIPTIONS_FILE, 'utf-8'));
+  }
+} catch (e) {
+  motoboySubscriptions = {};
+}
+
+function saveMotoboySubscriptions() {
+  try {
+    fs.writeFileSync(SUBSCRIPTIONS_FILE, JSON.stringify(motoboySubscriptions, null, 2));
+  } catch (e) {
+    console.warn('[WebPush] Erro ao salvar inscrições de motoboys:', e);
+  }
+}
+
+// Rota para o frontend obter a Chave Pública VAPID
+app.get('/api/push/public-key', (req, res) => {
+  res.json({
+    success: true,
+    publicKey: activeVapidKeys.publicKey
+  });
+});
+
+// Rota para salvar a inscrição Web Push de um motoboy
+app.post('/api/push/subscribe', (req, res) => {
+  try {
+    const { motoboyId, subscription } = req.body;
+    if (!motoboyId || !subscription || !subscription.endpoint) {
+      return res.status(400).json({ success: false, message: 'motoboyId e subscription são obrigatórios' });
+    }
+
+    const key = String(motoboyId);
+    if (!motoboySubscriptions[key]) {
+      motoboySubscriptions[key] = [];
+    }
+
+    // Evita duplicar endpoint idêntico
+    motoboySubscriptions[key] = motoboySubscriptions[key].filter(s => s.endpoint !== subscription.endpoint);
+    motoboySubscriptions[key].push(subscription);
+    saveMotoboySubscriptions();
+
+    console.log(`[WebPush] Inscrição salva para motoboy #${key}. Total de dispositivos: ${motoboySubscriptions[key].length}`);
+    return res.json({ success: true, count: motoboySubscriptions[key].length });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Rota para enviar notificação Push para o motoboy (mesmo com navegador fechado)
+app.post('/api/push/send-to-motoboy', async (req, res) => {
+  try {
+    const { motoboyId, order, customTitle, customBody } = req.body;
+    if (!motoboyId) {
+      return res.status(400).json({ success: false, message: 'motoboyId é obrigatório' });
+    }
+
+    const key = String(motoboyId);
+    const subs = motoboySubscriptions[key] || [];
+
+    if (subs.length === 0) {
+      return res.json({ success: false, sentCount: 0, message: 'Nenhum dispositivo cadastrado para este motoboy.' });
+    }
+
+    const orderNum = order?.orderNumber || order?.id || '';
+    const feeStr = order?.deliveryFee ? `Taxa: R$ ${Number(order.deliveryFee).toFixed(2)}` : '';
+    const custName = order?.customerName ? ` • ${order.customerName}` : '';
+    const custAddr = order?.customerAddress ? `\n📍 ${order.customerAddress}` : '';
+
+    const payload = JSON.stringify({
+      title: customTitle || `🛵 Pedido #${orderNum} Chegou!`,
+      body: customBody || `${feeStr}${custName}${custAddr}`,
+      orderId: String(order?.id || Date.now()),
+      tag: `order-${order?.id || Date.now()}`,
+      url: '/?portal=motoboy'
+    });
+
+    let successCount = 0;
+    const deadSubs: string[] = [];
+
+    await Promise.all(
+      subs.map(async (sub) => {
+        try {
+          await webpush.sendNotification(sub, payload);
+          successCount++;
+        } catch (err: any) {
+          console.warn(`[WebPush] Falha no envio: status ${err.statusCode || err.message}`);
+          if (err.statusCode === 410 || err.statusCode === 404) {
+            deadSubs.push(sub.endpoint);
+          }
+        }
+      })
+    );
+
+    if (deadSubs.length > 0) {
+      motoboySubscriptions[key] = subs.filter(s => !deadSubs.includes(s.endpoint));
+      saveMotoboySubscriptions();
+    }
+
+    return res.json({ success: true, sentCount: successCount, totalDevices: subs.length });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Rota de teste imediato de push
+app.post('/api/push/test', async (req, res) => {
+  try {
+    const { motoboyId } = req.body;
+    if (!motoboyId) return res.status(400).json({ success: false, message: 'motoboyId é obrigatório' });
+
+    const key = String(motoboyId);
+    const subs = motoboySubscriptions[key] || [];
+    if (subs.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Nenhum celular cadastrado para este motoboy. Abra o portal no celular e clique em "Ativar Alertas Push" primeiro.'
+      });
+    }
+
+    const payload = JSON.stringify({
+      title: '🛵 Alerta Push Recebido!',
+      body: 'Seu smartphone recebeu a notificação em segundo plano com sucesso! Pronto para entregas.',
+      orderId: 'test-' + Date.now(),
+      url: '/?portal=motoboy'
+    });
+
+    let sent = 0;
+    for (const sub of subs) {
+      try {
+        await webpush.sendNotification(sub, payload);
+        sent++;
+      } catch (e: any) {
+        console.warn('[WebPush] Falha no envio de teste:', e.message);
+      }
+    }
+
+    return res.json({ success: true, sentCount: sent, totalDevices: subs.length });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
   }
 });
 
