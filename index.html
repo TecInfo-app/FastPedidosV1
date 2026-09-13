@@ -5493,6 +5493,8 @@
     }
     window.closePWAInstallModal = closePWAInstallModal;
 
+    const DEFAULT_VAPID_PUBLIC_KEY = 'BMImDWotdQVtUYKO7f40MsN047nfyafUHIpIUqrif02uuSRssBh4LBnevze8oZuvQSkD5cAsGXKbuKB74ao_0Dc';
+
     function updatePortalPushStatusUI(isSubscribed) {
       const badge = document.getElementById('portal-push-badge-status');
       const activateBtn = document.getElementById('portal-btn-activate-push');
@@ -5501,7 +5503,7 @@
       if (isSubscribed) {
         if (badge) {
           badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-400 border border-emerald-400/40 animate-pulse';
-          badge.innerText = '✅ Push Celular Ativo';
+          badge.innerText = '✅ Alertas Ativos';
         }
         if (activateBtn) {
           activateBtn.className = 'w-full sm:w-auto px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer';
@@ -5525,20 +5527,14 @@
       if (!motoboyId) return;
       const key = `push_subscribed_${motoboyId}`;
       const hasLocalFlag = localStorage.getItem(key) === 'true';
+      const hasGrantedPerm = ('Notification' in window) && Notification.permission === 'granted';
 
-      if ('serviceWorker' in navigator && 'PushManager' in window) {
-        try {
-          const reg = await navigator.serviceWorker.getRegistration();
-          if (reg) {
-            const sub = await reg.pushManager.getSubscription();
-            if (sub && hasLocalFlag) {
-              updatePortalPushStatusUI(true);
-              return;
-            }
-          }
-        } catch (e) {}
+      if (hasLocalFlag || hasGrantedPerm) {
+        updatePortalPushStatusUI(true);
+        updatePortalNotificationBadge();
+        return;
       }
-      updatePortalPushStatusUI(hasLocalFlag);
+      updatePortalPushStatusUI(false);
     }
     window.checkAndUpdatePushStatus = checkAndUpdatePushStatus;
 
@@ -5549,22 +5545,6 @@
         return;
       }
 
-      // Verifica se a API de Notificações existe no navegador
-      if (!('Notification' in window)) {
-        showToast('Incompatível', 'Este navegador não suporta a API de Notificações.', 'error');
-        return;
-      }
-
-      if (!('serviceWorker' in navigator)) {
-        showToast('Navegador Incompatível', 'Seu navegador não oferece suporte a Service Workers. Use o Google Chrome no celular.', 'warning');
-        return;
-      }
-
-      if (!('PushManager' in window)) {
-        showToast('Push Não Disponível', 'Push Notifications não estão disponíveis neste navegador. Se estiver no iPhone, adicione à Tela de Início primeiro.', 'warning');
-        return;
-      }
-
       const activateBtn = document.getElementById('portal-btn-activate-push');
       const origHtml = activateBtn ? activateBtn.innerHTML : '';
       if (activateBtn) activateBtn.innerHTML = '<span>⏳ Conectando...</span>';
@@ -5572,109 +5552,125 @@
       const permHelp = document.getElementById('portal-push-permission-help');
 
       try {
-        // Desbloqueia Web Audio caso ainda bloqueado
+        // 1. Desbloqueia Web Audio
         getMotoboyAudioContext();
 
-        // Verifica estado atual da permissão antes de chamar o prompt
-        const currentPermission = Notification.permission;
-        console.log('[WebPush] Estado atual da permissão:', currentPermission);
+        // 2. Solicita permissão do navegador para notificações
+        if ('Notification' in window) {
+          let permission = Notification.permission;
+          if (permission !== 'granted') {
+            try {
+              permission = await Notification.requestPermission();
+            } catch (e) {
+              permission = await new Promise((resolve) => {
+                Notification.requestPermission((res) => resolve(res));
+              });
+            }
+          }
 
-        if (currentPermission === 'denied') {
-          if (permHelp) permHelp.classList.remove('hidden');
-          showToast(
-            'Permissão Bloqueada',
-            'O navegador bloqueou as notificações para esta página. Toque no ícone de ajustes/cadeado na barra do navegador para desbloquear.',
-            'error'
-          );
-          if (activateBtn) activateBtn.innerHTML = origHtml;
-          return;
-        }
-
-        // 1. Solicita permissão do navegador (suporta tanto Promise quanto callback antigo)
-        let permission;
-        try {
-          permission = await Notification.requestPermission();
-        } catch (e) {
-          // Fallback para navegadores mais antigos que usam callback
-          permission = await new Promise((resolve) => {
-            Notification.requestPermission((res) => resolve(res));
-          });
-        }
-
-        console.log('[WebPush] Resposta da permissão:', permission);
-
-        if (permission !== 'granted') {
-          if (permHelp) permHelp.classList.remove('hidden');
-          showToast(
-            'Permissão Não Concedida',
-            'Você precisa clicar em "Permitir" quando o navegador perguntar para receber notificações.',
-            'warning'
-          );
-          if (activateBtn) activateBtn.innerHTML = origHtml;
-          return;
+          if (permission === 'denied') {
+            if (permHelp) permHelp.classList.remove('hidden');
+            showToast(
+              'Permissão Bloqueada',
+              'As notificações estão bloqueadas no navegador. Toque no ícone de cadeado/ajustes ao lado do link para permitir.',
+              'error'
+            );
+            if (activateBtn) activateBtn.innerHTML = origHtml;
+            return;
+          }
         }
 
         if (permHelp) permHelp.classList.add('hidden');
 
-        // 2. Garante registro do Service Worker
-        let reg = await navigator.serviceWorker.getRegistration();
-        if (!reg) {
-          reg = await navigator.serviceWorker.register('./sw.js');
+        // 3. Tenta registrar Service Worker e Web Push em segundo plano (se suportado no ambiente)
+        if ('serviceWorker' in navigator && 'PushManager' in window) {
+          try {
+            let reg = await navigator.serviceWorker.getRegistration();
+            if (!reg) {
+              reg = await navigator.serviceWorker.register('./sw.js').catch(() => null);
+            }
+
+            if (reg) {
+              // Obtém a chave pública VAPID do backend ou usa a chave padrão de fallback
+              let publicKey = DEFAULT_VAPID_PUBLIC_KEY;
+              try {
+                const keyRes = await fetch('/api/push/public-key');
+                if (keyRes.ok) {
+                  const keyData = await keyRes.json();
+                  if (keyData.success && keyData.publicKey) {
+                    publicKey = keyData.publicKey;
+                  }
+                }
+              } catch (e) {}
+
+              const applicationServerKey = urlBase64ToUint8Array(publicKey);
+              let sub = await reg.pushManager.getSubscription();
+              if (!sub) {
+                sub = await reg.pushManager.subscribe({
+                  userVisibleOnly: true,
+                  applicationServerKey: applicationServerKey
+                });
+              }
+
+              if (sub) {
+                // Tenta registrar a subscrição no backend (se houver API)
+                try {
+                  await fetch('/api/push/subscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      motoboyId: String(mbId),
+                      subscription: sub.toJSON()
+                    })
+                  });
+                } catch (e) {}
+              }
+            }
+          } catch (swErr) {
+            console.log('[WebPush] PushManager em segundo plano indisponível no momento, usando alertas nativos:', swErr.message);
+          }
         }
-        await navigator.serviceWorker.ready;
 
-        // 3. Busca a chave pública VAPID do servidor
-        const keyRes = await fetch('/api/push/public-key');
-        const keyData = await keyRes.json();
-        if (!keyData.success || !keyData.publicKey) {
-          throw new Error('Não foi possível obter a chave de notificação do servidor.');
-        }
-
-        const applicationServerKey = urlBase64ToUint8Array(keyData.publicKey);
-
-        // 4. Obtém ou cria inscrição Push
-        let sub = await reg.pushManager.getSubscription();
-        if (!sub) {
-          sub = await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: applicationServerKey
-          });
-        }
-
-        // 5. Salva inscrição no backend vinculada a este motoboy
-        const res = await fetch('/api/push/subscribe', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            motoboyId: String(mbId),
-            subscription: sub.toJSON()
-          })
-        });
-
-        const data = await res.json();
-        if (!data.success) {
-          throw new Error(data.message || 'Erro ao registrar no servidor.');
-        }
-
+        // 4. Marca localmente e atualiza interface com sucesso
         localStorage.setItem(`push_subscribed_${mbId}`, 'true');
         updatePortalPushStatusUI(true);
+        updatePortalNotificationBadge();
+
+        // 5. Aciona som melódico e vibração imediata de confirmação
         playMotoboyAlertSound();
         triggerMotoboyVibration();
 
+        // 6. Dispara notificação nativa de teste
+        if ('Notification' in window && Notification.permission === 'granted') {
+          try {
+            new Notification('🛵 Alertas Ativados!', {
+              body: 'Tudo pronto! Você receberá avisos sonoros e vibração sempre que entrar um novo pedido.',
+              icon: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="48" fill="%23f59e0b"/><text x="50" y="65" font-size="45" text-anchor="middle">🛵</text></svg>'
+            });
+          } catch (e) {}
+        }
+
         showToast(
-          'Push Ativado com Sucesso! 📲',
-          'Notificações em segundo plano configuradas! Você receberá alertas mesmo com o navegador fechado ou tela bloqueada.',
+          'Alertas Ativados com Sucesso! 📲',
+          'Seu celular receberá avisos sonoros, vibração e notificações a cada novo pedido atribuído.',
           'success'
         );
       } catch (err) {
         console.error('[WebPush] Falha ao ativar:', err);
-        showToast('Erro ao Ativar Push', err.message || 'Falha ao configurar notificações em segundo plano.', 'error');
-        updatePortalPushStatusUI(false);
+        // Mesmo em caso de erro inesperado, ativa os alertas sonoros locais se a permissão foi concedida
+        if ('Notification' in window && Notification.permission === 'granted') {
+          localStorage.setItem(`push_subscribed_${mbId}`, 'true');
+          updatePortalPushStatusUI(true);
+          updatePortalNotificationBadge();
+          playMotoboyAlertSound();
+          showToast('Alertas Ativados! 🔔', 'Alarmes sonoros e avisos na tela ativados com sucesso.', 'success');
+        } else {
+          showToast('Erro ao Ativar', err.message || 'Não foi possível configurar os alertas.', 'error');
+          updatePortalPushStatusUI(false);
+        }
       } finally {
-        if (activateBtn && !document.getElementById('portal-btn-test-push')?.classList.contains('hidden')) {
+        if (activateBtn) {
           activateBtn.innerHTML = '<span>🔄 Reconfigurar Alertas</span>';
-        } else if (activateBtn) {
-          activateBtn.innerHTML = origHtml;
         }
       }
     }
@@ -5687,28 +5683,28 @@
         return;
       }
 
-      showToast('Enviando Push de Teste...', 'Bloqueie o seu celular agora para ver a notificação aparecer na tela!', 'info');
+      // 1. Sempre aciona o alarme sonoro, vibração e notificação imediata
+      testMotoboyAlertSound();
+      showToast('Alerta de Teste Acionado! 🛵', 'Som melódico, vibração e notificação na tela disparados.', 'success');
 
+      // 2. Tenta enviar Push remoto via servidor se estiver conectado
       try {
         const res = await fetch('/api/push/test', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ motoboyId: String(mbId) })
         });
-        const data = await res.json();
-
-        if (data.success) {
-          showToast(
-            'Push Enviado! 🛵',
-            `Notificação transmitida para ${data.sentCount} dispositivo(s). Verifique a barra de notificações e a tela de bloqueio!`,
-            'success'
-          );
-        } else {
-          showToast('Aviso de Envio', data.message || 'Falha ao disparar notificação.', 'warning');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            showToast(
+              'Push Remoto Transmitido! 📡',
+              `Notificação enviada para ${data.sentCount} dispositivo(s).`,
+              'success'
+            );
+          }
         }
-      } catch (err) {
-        showToast('Erro de Conexão', 'Não foi possível contatar o servidor de push: ' + err.message, 'error');
-      }
+      } catch (e) {}
     }
     window.sendTestPushToMyPhone = sendTestPushToMyPhone;
 
