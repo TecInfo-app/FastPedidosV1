@@ -4733,33 +4733,18 @@
     }
     window.filterPortalMotoboySelection = filterPortalMotoboySelection;
 
+    function getMotoboyPortalUrl() {
+      const tenantId = getCurrentTenantId();
+      const storeParam = tenantId ? `?store=${encodeURIComponent(tenantId)}` : '';
+      const currentPath = window.location.pathname;
+      const basePath = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+      return `${window.location.origin}${basePath}motoboy.html${storeParam}`;
+    }
+    window.getMotoboyPortalUrl = getMotoboyPortalUrl;
+
     function openMotoboyPortal() {
-      const portalView = document.getElementById('portal-motoboy-view');
-      const overlay = document.getElementById('login-screen-overlay');
-      if (overlay) overlay.classList.add('hidden');
-      if (portalView) portalView.classList.remove('hidden');
-
-      document.documentElement.classList.add('in-portal-mode');
-      document.body.classList.add('in-portal-mode');
-
-      closeDrawer();
-
-      let tenantId = getCurrentTenantId();
-      if (!tenantId) {
-        tenantId = localStorage.getItem('portal_last_store_id') || localStorage.getItem('last_tenant_id');
-      }
-      if (tenantId) {
-        initTenantSession(tenantId, localStorage.getItem('last_tenant_email') || 'Portal Motoboy');
-      }
-
-      loadMotoboys();
-
-      const savedMbId = activePortalMotoboyId || window.activePortalMotoboyId || localStorage.getItem('activePortalMotoboyId');
-      if (savedMbId && (motoboysList || []).some(m => m.id === savedMbId) && typeof renderPortalDashboard === 'function') {
-        renderPortalDashboard(savedMbId);
-      } else if (typeof renderPortalMotoboySelection === 'function') {
-        renderPortalMotoboySelection();
-      }
+      const url = getMotoboyPortalUrl();
+      window.open(url, '_blank');
     }
     window.openMotoboyPortal = openMotoboyPortal;
 
@@ -4846,12 +4831,10 @@
     window.promptConnectStoreInPortal = promptConnectStoreInPortal;
 
     function copyMotoboyPortalLink() {
-      const tenantId = getCurrentTenantId();
-      const storeParam = tenantId ? `&store=${encodeURIComponent(tenantId)}` : '';
-      const url = `${window.location.origin}${window.location.pathname}?portal=motoboy${storeParam}`;
+      const url = getMotoboyPortalUrl();
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(url).then(() => {
-          showToast('Link Copiado!', 'Link do Portal do Entregador desta loja copiado com sucesso!', 'success');
+          showToast('Link Copiado!', 'Link direto do Portal do Entregador (motoboy.html) copiado com sucesso!', 'success');
         }).catch(() => {
           prompt('Copie o link do Portal do Entregador para sua equipe:', url);
         });

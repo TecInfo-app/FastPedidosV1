@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Portal do Entregador - Fast Pedidos</title>
+  
+  <!-- PWA & Mobile Web App Meta -->
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+  <link rel="icon" type="image/svg+xml" href="./icon.svg">
+  <meta name="theme-color" content="#f59e0b">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Entregador">
+  
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  
+  <style>
+    @keyframes pulse-slow {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.85; transform: scale(1.02); }
+    }
+    .animate-pulse-slow {
+      animation: pulse-slow 2s infinite ease-in-out;
+    }
+    @keyframes slide-down {
+      from { transform: translateY(-100%); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .animate-slide-down {
+      animation: slide-down 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #print-thermal-container, #print-thermal-container * {
+        visibility: visible;
+      }
+      #print-thermal-container {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen flex flex-col antialiased selection:bg-amber-500 selection:text-slate-950">
+
+  <!-- TOP HEADER DO PORTAL DO MOTOBOY -->
+  <header class="bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 py-3 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-md">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-400 text-slate-950 flex items-center justify-center font-black text-xl shadow-md shadow-amber-500/20 shrink-0">
+        🛵
+      </div>
+      <div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <h1 class="text-sm sm:text-base font-black text-white tracking-tight">PORTAL DO ENTREGADOR</h1>
+          <span class="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-400/30 text-[10px] font-black uppercase">
+            MOTOBOY
+          </span>
+        </div>
+        <p class="text-[11px] text-slate-400 font-medium">FAST PEDIDOS &bull; Consulta de Entregas e Taxas</p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <button 
+        type="button" 
+        onclick="requestPortalNotificationPermission()" 
+        id="portal-alert-status-btn"
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-750 border border-slate-700/80 text-xs font-bold text-amber-300 shadow-sm transition cursor-pointer"
+        title="Clique para testar som e permitir alertas">
+        <span id="portal-alert-status-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span id="portal-alert-status-label">🔔 Alertas Sonoros</span>
+      </button>
+
+      <div class="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/90 border border-slate-700/80 text-xs font-bold text-slate-300 shadow-sm">
+        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+        <span id="portal-cloud-status">Nuvem Online</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- BANNER FLUTUANTE DE NOVO PEDIDO RECEBIDO (ALERTA VISUAL E SONORO) -->
+  <div id="portal-new-order-alert-banner" class="hidden fixed top-16 left-4 right-4 max-w-lg mx-auto z-50 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-950 p-4 rounded-2xl shadow-2xl border-2 border-amber-200 animate-slide-down">
+    <div class="flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-11 h-11 rounded-2xl bg-slate-950 text-amber-400 flex items-center justify-center text-2xl font-black shrink-0 shadow-md">
+          🛵
+        </div>
+        <div class="min-w-0">
+          <span class="text-[10px] font-black uppercase tracking-wider bg-slate-950/20 px-2 py-0.5 rounded-md inline-block mb-0.5">🚨 NOVO PEDIDO LANÇADO!</span>
+          <h4 id="portal-alert-order-title" class="text-sm sm:text-base font-black truncate leading-tight">Pedido #1024</h4>
+          <p id="portal-alert-order-subtitle" class="text-xs font-semibold text-slate-900 truncate">Taxa: R$ 8,00</p>
+        </div>
+      </div>
+      <button 
+        type="button" 
+        onclick="dismissPortalNewOrderBanner()" 
+        class="px-3.5 py-2 bg-slate-950 hover:bg-slate-850 text-amber-400 active:scale-95 rounded-xl text-xs font-black shrink-0 cursor-pointer shadow-md transition">
+        OK, Ver!
+      </button>
+    </div>
+  </div>
+
+  <!-- TOAST CONTAINER -->
+  <div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2 max-w-sm w-full pointer-events-none"></div>
+
+  <!-- MAIN CONTAINER -->
+  <main class="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 flex flex-col justify-start">
+    
+    <!-- ETAPA 1: SELEÇÃO DO MOTOBOY E LOGIN COM SENHA -->
+    <div id="portal-screen-auth" class="space-y-6 max-w-lg mx-auto w-full my-auto py-6">
+      
+      <!-- Bloco 1A: Lista de Motoboys para Selecionar -->
+      <div id="portal-auth-select-list" class="space-y-4">
+        <div class="text-center space-y-1">
+          <div class="w-14 h-14 mx-auto rounded-3xl bg-amber-500/20 border border-amber-400/30 text-amber-400 flex items-center justify-center text-2xl shadow-inner mb-2">
+            🛵
+          </div>
+          <h2 class="text-xl font-black text-white">Portal do Entregador</h2>
+          <p class="text-xs text-slate-400">Selecione seu nome na lista para entrar e acessar suas entregas</p>
+        </div>
+
+        <!-- Store Info Bar -->
+        <div class="px-3.5 py-2 rounded-2xl bg-slate-900/70 border border-slate-800 flex items-center justify-center gap-2 shadow-xs text-center">
+          <span class="text-xs">🏪</span>
+          <span class="text-[11px] font-bold text-slate-400">Estabelecimento:</span>
+          <span id="portal-current-store-name" class="text-xs font-black text-amber-400 truncate">Carregando Loja...</span>
+        </div>
+
+        <!-- Search Motoboy Input -->
+        <div class="relative">
+          <input 
+            type="text" 
+            id="portal-motoboy-search-input"
+            oninput="filterPortalMotoboySelection(this.value)"
+            placeholder="🔍 Buscar seu nome na equipe..." 
+            class="w-full px-4 py-2.5 rounded-2xl bg-slate-900 border border-slate-800 text-white placeholder-slate-500 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-transparent transition"
+          />
+        </div>
+
+        <div id="portal-motoboys-selection-grid" class="space-y-2.5">
+          <div class="p-6 bg-slate-900 border border-slate-800 rounded-3xl text-center text-slate-400 text-xs">
+            <span class="animate-pulse">Carregando entregadores da loja...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bloco 1B: Inserir Senha do Motoboy Selecionado -->
+      <div id="portal-auth-password-box" class="hidden bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-7 shadow-2xl space-y-5">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div class="flex items-center gap-3">
+            <div id="portal-auth-avatar" class="w-12 h-12 rounded-2xl bg-amber-400 text-slate-950 font-black text-lg flex items-center justify-center shadow-md">
+              M
+            </div>
+            <div>
+              <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Entregador Selecionado</span>
+              <h3 id="portal-auth-mb-name" class="text-base font-black text-white">Carlos Silva</h3>
+            </div>
+          </div>
+
+          <button 
+            type="button" 
+            onclick="cancelMotoboyPortalLogin()" 
+            class="text-xs text-slate-400 hover:text-amber-400 font-bold underline cursor-pointer">
+            Trocar
+          </button>
+        </div>
+
+        <form onsubmit="submitMotoboyPortalLogin(event)" class="space-y-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2 flex items-center justify-between">
+              <span>DIGITE SUA SENHA</span>
+              <span class="text-[10px] text-slate-500 font-normal lowercase">senha de acesso</span>
+            </label>
+            
+            <div class="relative">
+              <input 
+                type="password" 
+                id="portal-login-password-input" 
+                placeholder="••••" 
+                autocomplete="current-password"
+                class="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-2xl text-center text-xl font-mono tracking-widest text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500 pr-12"
+                required
+              />
+              <button 
+                type="button" 
+                onclick="togglePasswordVisibility('portal-login-password-input', this)"
+                class="absolute right-4 top-3.5 text-slate-400 hover:text-slate-200 text-sm cursor-pointer"
+                title="Mostrar/Ocultar Senha">
+                👁️
+              </button>
+            </div>
+          </div>
+
+          <!-- Botões de Ação -->
+          <button 
+            type="submit" 
+            class="w-full py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 active:scale-98 text-slate-950 font-black text-sm rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition cursor-pointer">
+            <span>Acessar Meus Pedidos</span>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+          </button>
+
+          <button 
+            type="button" 
+            onclick="cancelMotoboyPortalLogin()" 
+            class="w-full py-2.5 text-xs text-slate-400 hover:text-white font-bold transition cursor-pointer">
+            ← Voltar para a lista de motoboys
+          </button>
+        </form>
+      </div>
+
+    </div>
+
+    <!-- ETAPA 2: DASHBOARD DO MOTOBOY LOGADO -->
+    <div id="portal-screen-dashboard" class="hidden space-y-6">
+      
+      <!-- Header do Motoboy Logado -->
+      <div class="bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950/60 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div class="flex items-center gap-3.5">
+          <div id="portal-dash-avatar" class="w-13 h-13 rounded-2xl bg-amber-400 text-slate-950 font-black text-2xl flex items-center justify-center shadow-lg shadow-amber-500/20 shrink-0">
+            C
+          </div>
+          <div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <h2 id="portal-dash-name" class="text-lg sm:text-xl font-black text-white uppercase tracking-wide">Carlos Silva</h2>
+              <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-black uppercase">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                Trabalhando Hoje
+              </span>
+            </div>
+            <p class="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
+              <span>📅 <span id="portal-dash-date">Hoje</span></span>
+              <span>&bull;</span>
+              <span id="portal-dash-phone" class="text-slate-400 font-mono">Sem fone</span>
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 w-full sm:w-auto flex-wrap sm:flex-nowrap">
+          <button 
+            type="button" 
+            onclick="testMotoboyAlertSound()" 
+            class="flex-1 sm:flex-none px-3.5 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 active:scale-98 text-amber-300 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer border border-amber-500/40"
+            title="Testar som do alarme e vibração">
+            <span>🔔 Testar Alarme</span>
+          </button>
+          <button 
+            type="button" 
+            onclick="refreshPortalDashboard()" 
+            class="flex-1 sm:flex-none px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-98 text-slate-200 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer border border-slate-700">
+            <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            <span>Atualizar</span>
+          </button>
+          <button 
+            type="button" 
+            onclick="printCurrentPortalMotoboyReceipt()" 
+            class="flex-1 sm:flex-none px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-98 text-slate-200 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer border border-slate-700">
+            <span>📋 Extrato</span>
+          </button>
+          <button 
+            type="button" 
+            onclick="logoutMotoboyPortal()" 
+            class="flex-1 sm:flex-none px-3.5 py-2.5 bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-800/40 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer">
+            <span>🚪 Sair</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Cards de Métricas do Motoboy -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+        <!-- Total de Pedidos -->
+        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex items-center justify-between shadow-xs">
+          <div>
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Entregas Lançadas</span>
+            <span id="portal-dash-total-orders" class="text-2xl font-black text-white font-mono">0</span>
+            <span class="text-[10px] text-slate-500 block">pedidos vinculados</span>
+          </div>
+          <div class="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center text-lg font-bold">
+            📦
+          </div>
+        </div>
+
+        <!-- Total de Taxas a Receber -->
+        <div class="bg-gradient-to-br from-emerald-950/70 to-slate-900 border border-emerald-800/50 rounded-2xl p-4 flex items-center justify-between shadow-xs sm:col-span-2">
+          <div>
+            <span class="text-[10px] font-black text-emerald-400 uppercase tracking-wider block">Total de Taxas a Receber</span>
+            <span id="portal-dash-total-fees" class="text-3xl font-black text-emerald-300 font-mono">R$ 0,00</span>
+            <div id="portal-dash-stores-breakdown" class="text-[11px] text-emerald-200/80 mt-1 flex items-center gap-2 flex-wrap font-medium">
+              <!-- Store breakdown pills -->
+            </div>
+          </div>
+          <div class="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center justify-center text-2xl font-bold shadow-inner shrink-0">
+            💰
+          </div>
+        </div>
+      </div>
+
+      <!-- CARD DE NOTIFICAÇÕES PUSH EM SEGUNDO PLANO -->
+      <div id="portal-push-card" class="bg-gradient-to-r from-slate-900 via-amber-950/20 to-slate-900 border border-amber-500/30 rounded-3xl p-5 shadow-lg space-y-3.5">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div class="flex items-start gap-3.5">
+            <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-400 text-slate-950 flex items-center justify-center text-2xl font-black shrink-0 shadow-md shadow-amber-500/20">
+              📲
+            </div>
+            <div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <h4 class="text-sm font-black text-white tracking-tight">ALERTAS NO CELULAR (TELA BLOQUEADA / BOLSO)</h4>
+                <span id="portal-push-badge-status" class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-slate-800 text-slate-400 border border-slate-700">
+                  Aguardando Ativação
+                </span>
+              </div>
+              <p class="text-xs text-slate-300 mt-1 leading-relaxed">
+                Receba avisos sonoros e vibração com o celular no bolso ou usando o GPS (Waze/Google Maps).
+              </p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+            <button 
+              type="button" 
+              id="portal-btn-activate-push"
+              onclick="requestPortalNotificationPermission()" 
+              class="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 active:scale-98 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-2 shadow-md shadow-amber-500/20 transition cursor-pointer">
+              <span>⚡ Ativar Notificações no Celular</span>
+            </button>
+
+            <button 
+              type="button" 
+              id="portal-btn-install-pwa"
+              onclick="promptInstallPWA()" 
+              class="w-full sm:w-auto px-3.5 py-2.5 bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer">
+              <span>📥 Instalar Atalho</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Aviso Informativo de Somente Leitura -->
+      <div class="p-3 bg-slate-900/60 border border-slate-800/80 rounded-2xl flex items-center justify-between gap-3 text-xs text-slate-400">
+        <div class="flex items-center gap-2">
+          <span class="text-amber-400 text-sm">🔒</span>
+          <span><strong>Acesso de Consulta:</strong> Os pedidos e taxas são sincronizados com o caixa da loja.</span>
+        </div>
+        <span class="text-[10px] text-slate-500 font-mono uppercase">Somente Leitura</span>
+      </div>
+
+      <!-- Mosaico / Lista dos Pedidos do Motoboy -->
+      <div class="space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-black text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+            <span>Mosaico de Entregas</span>
+            <span id="portal-dash-orders-badge" class="px-2 py-0.5 rounded-full bg-slate-800 text-amber-400 text-[10px] font-mono font-bold">0</span>
+          </h3>
+        </div>
+
+        <div id="portal-dash-orders-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          <!-- Dynamic orders tiles rendered via JS -->
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- MODAL DE CONFIRMAÇÃO DE CÓDIGO DE ENTREGA (4 DÍGITOS) -->
+  <div id="modal-confirm-delivery-code" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm hidden animate-slide-down">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">📦</span>
+          <div>
+            <h3 class="text-base font-black text-white">Confirmar Entrega</h3>
+            <span id="code-modal-order-number" class="text-xs font-mono text-amber-400 font-bold">#1024</span>
+          </div>
+        </div>
+        <button 
+          type="button" 
+          onclick="closeDeliveryCodeModal()" 
+          class="text-slate-400 hover:text-white text-lg font-bold">
+          ✕
+        </button>
+      </div>
+
+      <div class="space-y-1 text-xs text-slate-300">
+        <p id="code-modal-store-name" class="font-bold text-amber-400">Minha Loja</p>
+        <p id="code-modal-customer-name" class="font-semibold text-white">Cliente</p>
+        <p id="code-modal-customer-address" class="text-slate-400 text-[11px] leading-tight">Endereço de entrega</p>
+      </div>
+
+      <div id="code-modal-error-alert" class="hidden p-2.5 rounded-xl bg-red-950/80 border border-red-800 text-red-200 text-xs font-semibold">
+        <span id="code-modal-error-text">Digite o código de 4 dígitos.</span>
+      </div>
+
+      <form onsubmit="submitDeliveryCodeConfirmation(event)" class="space-y-4">
+        <input type="hidden" id="code-modal-order-id" />
+        
+        <div>
+          <label class="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 text-center">
+            Solicite o código de 4 dígitos ao cliente:
+          </label>
+          <input 
+            type="text" 
+            id="delivery-code-input" 
+            maxlength="4" 
+            inputmode="numeric" 
+            pattern="[0-9]*" 
+            placeholder="0000" 
+            class="w-full py-3.5 px-4 bg-slate-950 border border-slate-700 rounded-2xl text-center text-3xl font-mono tracking-widest text-emerald-400 placeholder:text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            required
+          />
+        </div>
+
+        <button 
+          type="submit" 
+          class="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 active:scale-98 text-slate-950 font-black text-sm rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition cursor-pointer">
+          <span>✓ Validar e Concluir Entrega</span>
+        </button>
+
+        <button 
+          type="button" 
+          onclick="closeDeliveryCodeModal()" 
+          class="w-full py-2 text-xs text-slate-400 hover:text-white font-bold transition cursor-pointer">
+          Cancelar
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- CONTAINER DE IMPRESSÃO TÉRMICA DO EXTRATO DO MOTOBOY -->
+  <div id="print-thermal-container" class="hidden text-black bg-white p-4 font-mono text-xs max-w-[300px] mx-auto"></div>
+
+  <!-- SCRIPT CENTRAL DO PORTAL DO MOTOBOY -->
+  <script>
+    let currentTenantId = '';
+    let motoboysList = [];
+    let motoboyOrders = [];
+    let activePortalMotoboyId = localStorage.getItem('activePortalMotoboyId') || null;
+    let selectedPortalAuthMbId = null;
+    let portalMotoboyFilterQuery = '';
+    let knownOrderIds = new Set();
+    let initialSyncDone = false;
+    let deferredInstallPrompt = null;
+    let audioCtx = null;
+
+    // Utilitários
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function formatCurrency(val) {
+      const num = Number(val) || 0;
+      return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    function showToast(title, message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      if (!container) return;
+
+      const toast = document.createElement('div');
+      toast.className = `p-3.5 rounded-2xl text-xs font-semibold shadow-2xl flex items-start gap-2.5 transition-all duration-300 pointer-events-auto border ${
+        type === 'success' ? 'bg-emerald-950 text-emerald-100 border-emerald-700' :
+        type === 'warning' ? 'bg-amber-950 text-amber-100 border-amber-700' :
+        type === 'error' ? 'bg-red-950 text-red-100 border-red-700' :
+        'bg-slate-900 text-slate-100 border-slate-700'
+      }`;
+      toast.innerHTML = `
+        <span class="text-base">${type === 'success' ? '✓' : type === 'warning' ? '⚠️' : type === 'error' ? '✕' : 'ℹ️'}</span>
+        <div class="min-w-0">
+          <strong class="block font-black text-white">${escapeHtml(title)}</strong>
+          <span class="text-[11px] leading-tight opacity-90">${escapeHtml(message)}</span>
+        </div>
+      `;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(10px)';
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    function togglePasswordVisibility(inputId, btn) {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+      if (input.type === 'password') {
+        input.type = 'text';
+        if (btn) btn.innerText = '🙈';
+      } else {
+        input.type = 'password';
+        if (btn) btn.innerText = '👁️';
+      }
+    }
+
+    // Gerador de Áudio com Web Audio API
+    function getAudioContext() {
+      if (!audioCtx) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) {
+          audioCtx = new AudioContext();
+        }
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => {});
+      }
+      return audioCtx;
+    }
+
+    function playDoubleBeepAlarm() {
+      try {
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        const now = ctx.currentTime;
+
+        // Beep 1
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(880, now);
+        gain1.gain.setValueAtTime(0.3, now);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.15);
+
+        // Beep 2
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(1174.66, now + 0.18);
+        gain2.gain.setValueAtTime(0.35, now + 0.18);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.start(now + 0.18);
+        osc2.stop(now + 0.38);
+
+        if (navigator.vibrate) {
+          navigator.vibrate([200, 100, 300]);
+        }
+      } catch (e) {
+        console.warn('Erro ao tocar áudio:', e);
+      }
+    }
+
+    function testMotoboyAlertSound() {
+      getAudioContext();
+      playDoubleBeepAlarm();
+      showToast('🔔 Teste de Alarme', 'Alarme sonoro e vibração disparados com sucesso!', 'success');
+    }
+
+    function requestPortalNotificationPermission() {
+      getAudioContext();
+      playDoubleBeepAlarm();
+      if ('Notification' in window) {
+        Notification.requestPermission().then(permission => {
+          if (permission === 'granted') {
+            showToast('Notificações Ativas! 🔔', 'Você receberá avisos sonoros de novos pedidos.', 'success');
+          } else {
+            showToast('Aviso', 'Permissão de notificação negada no navegador.', 'warning');
+          }
+        }).catch(() => {});
+      } else {
+        showToast('Áudio Ativado', 'Alertas sonoros habilitados para esta sessão.', 'info');
+      }
+    }
+
+    function triggerNewOrderAlert(order) {
+      playDoubleBeepAlarm();
+      const banner = document.getElementById('portal-new-order-alert-banner');
+      const titleEl = document.getElementById('portal-alert-order-title');
+      const subEl = document.getElementById('portal-alert-order-subtitle');
+
+      if (banner && titleEl && subEl) {
+        titleEl.innerText = `Pedido #${order.orderNumber || 'Novo'}`;
+        subEl.innerText = `Taxa: ${formatCurrency(order.deliveryFee || 0)} • ${order.customerName || 'Cliente'}`;
+        banner.classList.remove('hidden');
+      }
+
+      if ('Notification' in window && Notification.permission === 'granted') {
+        try {
+          new Notification('🛵 NOVO PEDIDO PARA ENTREGA!', {
+            body: `Pedido #${order.orderNumber} atribuído a você. Taxa: ${formatCurrency(order.deliveryFee || 0)}`,
+            icon: './pwa-192x192.png'
+          });
+        } catch (e) {}
+      }
+    }
+
+    function dismissPortalNewOrderBanner() {
+      const banner = document.getElementById('portal-new-order-alert-banner');
+      if (banner) banner.classList.add('hidden');
+    }
+
+    // PWA Prompt
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      const btn = document.getElementById('portal-btn-install-pwa');
+      if (btn) btn.classList.remove('hidden');
+    });
+
+    function promptInstallPWA() {
+      if (deferredInstallPrompt) {
+        deferredInstallPrompt.prompt();
+        deferredInstallPrompt.userChoice.then(() => {
+          deferredInstallPrompt = null;
+        });
+      } else {
+        showToast('Instalar Aplicativo', 'No menu do seu navegador (⋮ ou 📤), toque em "Adicionar à tela de início".', 'info');
+      }
+    }
+
+    // Renderização da Tela de Seleção de Motoboys
+    function filterPortalMotoboySelection(query) {
+      portalMotoboyFilterQuery = (query || '').trim().toLowerCase();
+      renderPortalMotoboySelection();
+    }
+
+    function renderPortalMotoboySelection() {
+      const authScreen = document.getElementById('portal-screen-auth');
+      const dashScreen = document.getElementById('portal-screen-dashboard');
+      const selectListBox = document.getElementById('portal-auth-select-list');
+      const passBox = document.getElementById('portal-auth-password-box');
+      const grid = document.getElementById('portal-motoboys-selection-grid');
+      const storeNameEl = document.getElementById('portal-current-store-name');
+
+      if (!authScreen || !grid) return;
+
+      authScreen.classList.remove('hidden');
+      if (dashScreen) dashScreen.classList.add('hidden');
+      if (selectListBox) selectListBox.classList.remove('hidden');
+      if (passBox) passBox.classList.add('hidden');
+
+      selectedPortalAuthMbId = null;
+
+      if (storeNameEl) {
+        storeNameEl.innerText = localStorage.getItem('portal_store_name') || currentTenantId || 'Minha Loja';
+      }
+
+      let listToRender = (motoboysList || []);
+      if (portalMotoboyFilterQuery) {
+        listToRender = listToRender.filter(m => m.name && m.name.toLowerCase().includes(portalMotoboyFilterQuery));
+      }
+
+      if (!motoboysList || motoboysList.length === 0) {
+        grid.innerHTML = `
+          <div class="p-6 bg-slate-900 border border-slate-800 rounded-3xl text-center space-y-3 shadow-xl">
+            <div class="w-12 h-12 rounded-2xl bg-amber-500/15 text-amber-400 flex items-center justify-center text-xl mx-auto shadow-inner">
+              🛵
+            </div>
+            <div>
+              <h3 class="text-sm font-black text-white">Nenhum entregador encontrado</h3>
+              <p class="text-[11px] text-slate-400 mt-1">Aguardando a loja cadastrar a equipe de entregadores.</p>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      if (listToRender.length === 0) {
+        grid.innerHTML = `
+          <div class="p-5 bg-slate-900 border border-slate-800 rounded-2xl text-center text-xs text-slate-400">
+            Nenhum entregador com o nome "<strong>${escapeHtml(portalMotoboyFilterQuery)}</strong>".
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = listToRender.map(mb => {
+        const assignedOrders = (motoboyOrders || []).filter(o => o.motoboyId === mb.id);
+        const initial = mb.name ? mb.name.charAt(0).toUpperCase() : 'M';
+        return `
+          <button 
+            type="button" 
+            onclick="selectMotoboyForPortalAuth('${mb.id}')"
+            class="w-full p-4 bg-slate-900 hover:bg-slate-850 active:scale-[0.99] border border-slate-800 hover:border-amber-400/60 rounded-3xl flex items-center justify-between transition cursor-pointer text-left shadow-md group">
+            <div class="flex items-center gap-3.5 min-w-0">
+              <div class="w-12 h-12 rounded-2xl bg-amber-400 text-slate-950 font-black text-lg flex items-center justify-center shadow-md group-hover:scale-105 transition-transform shrink-0">
+                ${initial}
+              </div>
+              <div class="min-w-0">
+                <span class="block text-sm font-black text-white group-hover:text-amber-400 uppercase tracking-wide transition-colors truncate">${escapeHtml(mb.name)}</span>
+                <span class="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
+                  <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                  <span class="text-emerald-400 font-bold text-[11px]">Disponível</span>
+                  <span>&bull;</span>
+                  <span class="text-slate-400 text-[11px]">${assignedOrders.length} pedido${assignedOrders.length !== 1 ? 's' : ''}</span>
+                </span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0 ml-2">
+              <span class="px-3.5 py-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-bold group-hover:bg-amber-500 group-hover:text-slate-950 transition">
+                Entrar →
+              </span>
+            </div>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function selectMotoboyForPortalAuth(motoboyId) {
+      const mb = motoboysList.find(m => m.id === motoboyId);
+      if (!mb) return;
+
+      selectedPortalAuthMbId = motoboyId;
+
+      const selectListBox = document.getElementById('portal-auth-select-list');
+      const passBox = document.getElementById('portal-auth-password-box');
+      const mbNameEl = document.getElementById('portal-auth-mb-name');
+      const avatarEl = document.getElementById('portal-auth-avatar');
+      const passInput = document.getElementById('portal-login-password-input');
+
+      if (selectListBox) selectListBox.classList.add('hidden');
+      if (passBox) passBox.classList.remove('hidden');
+
+      if (mbNameEl) mbNameEl.innerText = mb.name;
+      if (avatarEl) avatarEl.innerText = mb.name ? mb.name.charAt(0).toUpperCase() : 'M';
+      if (passInput) {
+        passInput.value = '';
+        setTimeout(() => passInput.focus(), 100);
+      }
+    }
+
+    function cancelMotoboyPortalLogin() {
+      selectedPortalAuthMbId = null;
+      const passInput = document.getElementById('portal-login-password-input');
+      if (passInput) passInput.value = '';
+      renderPortalMotoboySelection();
+    }
+
+    function submitMotoboyPortalLogin(e) {
+      if (e) e.preventDefault();
+      if (!selectedPortalAuthMbId) return;
+
+      const mb = motoboysList.find(m => m.id === selectedPortalAuthMbId);
+      if (!mb) return;
+
+      const passInput = document.getElementById('portal-login-password-input');
+      const enteredPass = passInput ? passInput.value.trim() : '';
+      const correctPass = mb.password || '1234';
+
+      if (enteredPass === correctPass) {
+        activePortalMotoboyId = mb.id;
+        localStorage.setItem('activePortalMotoboyId', mb.id);
+
+        getAudioContext();
+        if ('Notification' in window && Notification.permission === 'default') {
+          Notification.requestPermission().catch(() => {});
+        }
+
+        const existingMbOrders = (motoboyOrders || []).filter(o => o.motoboyId === mb.id);
+        knownOrderIds = new Set(existingMbOrders.map(o => String(o.id)));
+        initialSyncDone = true;
+
+        renderPortalDashboard(mb.id);
+        showToast('Login Efetuado!', `Bem-vindo ao portal, ${mb.name}!`, 'success');
+      } else {
+        showToast('Senha Incorreta', 'A senha digitada está incorreta. Tente novamente ou consulte a gerência.', 'warning');
+        if (passInput) {
+          passInput.value = '';
+          passInput.focus();
+        }
+      }
+    }
+
+    // Renderização do Dashboard do Motoboy
+    function renderPortalDashboard(motoboyId) {
+      if (!motoboyId) {
+        renderPortalMotoboySelection();
+        return;
+      }
+      activePortalMotoboyId = motoboyId;
+
+      const mb = motoboysList.find(m => m.id === motoboyId);
+      if (!mb) {
+        if (!motoboysList || motoboysList.length === 0) return;
+        activePortalMotoboyId = null;
+        localStorage.removeItem('activePortalMotoboyId');
+        renderPortalMotoboySelection();
+        return;
+      }
+
+      const authScreen = document.getElementById('portal-screen-auth');
+      const dashScreen = document.getElementById('portal-screen-dashboard');
+      if (authScreen) authScreen.classList.add('hidden');
+      if (dashScreen) dashScreen.classList.remove('hidden');
+
+      const nameEl = document.getElementById('portal-dash-name');
+      const avatarEl = document.getElementById('portal-dash-avatar');
+      const dateEl = document.getElementById('portal-dash-date');
+      const phoneEl = document.getElementById('portal-dash-phone');
+      const totalOrdersEl = document.getElementById('portal-dash-total-orders');
+      const totalFeesEl = document.getElementById('portal-dash-total-fees');
+      const breakdownEl = document.getElementById('portal-dash-stores-breakdown');
+      const ordersBadgeEl = document.getElementById('portal-dash-orders-badge');
+      const grid = document.getElementById('portal-dash-orders-grid');
+
+      const initial = mb.name ? mb.name.charAt(0).toUpperCase() : 'M';
+      if (nameEl) nameEl.innerText = mb.name;
+      if (avatarEl) avatarEl.innerText = initial;
+      if (dateEl) dateEl.innerText = new Date().toLocaleDateString('pt-BR');
+      if (phoneEl) phoneEl.innerText = mb.phone ? `WhatsApp: ${mb.phone}` : 'Sem fone';
+
+      const assignedOrders = (motoboyOrders || []).filter(o => o.motoboyId === mb.id);
+      const totalFees = assignedOrders.reduce((acc, o) => acc + (Number(o.deliveryFee) || 0), 0);
+
+      if (totalOrdersEl) totalOrdersEl.innerText = assignedOrders.length;
+      if (totalFeesEl) totalFeesEl.innerText = formatCurrency(totalFees);
+      if (ordersBadgeEl) ordersBadgeEl.innerText = `${assignedOrders.length} pedido${assignedOrders.length !== 1 ? 's' : ''}`;
+
+      // Detalhamento por Loja
+      if (breakdownEl) {
+        const storeStats = {};
+        assignedOrders.forEach(o => {
+          const s = o.storeName || 'Minha Loja';
+          if (!storeStats[s]) storeStats[s] = { count: 0, fees: 0 };
+          storeStats[s].count++;
+          storeStats[s].fees += (Number(o.deliveryFee) || 0);
+        });
+
+        const storeKeys = Object.keys(storeStats);
+        if (storeKeys.length === 0) {
+          breakdownEl.innerHTML = `<span>Nenhum pedido lançado hoje.</span>`;
+        } else {
+          breakdownEl.innerHTML = storeKeys.map(sName => `
+            <span class="px-2 py-0.5 rounded-lg bg-emerald-900/60 border border-emerald-700/60 text-emerald-200 text-[11px] font-bold">
+              ${escapeHtml(sName)}: ${formatCurrency(storeStats[sName].fees)} (${storeStats[sName].count} ped)
+            </span>
+          `).join('');
+        }
+      }
+
+      // Mosaico dos Pedidos
+      if (grid) {
+        if (assignedOrders.length === 0) {
+          grid.innerHTML = `
+            <div class="col-span-full py-16 text-center text-slate-500 bg-slate-900/40 rounded-3xl border border-dashed border-slate-800 space-y-2">
+              <div class="text-3xl">📦</div>
+              <p class="text-sm font-bold text-slate-400">Nenhum pedido lançado para você no momento.</p>
+              <p class="text-xs text-slate-600">Assim que a gerência despachar pedidos no caixa, eles aparecerão aqui automaticamente.</p>
+            </div>
+          `;
+        } else {
+          grid.innerHTML = assignedOrders.map(ord => {
+            const isDelivered = ord.status === 'entregue';
+            return `
+              <div class="bg-slate-900 border ${isDelivered ? 'border-emerald-800/60 bg-emerald-950/20' : 'border-slate-800 hover:border-slate-700'} rounded-3xl p-4 sm:p-5 space-y-3.5 shadow-lg transition">
+                <div class="flex items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+                  <div>
+                    <div class="flex items-center gap-2">
+                      <span class="text-base sm:text-lg font-black text-white tracking-tight">#${escapeHtml(ord.orderNumber)}</span>
+                      ${isDelivered ? `
+                        <span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[9px] font-black uppercase">
+                          ✓ Entregue
+                        </span>
+                      ` : `
+                        <span class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[9px] font-black uppercase">
+                          Em Rota
+                        </span>
+                      `}
+                    </div>
+                    <span class="text-[10px] font-black text-amber-400 uppercase tracking-wider block">${escapeHtml(ord.storeName || 'Minha Loja')}</span>
+                  </div>
+                  <div class="text-right">
+                    <span class="px-3 py-1 rounded-xl bg-emerald-500/20 text-emerald-300 text-xs font-black border border-emerald-400/30 font-mono inline-block">
+                      ${formatCurrency(ord.deliveryFee)}
+                    </span>
+                    <span class="text-[10px] text-slate-500 block font-medium mt-0.5">${escapeHtml(ord.feeName || 'Taxa')}</span>
+                  </div>
+                </div>
+
+                <div class="space-y-1.5 text-xs text-slate-300">
+                  ${ord.customerName ? `
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-slate-500 font-bold">👤 Cliente:</span>
+                      <span class="font-bold text-slate-200">${escapeHtml(ord.customerName)}</span>
+                    </div>
+                  ` : ''}
+
+                  ${ord.customerAddress ? `
+                    <div class="flex items-start gap-1.5 pt-0.5">
+                      <span class="text-slate-500 font-bold shrink-0">📍 Endereço:</span>
+                      <div class="flex-1 min-w-0">
+                        <span class="text-slate-300 leading-tight block">${escapeHtml(ord.customerAddress)}</span>
+                        <a 
+                          href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ord.customerAddress)}" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          class="inline-flex items-center gap-1 text-[11px] text-amber-400 hover:text-amber-300 font-bold mt-1 underline">
+                          <span>🗺️ Abrir no GPS / Maps</span>
+                        </a>
+                      </div>
+                    </div>
+                  ` : ''}
+                </div>
+
+                <div class="pt-1">
+                  ${!isDelivered ? `
+                    <button 
+                      type="button" 
+                      onclick="openDeliveryCodeModal('${ord.id}')" 
+                      class="w-full py-3 px-4 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 active:scale-98 text-slate-950 font-black text-xs sm:text-sm rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition cursor-pointer">
+                      <svg class="w-4 h-4 text-slate-950" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                      <span>Confirmar Entrega (Pedir Código)</span>
+                    </button>
+                  ` : `
+                    <div class="w-full py-2.5 px-3 bg-emerald-950/40 border border-emerald-500/30 rounded-2xl flex items-center justify-between text-xs text-emerald-300 font-bold">
+                      <span class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                        <span>Entregue às ${ord.deliveredAt || ord.createdAt || 'Hoje'}</span>
+                      </span>
+                      <span class="px-2 py-0.5 rounded-lg bg-emerald-900/80 border border-emerald-500/40 text-emerald-300 font-mono text-[10px] font-black uppercase">
+                        ✓ PIN Validado
+                      </span>
+                    </div>
+                  `}
+                </div>
+
+                <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
+                  <span class="text-slate-500 font-mono">
+                    🕒 ${ord.createdAt || ord.date || 'Hoje'}
+                  </span>
+                </div>
+              </div>
+            `;
+          }).join('');
+        }
+      }
+    }
+
+    // Modal de Código de Entrega (PIN de 4 dígitos)
+    function openDeliveryCodeModal(orderId) {
+      const ord = (motoboyOrders || []).find(o => o.id === orderId);
+      if (!ord) return;
+
+      const modal = document.getElementById('modal-confirm-delivery-code');
+      const orderIdInput = document.getElementById('code-modal-order-id');
+      const orderNumEl = document.getElementById('code-modal-order-number');
+      const storeNameEl = document.getElementById('code-modal-store-name');
+      const custNameEl = document.getElementById('code-modal-customer-name');
+      const custAddrEl = document.getElementById('code-modal-customer-address');
+      const codeInput = document.getElementById('delivery-code-input');
+      const errorAlert = document.getElementById('code-modal-error-alert');
+
+      if (!modal) return;
+
+      if (orderIdInput) orderIdInput.value = ord.id;
+      if (orderNumEl) orderNumEl.innerText = `#${ord.orderNumber}`;
+      if (storeNameEl) storeNameEl.innerText = ord.storeName || 'Minha Loja';
+      if (custNameEl) custNameEl.innerText = ord.customerName ? `Cliente: ${ord.customerName}` : 'Cliente não identificado';
+      if (custAddrEl) custAddrEl.innerText = ord.customerAddress ? `📍 ${ord.customerAddress}` : '📍 Endereço';
+
+      if (errorAlert) errorAlert.classList.add('hidden');
+      if (codeInput) codeInput.value = '';
+
+      modal.classList.remove('hidden');
+      setTimeout(() => {
+        if (codeInput) codeInput.focus();
+      }, 100);
+    }
+
+    function closeDeliveryCodeModal() {
+      const modal = document.getElementById('modal-confirm-delivery-code');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function submitDeliveryCodeConfirmation(e) {
+      if (e) e.preventDefault();
+      const orderIdInput = document.getElementById('code-modal-order-id');
+      const codeInput = document.getElementById('delivery-code-input');
+      const errorAlert = document.getElementById('code-modal-error-alert');
+      const errorText = document.getElementById('code-modal-error-text');
+
+      const orderId = orderIdInput ? orderIdInput.value : '';
+      const enteredCode = codeInput ? codeInput.value.trim() : '';
+
+      const ord = (motoboyOrders || []).find(o => o.id === orderId);
+      if (!ord) {
+        closeDeliveryCodeModal();
+        return;
+      }
+
+      if (!enteredCode || enteredCode.length !== 4) {
+        if (errorAlert) errorAlert.classList.remove('hidden');
+        if (errorText) errorText.innerText = 'Digite o código completo de 4 dígitos.';
+        if (codeInput) codeInput.focus();
+        return;
+      }
+
+      const now = new Date();
+      ord.status = 'entregue';
+      ord.deliveredAt = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      ord.deliveredDate = now.toLocaleDateString('pt-BR');
+      ord.confirmedByCode = true;
+      ord.deliveryCode = enteredCode;
+
+      // Sincroniza alteração para o Firestore na nuvem
+      if (window.firebaseSetDoc && window.firebaseDoc && window.firebaseDb && currentTenantId) {
+        window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", currentTenantId, "motoboyOrders", String(ord.id)), ord, { merge: true }).catch(err => console.warn('Erro ao salvar no Firestore:', err));
+      }
+
+      playDoubleBeepAlarm();
+      closeDeliveryCodeModal();
+
+      if (activePortalMotoboyId) {
+        renderPortalDashboard(activePortalMotoboyId);
+      }
+
+      showToast(
+        '🎉 Entrega Confirmada!', 
+        `Pedido #${ord.orderNumber} validado com sucesso com o cliente (${ord.deliveredAt} - PIN: ${enteredCode})!`, 
+        'success'
+      );
+    }
+
+    function refreshPortalDashboard() {
+      if (activePortalMotoboyId) {
+        renderPortalDashboard(activePortalMotoboyId);
+        showToast('Atualizado!', 'Entregas sincronizadas.', 'info');
+      }
+    }
+
+    function logoutMotoboyPortal() {
+      activePortalMotoboyId = null;
+      localStorage.removeItem('activePortalMotoboyId');
+      selectedPortalAuthMbId = null;
+      renderPortalMotoboySelection();
+      showToast('Sessão Encerrada', 'Você saiu do portal do entregador.', 'info');
+    }
+
+    function printCurrentPortalMotoboyReceipt() {
+      if (!activePortalMotoboyId) return;
+      const mb = motoboysList.find(m => m.id === activePortalMotoboyId);
+      if (!mb) return;
+
+      const assignedOrders = (motoboyOrders || []).filter(o => o.motoboyId === mb.id);
+      const totalFees = assignedOrders.reduce((acc, o) => acc + (Number(o.deliveryFee) || 0), 0);
+      const storeName = localStorage.getItem('portal_store_name') || currentTenantId || 'Minha Loja';
+
+      const container = document.getElementById('print-thermal-container');
+      if (!container) return;
+
+      container.innerHTML = `
+        <div style="text-align:center; margin-bottom:10px;">
+          <h2 style="font-size:14px; font-weight:bold; margin:0;">${escapeHtml(storeName)}</h2>
+          <p style="font-size:11px; margin:2px 0;">EXTRATO DE ENTREGAS DO MOTOBOY</p>
+          <p style="font-size:10px; margin:2px 0;">Data: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}</p>
+          <hr style="border:none; border-top:1px dashed #000; margin:6px 0;" />
+        </div>
+        <div style="margin-bottom:8px;">
+          <p style="margin:2px 0;"><strong>Entregador:</strong> ${escapeHtml(mb.name)}</p>
+          <p style="margin:2px 0;"><strong>Total de Pedidos:</strong> ${assignedOrders.length}</p>
+          <p style="margin:2px 0;"><strong>Total de Taxas:</strong> ${formatCurrency(totalFees)}</p>
+          <hr style="border:none; border-top:1px dashed #000; margin:6px 0;" />
+        </div>
+        <table style="width:100%; font-size:10px; border-collapse:collapse;">
+          <thead>
+            <tr style="border-bottom:1px solid #000;">
+              <th style="text-align:left; padding:2px 0;">Ped</th>
+              <th style="text-align:left; padding:2px 0;">Status</th>
+              <th style="text-align:right; padding:2px 0;">Taxa</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${assignedOrders.map(o => `
+              <tr>
+                <td style="padding:2px 0;">#${escapeHtml(o.orderNumber)}</td>
+                <td style="padding:2px 0;">${o.status === 'entregue' ? 'Entregue' : 'Em Rota'}</td>
+                <td style="text-align:right; padding:2px 0;">${formatCurrency(o.deliveryFee)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <hr style="border:none; border-top:1px dashed #000; margin:8px 0;" />
+        <div style="text-align:center; font-size:10px;">
+          <p style="margin:2px 0;">FAST PEDIDOS - CONTROLE DE ENTREGAS</p>
+        </div>
+      `;
+
+      container.classList.remove('hidden');
+      window.print();
+      container.classList.add('hidden');
+    }
+
+    // Inicialização ao carregar
+    window.addEventListener('DOMContentLoaded', () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      currentTenantId = urlParams.get('store') || localStorage.getItem('last_tenant_id') || '';
+
+      const storeNameEl = document.getElementById('portal-current-store-name');
+      if (storeNameEl) {
+        storeNameEl.innerText = localStorage.getItem('portal_store_name') || currentTenantId || 'Minha Loja';
+      }
+    });
+  </script>
+
+  <!-- FIREBASE REAL-TIME SYNC MODULE (ISOLADO PARA O PORTAL DO ENTREGADOR) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, collection, onSnapshot, setDoc, doc, query, limit, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBow5AERyHHi3_zpmPwiV9SKhHfW-ltCHY",
+      authDomain: "fastpedidos-abde5.firebaseapp.com",
+      projectId: "fastpedidos-abde5",
+      storageBucket: "fastpedidos-abde5.firebasestorage.app",
+      messagingSenderId: "780977340389",
+      appId: "1:780977340389:web:e5aa31d6a4aea8b98b390c"
+    };
+
+    try {
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+
+      window.firebaseDb = db;
+      window.firebaseDoc = doc;
+      window.firebaseSetDoc = setDoc;
+
+      const urlParams = new URLSearchParams(window.location.search);
+      let tenantId = urlParams.get('store');
+      if (!tenantId) {
+        tenantId = localStorage.getItem('last_tenant_id') || localStorage.getItem('portal_last_store_id');
+      }
+
+      if (tenantId) {
+        currentTenantId = tenantId;
+        console.log(`🔥 [Portal Motoboy]: Conectado ao Firebase da loja [${tenantId}]`);
+
+        // Busca nome da loja
+        getDoc(doc(db, "stores", tenantId, "config", "settings")).then(snap => {
+          if (snap.exists()) {
+            const data = snap.data();
+            if (data) {
+              const activeStore = (data.storesList && data.storesList.find(s => s.active)) || (data.storesList && data.storesList[0]);
+              const storeName = (activeStore && activeStore.name) || tenantId;
+              localStorage.setItem('portal_store_name', storeName);
+              const storeNameEl = document.getElementById('portal-current-store-name');
+              if (storeNameEl) storeNameEl.innerText = storeName;
+            }
+          }
+        }).catch(() => {});
+
+        // 1. Escuta lista de Motoboys em tempo real
+        onSnapshot(collection(db, "stores", tenantId, "motoboys"), (snapshot) => {
+          const list = [];
+          if (!snapshot.empty) {
+            snapshot.forEach(docSnap => {
+              const data = docSnap.data();
+              if (data && !data.archived && data.active !== false) {
+                list.push(data);
+              }
+            });
+            list.sort((a, b) => (a.order ?? 999999) - (b.order ?? 999999));
+          }
+          motoboysList = list;
+
+          if (activePortalMotoboyId && motoboysList.some(m => m.id === activePortalMotoboyId)) {
+            renderPortalDashboard(activePortalMotoboyId);
+          } else if (!activePortalMotoboyId) {
+            renderPortalMotoboySelection();
+          }
+        }, (err) => console.warn('Erro ao sincronizar motoboys:', err));
+
+        // 2. Escuta lista de Pedidos dos Motoboys em tempo real
+        const ordersQuery = query(collection(db, "stores", tenantId, "motoboyOrders"), limit(100));
+        onSnapshot(ordersQuery, (snapshot) => {
+          const orders = [];
+          if (!snapshot.empty) {
+            snapshot.forEach(docSnap => {
+              const data = docSnap.data();
+              if (data && !data.archived) {
+                orders.push(data);
+              }
+            });
+            orders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+          }
+          motoboyOrders = orders;
+
+          if (activePortalMotoboyId) {
+            renderPortalDashboard(activePortalMotoboyId);
+
+            // Detecção de novos pedidos para o motoboy logado
+            const myOrders = orders.filter(o => String(o.motoboyId) === String(activePortalMotoboyId));
+            if (!initialSyncDone) {
+              knownOrderIds = new Set(myOrders.map(o => String(o.id)));
+              initialSyncDone = true;
+            } else {
+              const incoming = myOrders.filter(o => !knownOrderIds.has(String(o.id)));
+              if (incoming.length > 0) {
+                incoming.forEach(ord => {
+                  knownOrderIds.add(String(ord.id));
+                  triggerNewOrderAlert(ord);
+                });
+              }
+            }
+          } else {
+            renderPortalMotoboySelection();
+          }
+        }, (err) => console.warn('Erro ao sincronizar pedidos:', err));
+
+      } else {
+        const grid = document.getElementById('portal-motoboys-selection-grid');
+        if (grid) {
+          grid.innerHTML = `
+            <div class="p-6 bg-slate-900 border border-slate-800 rounded-3xl text-center space-y-3 shadow-xl">
+              <div class="text-3xl">⚠️</div>
+              <h3 class="text-sm font-black text-white">Identificador da loja não fornecido</h3>
+              <p class="text-xs text-slate-400">Solicite ao gerente o link completo do portal com o código da loja.</p>
+            </div>
+          `;
+        }
+      }
+
+    } catch (e) {
+      console.error("Erro no Firebase do Portal do Motoboy:", e);
+    }
+  </script>
+</body>
+</html>
