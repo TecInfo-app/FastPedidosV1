@@ -5583,7 +5583,8 @@
         if (permHelp) permHelp.classList.add('hidden');
 
         // 3. Tenta registrar Service Worker e Web Push em segundo plano (se suportado no ambiente)
-        if ('serviceWorker' in navigator && 'PushManager' in window) {
+        const isStaticHost = window.location.hostname.includes('github.io');
+        if ('serviceWorker' in navigator && 'PushManager' in window && !isStaticHost) {
           try {
             let reg = await navigator.serviceWorker.getRegistration();
             if (!reg) {
@@ -5687,24 +5688,27 @@
       testMotoboyAlertSound();
       showToast('Alerta de Teste Acionado! 🛵', 'Som melódico, vibração e notificação na tela disparados.', 'success');
 
-      // 2. Tenta enviar Push remoto via servidor se estiver conectado
-      try {
-        const res = await fetch('/api/push/test', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ motoboyId: String(mbId) })
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success) {
-            showToast(
-              'Push Remoto Transmitido! 📡',
-              `Notificação enviada para ${data.sentCount} dispositivo(s).`,
-              'success'
-            );
+      // 2. Tenta enviar Push remoto via servidor se estiver conectado a um backend real
+      const isStaticHost = window.location.hostname.includes('github.io');
+      if (!isStaticHost) {
+        try {
+          const res = await fetch('/api/push/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ motoboyId: String(mbId) })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success) {
+              showToast(
+                'Push Remoto Transmitido! 📡',
+                `Notificação enviada para ${data.sentCount} dispositivo(s).`,
+                'success'
+              );
+            }
           }
-        }
-      } catch (e) {}
+        } catch (e) {}
+      }
     }
     window.sendTestPushToMyPhone = sendTestPushToMyPhone;
 
