@@ -1362,8 +1362,8 @@
           }
         }, (err) => console.warn('Erro ao sincronizar motoboys:', err));
 
-        // 2. Escuta lista de Pedidos dos Motoboys em tempo real
-        const ordersQuery = query(collection(db, "stores", tenantId, "motoboyOrders"), limit(100));
+        // 2. Escuta lista de Pedidos dos Motoboys em tempo real (Até 1000 pedidos por turno)
+        const ordersQuery = query(collection(db, "stores", tenantId, "motoboyOrders"), limit(1000));
         unsubOrders = onSnapshot(ordersQuery, (snapshot) => {
           const orders = [];
           if (!snapshot.empty) {

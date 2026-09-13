@@ -6077,15 +6077,17 @@
       renderMotoboyMosaic();
       if (!skipFirebase && tenantId && window.firebaseDb && window.firebaseSetDoc) {
         try {
+          if (!window._firebaseLastSynced) window._firebaseLastSynced = {};
           motoboyOrders.forEach(ord => {
             if (ord.id) {
               const cleanPayload = JSON.parse(JSON.stringify(ord));
               const payloadStr = JSON.stringify(cleanPayload);
               // Só envia para a nuvem se o conteúdo REALMENTE mudou
-              if (window._firebaseLastSynced && window._firebaseLastSynced[String(ord.id)] !== payloadStr) {
+              if (window._firebaseLastSynced[String(ord.id)] !== payloadStr) {
                 window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "motoboyOrders", String(ord.id)), cleanPayload, { merge: true }).then(() => {
+                   if (!window._firebaseLastSynced) window._firebaseLastSynced = {};
                    window._firebaseLastSynced[String(ord.id)] = payloadStr;
-                }).catch(() => {});
+                }).catch((err) => console.warn("Erro ao salvar pedido no Firebase:", err));
               }
             }
           });
@@ -6513,18 +6515,20 @@
       lastLaunchedMotoboyId = pendingOrderData.motoboyId;
       saveMotoboyOrders();
 
-      // Dispara Notificação Web Push em segundo plano para o smartphone do motoboy (mesmo com navegador fechado / tela apagada)
-      const targetMbId = lastLaunchedMotoboyId;
-      createdOrders.forEach(item => {
-        fetch('/api/push/send-to-motoboy', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            motoboyId: String(targetMbId),
-            order: item.order
-          })
-        }).catch(err => console.warn('[WebPush] Falha ao enviar push em segundo plano:', err));
-      });
+      // Dispara Notificação Web Push em segundo plano para o smartphone do motoboy (se houver backend push configurado)
+      if (!window.location.hostname.includes('github.io')) {
+        const targetMbId = lastLaunchedMotoboyId;
+        createdOrders.forEach(item => {
+          fetch('/api/push/send-to-motoboy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              motoboyId: String(targetMbId),
+              order: item.order
+            })
+          }).catch(() => {});
+        });
+      }
 
       // Se o motoboy estiver com o portal aberto no mesmo navegador, notifica imediatamente
       const currentActiveMb = window.activePortalMotoboyId || (typeof window.getActivePortalMotoboyId === 'function' ? window.getActivePortalMotoboyId() : null);
@@ -8227,8 +8231,8 @@
           }
         });
 
-        // 3. Pedidos dos Motoboys da Loja: stores/${tenantId}/motoboyOrders (Limitado a 100 mais recentes para reduzir consumo de leituras)
-        const motoboyOrdersQuery = query(collection(db, "stores", tenantId, "motoboyOrders"), limit(100));
+        // 3. Pedidos dos Motoboys da Loja: stores/${tenantId}/motoboyOrders (Até 1000 pedidos por turno)
+        const motoboyOrdersQuery = query(collection(db, "stores", tenantId, "motoboyOrders"), limit(1000));
         unsubMotoboyOrders = onSnapshot(motoboyOrdersQuery, (snapshot) => {
           const remoteOrders = [];
           if (!snapshot.empty) {
@@ -8297,8 +8301,8 @@
           }
         });
 
-        // 4. Pedidos iFood KDS da Loja: stores/${tenantId}/orders (Limitado a 100 mais recentes para reduzir consumo de leituras)
-        const ordersQuery = query(collection(db, "stores", tenantId, "orders"), limit(100));
+        // 4. Pedidos iFood KDS da Loja: stores/${tenantId}/orders (Até 1000 pedidos por turno)
+        const ordersQuery = query(collection(db, "stores", tenantId, "orders"), limit(1000));
         unsubOrders = onSnapshot(ordersQuery, (snapshot) => {
           const remoteOrders = [];
           if (!snapshot.empty) {
