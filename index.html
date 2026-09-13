@@ -1825,6 +1825,22 @@
               </button>
             </div>
           </div>
+
+          <!-- Mensagem de ajuda caso a permissão esteja bloqueada no navegador -->
+          <div id="portal-push-permission-help" class="hidden p-3 bg-red-950/40 border border-red-500/40 rounded-2xl text-xs text-red-200 space-y-1.5">
+            <div class="font-bold flex items-center gap-2 text-red-300">
+              <span>🚫 Notificações Bloqueadas pelo Navegador</span>
+            </div>
+            <p class="text-slate-300 text-[11px] leading-relaxed">
+              O navegador está configurado para não perguntar ou bloqueou as notificações deste site. Para corrigir:
+            </p>
+            <ol class="list-decimal list-inside text-[11px] text-slate-300 space-y-1">
+              <li>No Chrome/Navegador do celular, toque no ícone de <strong>Cadeado / Ajustes (⚙️/🔒)</strong> ao lado do endereço do site.</li>
+              <li>Toque em <strong>"Permissões"</strong> ou <strong>"Configurações do site"</strong>.</li>
+              <li>Procure por <strong>"Notificações"</strong> e altere para <strong>"Permitir"</strong>.</li>
+              <li>Depois retorne aqui e toque novamente em <strong>"Ativar Notificações no Celular"</strong>.</li>
+            </ol>
+          </div>
         </div>
 
         <!-- Aviso Informativo de Somente Leitura -->
@@ -5533,13 +5549,19 @@
         return;
       }
 
+      // Verifica se a API de Notificações existe no navegador
+      if (!('Notification' in window)) {
+        showToast('Incompatível', 'Este navegador não suporta a API de Notificações.', 'error');
+        return;
+      }
+
       if (!('serviceWorker' in navigator)) {
         showToast('Navegador Incompatível', 'Seu navegador não oferece suporte a Service Workers. Use o Google Chrome no celular.', 'warning');
         return;
       }
 
       if (!('PushManager' in window)) {
-        showToast('Push Não Disponível', 'Push Notifications não estão disponíveis neste navegador. Adicione o app à Tela de Início (PWA) ou use o Chrome.', 'warning');
+        showToast('Push Não Disponível', 'Push Notifications não estão disponíveis neste navegador. Se estiver no iPhone, adicione à Tela de Início primeiro.', 'warning');
         return;
       }
 
@@ -5547,17 +5569,52 @@
       const origHtml = activateBtn ? activateBtn.innerHTML : '';
       if (activateBtn) activateBtn.innerHTML = '<span>⏳ Conectando...</span>';
 
+      const permHelp = document.getElementById('portal-push-permission-help');
+
       try {
         // Desbloqueia Web Audio caso ainda bloqueado
         getMotoboyAudioContext();
 
-        // 1. Solicita permissão do navegador
-        const permission = await Notification.requestPermission();
-        if (permission !== 'granted') {
-          showToast('Permissão Necessária', 'Você precisa clicar em "Permitir" na caixa de diálogo do navegador para receber notificações.', 'warning');
+        // Verifica estado atual da permissão antes de chamar o prompt
+        const currentPermission = Notification.permission;
+        console.log('[WebPush] Estado atual da permissão:', currentPermission);
+
+        if (currentPermission === 'denied') {
+          if (permHelp) permHelp.classList.remove('hidden');
+          showToast(
+            'Permissão Bloqueada',
+            'O navegador bloqueou as notificações para esta página. Toque no ícone de ajustes/cadeado na barra do navegador para desbloquear.',
+            'error'
+          );
           if (activateBtn) activateBtn.innerHTML = origHtml;
           return;
         }
+
+        // 1. Solicita permissão do navegador (suporta tanto Promise quanto callback antigo)
+        let permission;
+        try {
+          permission = await Notification.requestPermission();
+        } catch (e) {
+          // Fallback para navegadores mais antigos que usam callback
+          permission = await new Promise((resolve) => {
+            Notification.requestPermission((res) => resolve(res));
+          });
+        }
+
+        console.log('[WebPush] Resposta da permissão:', permission);
+
+        if (permission !== 'granted') {
+          if (permHelp) permHelp.classList.remove('hidden');
+          showToast(
+            'Permissão Não Concedida',
+            'Você precisa clicar em "Permitir" quando o navegador perguntar para receber notificações.',
+            'warning'
+          );
+          if (activateBtn) activateBtn.innerHTML = origHtml;
+          return;
+        }
+
+        if (permHelp) permHelp.classList.add('hidden');
 
         // 2. Garante registro do Service Worker
         let reg = await navigator.serviceWorker.getRegistration();
