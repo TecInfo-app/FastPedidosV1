@@ -70,10 +70,10 @@
 </head>
 <body class="bg-slate-100 font-sans text-slate-800 min-h-screen flex flex-col antialiased selection:bg-ifood-red selection:text-white">
 
-  <!-- PREVENT LOGIN FLASH FOR MOTOBOY PORTAL -->
+  <!-- PREVENT LOGIN & MAIN INTERFACE FLASH FOR MOTOBOY PORTAL -->
   <script>
     if (window.location.search.includes('portal=motoboy')) {
-      document.write('<style>#login-screen-overlay { display: none !important; }</style>');
+      document.write('<style>#login-screen-overlay { display: none !important; } #portal-motoboy-view { display: flex !important; } main, header, footer, #settings-drawer, #drawer-backdrop { display: none !important; }</style>');
     }
   </script>
 
@@ -4196,9 +4196,11 @@
       populateMotoboySelect();
       renderMotoboyMosaic();
       if (!document.getElementById('portal-motoboy-view')?.classList.contains('hidden')) {
-        renderPortalMotoboySelection();
-        if (activePortalMotoboyId) {
-          renderPortalDashboard(activePortalMotoboyId);
+        const curMbId = activePortalMotoboyId || window.activePortalMotoboyId || localStorage.getItem('activePortalMotoboyId');
+        if (curMbId && motoboysList.some(m => m.id === curMbId)) {
+          renderPortalDashboard(curMbId);
+        } else if (!curMbId) {
+          renderPortalMotoboySelection();
         }
       }
       if (tenantId && window.firebaseDb && window.firebaseSetDoc) {
@@ -4429,6 +4431,17 @@
     // --- PORTAL DO MOTOBOY (ENGINE COMPLETO) ---
     // ==========================================
     let activePortalMotoboyId = localStorage.getItem('activePortalMotoboyId') || null;
+    window.activePortalMotoboyId = activePortalMotoboyId;
+    window.getActivePortalMotoboyId = () => activePortalMotoboyId || window.activePortalMotoboyId || localStorage.getItem('activePortalMotoboyId') || null;
+    window.setActivePortalMotoboyId = (id) => {
+      activePortalMotoboyId = id || null;
+      window.activePortalMotoboyId = id || null;
+      if (id) {
+        localStorage.setItem('activePortalMotoboyId', id);
+      } else {
+        localStorage.removeItem('activePortalMotoboyId');
+      }
+    };
     let selectedPortalAuthMbId = null;
 
     function openMotoboyPortal() {
@@ -4456,12 +4469,14 @@
       portalView.classList.remove('hidden');
 
       // Se já houver um motoboy ativo logado na sessão atual
-      if (activePortalMotoboyId && motoboysList.some(m => m.id === activePortalMotoboyId)) {
-        renderPortalDashboard(activePortalMotoboyId);
+      const savedMbId = activePortalMotoboyId || window.activePortalMotoboyId || localStorage.getItem('activePortalMotoboyId');
+      if (savedMbId) {
+        renderPortalDashboard(savedMbId);
       } else {
         renderPortalMotoboySelection();
       }
     }
+    window.openMotoboyPortal = openMotoboyPortal;
 
     function closeMotoboyPortal() {
       // Bloqueio de Segurança: Nunca permite fechar o portal se acessado via link do motoboy
@@ -4591,6 +4606,7 @@
 
       if (enteredPass === correctPass) {
         activePortalMotoboyId = mb.id;
+        window.activePortalMotoboyId = mb.id;
         localStorage.setItem('activePortalMotoboyId', mb.id);
         renderPortalDashboard(mb.id);
         showToast('Login Efetuado!', `Bem-vindo ao portal, ${mb.name}!`, 'success');
@@ -4604,8 +4620,22 @@
     }
 
     function renderPortalDashboard(motoboyId) {
+      if (!motoboyId) {
+        renderPortalMotoboySelection();
+        return;
+      }
+      activePortalMotoboyId = motoboyId;
+      window.activePortalMotoboyId = motoboyId;
+
       const mb = motoboysList.find(m => m.id === motoboyId);
       if (!mb) {
+        // Se a lista de motoboys ainda não carregou do Firebase/storage, não desloga
+        if (!motoboysList || motoboysList.length === 0) {
+          return;
+        }
+        activePortalMotoboyId = null;
+        window.activePortalMotoboyId = null;
+        localStorage.removeItem('activePortalMotoboyId');
         renderPortalMotoboySelection();
         return;
       }
@@ -4970,11 +5000,14 @@
 
     function logoutMotoboyPortal() {
       activePortalMotoboyId = null;
+      window.activePortalMotoboyId = null;
       localStorage.removeItem('activePortalMotoboyId');
       selectedPortalAuthMbId = null;
       renderPortalMotoboySelection();
       showToast('Sessão Encerrada', 'Você saiu do portal do entregador.', 'info');
     }
+    window.renderPortalDashboard = renderPortalDashboard;
+    window.renderPortalMotoboySelection = renderPortalMotoboySelection;
 
     function printCurrentPortalMotoboyReceipt() {
       if (!activePortalMotoboyId) return;
@@ -6607,7 +6640,10 @@
               initTenantSession(sess.tenantId, sess.username);
             }
           }
-          if (typeof renderPortalMotoboySelection === 'function') {
+          const savedMbId = activePortalMotoboyId || window.activePortalMotoboyId || localStorage.getItem('activePortalMotoboyId');
+          if (savedMbId && typeof renderPortalDashboard === 'function') {
+            renderPortalDashboard(savedMbId);
+          } else if (typeof renderPortalMotoboySelection === 'function') {
             renderPortalMotoboySelection();
           }
           return;
@@ -7129,9 +7165,16 @@
           if (typeof renderDrawerMotoboys === 'function') renderDrawerMotoboys();
           if (typeof populateMotoboySelect === 'function') populateMotoboySelect();
           if (typeof renderMotoboyMosaic === 'function') renderMotoboyMosaic();
-          if (typeof renderPortalMotoboySelection === 'function') renderPortalMotoboySelection();
-          if (window.activePortalMotoboyId && typeof renderPortalDashboard === 'function') {
-            renderPortalDashboard(window.activePortalMotoboyId);
+          
+          const activeMbId = window.activePortalMotoboyId || (typeof window.getActivePortalMotoboyId === 'function' ? window.getActivePortalMotoboyId() : localStorage.getItem('activePortalMotoboyId'));
+          if (activeMbId) {
+            if (typeof renderPortalDashboard === 'function') {
+              renderPortalDashboard(activeMbId);
+            }
+          } else {
+            if (typeof renderPortalMotoboySelection === 'function') {
+              renderPortalMotoboySelection();
+            }
           }
         }, (err) => console.warn("Firebase Motoboys error:", err));
 
@@ -7170,8 +7213,9 @@
           }
 
           if (typeof renderMotoboyMosaic === 'function') renderMotoboyMosaic();
-          if (window.activePortalMotoboyId && typeof renderPortalDashboard === 'function') {
-            renderPortalDashboard(window.activePortalMotoboyId);
+          const activePortalMb = window.activePortalMotoboyId || (typeof window.getActivePortalMotoboyId === 'function' ? window.getActivePortalMotoboyId() : localStorage.getItem('activePortalMotoboyId'));
+          if (activePortalMb && typeof renderPortalDashboard === 'function') {
+            renderPortalDashboard(activePortalMb);
           }
         }, (err) => console.warn("Firebase MotoboyOrders error:", err));
 
