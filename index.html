@@ -1202,6 +1202,64 @@
     </div>
   </div>
 
+  <!-- MODAL EDITAR TAXA DE ENTREGA -->
+  <div id="modal-edit-fee" style="z-index: 99996;" class="fixed inset-0 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs hidden animate-fade-in" onclick="if(event.target === this) closeEditFeeModal()">
+    <div class="bg-white rounded-3xl max-w-sm w-full shadow-2xl p-6 relative border border-slate-100">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-sm font-bold shadow-2xs">
+            ✏️
+          </div>
+          <h3 class="text-sm font-black text-slate-900">Editar Taxa de Entrega</h3>
+        </div>
+        <button type="button" onclick="closeEditFeeModal()" class="text-slate-400 hover:text-slate-700 text-xl font-bold cursor-pointer p-1">
+          ✕
+        </button>
+      </div>
+
+      <form onsubmit="submitEditFee(event)" class="space-y-4">
+        <input type="hidden" id="edit-fee-id" />
+        <div>
+          <label class="block text-[11px] font-black text-slate-700 uppercase tracking-wider mb-1.5">
+            IDENTIFICAÇÃO / BAIRRO
+          </label>
+          <input 
+            type="text" 
+            id="edit-fee-name" 
+            placeholder="Ex: Bairro Centro, Noturna, Zona Sul" 
+            class="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            required
+          />
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-black text-slate-700 uppercase tracking-wider mb-1.5">
+            VALOR DA TAXA (R$)
+          </label>
+          <div class="relative">
+            <span class="absolute left-3.5 top-2.5 text-xs font-bold text-slate-400">R$</span>
+            <input 
+              type="text" 
+              inputmode="decimal"
+              id="edit-fee-val" 
+              placeholder="0,00" 
+              class="w-full pl-9 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              required
+            />
+          </div>
+          <p class="text-[10px] text-slate-400 mt-1">Aceita ponto ou vírgula (ex: 7,50 ou 7.50).</p>
+        </div>
+
+        <button 
+          type="submit" 
+          class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-black text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2 shadow-md transition cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+          <span>Salvar Alterações</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
   <!-- MODAL 8: CADASTRAR NOVO MOTOBOY (SUBSTITUI PROMPT - COM SENHA PARA O PORTAL) -->
   <div id="modal-create-motoboy" style="z-index: 99995;" class="fixed inset-0 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs hidden animate-fade-in" onclick="if(event.target === this) closeCreateMotoboyModal()">
     <div class="bg-white rounded-3xl max-w-sm w-full shadow-2xl p-6 relative border border-slate-100">
@@ -1952,12 +2010,10 @@
           <div class="relative flex-1 w-full">
             <input 
               type="text" 
-              inputmode="numeric"
-              pattern="[0-9]*"
               id="quick-order-input" 
               autocomplete="off"
               oninput="handleQuickOrderInput(this.value)"
-              placeholder="Digite o número do pedido (Ex: 101, 402, 7412)..." 
+              placeholder="Digite o número do pedido (ou vários separados por vírgula: 101, 102)..." 
               class="w-full px-4 py-3 bg-white border-2 border-amber-400 focus:border-amber-500 rounded-2xl text-sm font-bold text-slate-900 placeholder:font-normal placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400/20 transition shadow-2xs"
             />
           </div>
@@ -3885,25 +3941,70 @@
 
     function saveDeliveryFees() {
       const storageKey = getTenantStorageKey('delivery_fees');
+      deliveryFeesList.forEach((fee, idx) => { fee.order = idx; });
       localStorage.setItem(storageKey, JSON.stringify(deliveryFeesList));
       renderDrawerFees();
       populateDeliveryFeeSelect();
       syncSettingsToFirebase();
     }
 
+    function moveDeliveryFeeOrder(index, delta) {
+      const targetIndex = index + delta;
+      if (targetIndex < 0 || targetIndex >= deliveryFeesList.length) return;
+      const [item] = deliveryFeesList.splice(index, 1);
+      deliveryFeesList.splice(targetIndex, 0, item);
+      saveDeliveryFees();
+      showToast('Ordem Alterada', `Taxa "${item.name}" movida para a posição ${targetIndex + 1}.`, 'info');
+    }
+
     function renderDrawerFees() {
       const container = document.getElementById('drawer-fees-list');
       if (!container) return;
 
-      container.innerHTML = deliveryFeesList.map(fee => `
-        <div class="p-2.5 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-2 shadow-2xs">
-          <div>
-            <span class="text-xs font-bold text-slate-800">${fee.name}</span>
-            <div class="text-xs font-black text-emerald-700">${formatCurrency(fee.value)}</div>
+      if (!deliveryFeesList || deliveryFeesList.length === 0) {
+        container.innerHTML = `
+          <div class="p-4 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center text-xs text-slate-400">
+            Nenhuma taxa cadastrada.
           </div>
-          <button onclick="removeDeliveryFee('${fee.id}')" class="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer" title="Remover Taxa">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-          </button>
+        `;
+        return;
+      }
+
+      container.innerHTML = deliveryFeesList.map((fee, idx) => `
+        <div class="p-2.5 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-2 shadow-2xs hover:border-slate-300 transition">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="flex flex-col items-center justify-center gap-0.5 shrink-0 bg-slate-50 p-1 rounded-lg border border-slate-200/60">
+              <button 
+                type="button" 
+                onclick="moveDeliveryFeeOrder(${idx}, -1)" 
+                ${idx === 0 ? 'disabled' : ''} 
+                class="w-5 h-4 flex items-center justify-center rounded text-slate-500 hover:text-slate-900 hover:bg-white disabled:opacity-20 disabled:pointer-events-none transition cursor-pointer text-[10px] leading-none" 
+                title="Mover para cima">
+                ▲
+              </button>
+              <span class="text-[9px] font-black text-slate-500 leading-none">${idx + 1}º</span>
+              <button 
+                type="button" 
+                onclick="moveDeliveryFeeOrder(${idx}, 1)" 
+                ${idx === deliveryFeesList.length - 1 ? 'disabled' : ''} 
+                class="w-5 h-4 flex items-center justify-center rounded text-slate-500 hover:text-slate-900 hover:bg-white disabled:opacity-20 disabled:pointer-events-none transition cursor-pointer text-[10px] leading-none" 
+                title="Mover para baixo">
+                ▼
+              </button>
+            </div>
+            <div class="min-w-0">
+              <span class="text-xs font-bold text-slate-800 truncate block">${escapeHtml(fee.name)}</span>
+              <div class="text-xs font-black text-emerald-700 font-mono">${formatCurrency(fee.value)}</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-1 shrink-0">
+            <button onclick="openEditFeeModal('${fee.id}')" class="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition cursor-pointer" title="Editar Taxa">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+            </button>
+            <button onclick="removeDeliveryFee('${fee.id}')" class="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer" title="Remover Taxa">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            </button>
+          </div>
         </div>
       `).join('');
     }
@@ -3943,7 +4044,8 @@
       const nameInput = document.getElementById('create-fee-name');
       const valInput = document.getElementById('create-fee-val');
       const name = nameInput ? nameInput.value.trim() : '';
-      const val = parseFloat(valInput ? valInput.value : 0);
+      const rawVal = valInput ? valInput.value.trim().replace(',', '.') : '';
+      const val = parseFloat(rawVal);
 
       if (!name) {
         showToast('Aviso', 'Informe a identificação da taxa.', 'warning');
@@ -3957,18 +4059,71 @@
       const newFee = {
         id: 'fee-' + Date.now(),
         name: name,
-        value: val
+        value: val,
+        order: deliveryFeesList.length
       };
 
       deliveryFeesList.push(newFee);
       saveDeliveryFees();
-      renderDrawerFees();
-      populateDeliveryFeeSelect();
       closeCreateFeeModal();
       showToast('Taxa Cadastrada', `Taxa "${name}" (${formatCurrency(val)}) adicionada com sucesso!`, 'success');
     }
 
     const addDeliveryFeePrompt = openCreateFeeModal;
+
+    function openEditFeeModal(id) {
+      const fee = deliveryFeesList.find(f => f.id === id);
+      if (!fee) return;
+
+      const modal = document.getElementById('modal-edit-fee');
+      const idInput = document.getElementById('edit-fee-id');
+      const nameInput = document.getElementById('edit-fee-name');
+      const valInput = document.getElementById('edit-fee-val');
+
+      if (!modal) return;
+      if (idInput) idInput.value = fee.id;
+      if (nameInput) nameInput.value = fee.name || '';
+      if (valInput) valInput.value = Number(fee.value || 0).toFixed(2).replace('.', ',');
+
+      modal.classList.remove('hidden');
+      setTimeout(() => { if (nameInput) nameInput.focus(); }, 80);
+    }
+
+    function closeEditFeeModal() {
+      const modal = document.getElementById('modal-edit-fee');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function submitEditFee(e) {
+      if (e) e.preventDefault();
+      const idInput = document.getElementById('edit-fee-id');
+      const nameInput = document.getElementById('edit-fee-name');
+      const valInput = document.getElementById('edit-fee-val');
+
+      const id = idInput ? idInput.value : '';
+      const fee = deliveryFeesList.find(f => f.id === id);
+      if (!fee) return;
+
+      const name = nameInput ? nameInput.value.trim() : '';
+      const rawVal = valInput ? valInput.value.trim().replace(',', '.') : '';
+      const val = parseFloat(rawVal);
+
+      if (!name) {
+        showToast('Aviso', 'Informe a identificação da taxa.', 'warning');
+        return;
+      }
+      if (isNaN(val) || val <= 0) {
+        showToast('Aviso', 'Informe um valor válido para a taxa.', 'warning');
+        return;
+      }
+
+      fee.name = name;
+      fee.value = val;
+
+      saveDeliveryFees();
+      closeEditFeeModal();
+      showToast('Taxa Atualizada', `Taxa "${name}" atualizada para ${formatCurrency(val)}!`, 'success');
+    }
 
     function removeDeliveryFee(feeId) {
       if (deliveryFeesList.length <= 1) {
@@ -3982,8 +4137,6 @@
         () => {
           deliveryFeesList = deliveryFeesList.filter(f => f.id !== feeId);
           saveDeliveryFees();
-          renderDrawerFees();
-          populateDeliveryFeeSelect();
           showToast('Taxa Removida', 'Taxa de entrega excluída.', 'info');
         }
       );
@@ -4013,6 +4166,7 @@
           motoboysList.forEach(mb => {
             if (!mb.password) mb.password = '1234';
           });
+          motoboysList.sort((a, b) => (a.order ?? 999999) - (b.order ?? 999999));
         } catch(e) {
           motoboysList = [];
         }
@@ -4024,9 +4178,19 @@
       renderMotoboyMosaic();
     }
 
+    function moveMotoboyOrder(index, delta) {
+      const targetIndex = index + delta;
+      if (targetIndex < 0 || targetIndex >= motoboysList.length) return;
+      const [item] = motoboysList.splice(index, 1);
+      motoboysList.splice(targetIndex, 0, item);
+      saveMotoboys();
+      showToast('Ordem Alterada', `Motoboy "${item.name}" movido para a posição ${targetIndex + 1}.`, 'info');
+    }
+
     function saveMotoboys(deletedId = null) {
       const tenantId = getCurrentTenantId();
       const storageKey = getTenantStorageKey('motoboys');
+      motoboysList.forEach((mb, idx) => { mb.order = idx; });
       localStorage.setItem(storageKey, JSON.stringify(motoboysList));
       renderDrawerMotoboys();
       populateMotoboySelect();
@@ -4086,16 +4250,38 @@
         return;
       }
 
-      container.innerHTML = motoboysList.map(mb => `
-        <div class="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-2 shadow-2xs">
-          <div class="space-y-0.5 min-w-0">
-            <div class="flex items-center gap-1.5 flex-wrap">
-              <span class="text-xs font-bold text-slate-900 truncate">${escapeHtml(mb.name)}</span>
-              <span class="px-1.5 py-0.5 rounded-md bg-purple-50 border border-purple-200 text-purple-700 text-[10px] font-mono font-bold">
-                🔑 ${escapeHtml(mb.password || '1234')}
-              </span>
+      container.innerHTML = motoboysList.map((mb, idx) => `
+        <div class="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-2 shadow-2xs hover:border-slate-300 transition">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <!-- Posição e botões de ordenação -->
+            <div class="flex flex-col items-center justify-center gap-0.5 shrink-0 bg-slate-50 p-1 rounded-lg border border-slate-200/60">
+              <button 
+                type="button" 
+                onclick="moveMotoboyOrder(${idx}, -1)" 
+                ${idx === 0 ? 'disabled' : ''} 
+                class="w-5 h-4 flex items-center justify-center rounded text-slate-500 hover:text-slate-900 hover:bg-white disabled:opacity-20 disabled:pointer-events-none transition cursor-pointer text-[10px] leading-none" 
+                title="Mover para cima">
+                ▲
+              </button>
+              <span class="text-[9px] font-black text-slate-500 leading-none">${idx + 1}º</span>
+              <button 
+                type="button" 
+                onclick="moveMotoboyOrder(${idx}, 1)" 
+                ${idx === motoboysList.length - 1 ? 'disabled' : ''} 
+                class="w-5 h-4 flex items-center justify-center rounded text-slate-500 hover:text-slate-900 hover:bg-white disabled:opacity-20 disabled:pointer-events-none transition cursor-pointer text-[10px] leading-none" 
+                title="Mover para baixo">
+                ▼
+              </button>
             </div>
-            <p class="text-[11px] text-slate-500 truncate">${mb.phone || 'Sem telefone'}</p>
+            <div class="space-y-0.5 min-w-0">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="text-xs font-bold text-slate-900 truncate">${escapeHtml(mb.name)}</span>
+                <span class="px-1.5 py-0.5 rounded-md bg-purple-50 border border-purple-200 text-purple-700 text-[10px] font-mono font-bold">
+                  🔑 ${escapeHtml(mb.password || '1234')}
+                </span>
+              </div>
+              <p class="text-[11px] text-slate-500 truncate">${mb.phone || 'Sem telefone'}</p>
+            </div>
           </div>
           <div class="flex items-center gap-1 shrink-0">
             <button onclick="openEditMotoboyModal('${mb.id}')" class="p-1.5 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition cursor-pointer" title="Editar Motoboy & Senha">
@@ -4150,6 +4336,7 @@
         name: name,
         phone: phone || '',
         password: password,
+        order: motoboysList.length,
         active: true
       };
 
@@ -4993,7 +5180,13 @@
     }
 
     function handleQuickOrderInput(val) {
-      const match = findMatchingIFoodOrder(val);
+      if (!val) {
+        const banner = document.getElementById('quick-order-ifood-match-banner');
+        if (banner) banner.classList.add('hidden');
+        return;
+      }
+      const firstToken = val.split(',')[0].trim();
+      const match = findMatchingIFoodOrder(firstToken) || findMatchingIFoodOrder(val.trim());
       const banner = document.getElementById('quick-order-ifood-match-banner');
       const idEl = document.getElementById('quick-order-ifood-id');
       const custEl = document.getElementById('quick-order-ifood-customer');
@@ -5052,20 +5245,30 @@
       let customerName = (custNameInput && custNameInput.value.trim()) || '';
       let customerAddress = (custAddrInput && custAddrInput.value.trim()) || '';
 
-      const newOrderNumber = orderNumberRaw.replace('#', '').trim();
+      // Suporta múltiplos pedidos separados por vírgula ou pedido único com vírgula
+      const rawNumbers = orderNumberRaw.split(',')
+        .map(s => s.replace('#', '').trim())
+        .filter(Boolean);
 
-      // Localiza se o pedido existe no iFood
-      const matchedIFood = findMatchingIFoodOrder(orderNumberRaw);
+      if (rawNumbers.length === 0) {
+        showToast('Aviso', 'Informe um número de pedido válido.', 'warning');
+        if (input) input.focus();
+        return;
+      }
+
+      // Localiza se o primeiro pedido existe no iFood
+      const primaryNum = rawNumbers[0];
+      const matchedIFood = findMatchingIFoodOrder(primaryNum) || findMatchingIFoodOrder(orderNumberRaw);
       if (matchedIFood) {
         // Se for um pedido do iFood, forçamos o uso dos dados oficiais
-        // ignorando os inputs que podem ter ficado sujos de digitações anteriores.
         customerName = matchedIFood.customerName || customerName;
         customerAddress = matchedIFood.customerAddress || customerAddress;
       }
 
       // Guardar dados temporários para o fluxo de modais
       pendingOrderData = {
-        orderNumber: newOrderNumber,
+        orderNumbers: rawNumbers,
+        orderNumber: rawNumbers.join(', '),
         customerName: customerName,
         customerAddress: customerAddress,
         matchedIFoodId: matchedIFood ? matchedIFood.id : null
@@ -5309,29 +5512,37 @@
       const dateStr = now.toLocaleDateString('pt-BR');
       const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
-      const newMbOrder = {
-        id: 'ord-' + Date.now(),
-        orderNumber: pendingOrderData.orderNumber,
-        motoboyId: pendingOrderData.motoboyId,
-        storeName: activeStore ? activeStore.name : 'Minha Loja',
-        deliveryFee: Number(feeValue) || 0,
-        feeName: feeName || 'Taxa Fixa',
-        customerName: pendingOrderData.customerName || '',
-        customerAddress: pendingOrderData.customerAddress || '',
-        customerPhone: (findMatchingIFoodOrder(pendingOrderData.orderNumber) || {}).customerPhone || '',
-        deliveryCode: null, // Será preenchido com o PIN de 4 dígitos informado pelo cliente no momento da entrega
-        date: dateStr,
-        createdAt: timeStr,
-        timestamp: Date.now(),
-        status: 'em_loja'
-      };
+      const rawNumbers = (pendingOrderData.orderNumbers && pendingOrderData.orderNumbers.length > 0)
+        ? pendingOrderData.orderNumbers
+        : [pendingOrderData.orderNumber];
 
-      // Adiciona à lista de pedidos dos motoboys
-      motoboyOrders.unshift(newMbOrder);
-      lastLaunchedMotoboyId = newMbOrder.motoboyId;
+      const createdOrders = [];
+
+      rawNumbers.forEach((orderNum, idx) => {
+        const matched = findMatchingIFoodOrder(orderNum);
+        const newMbOrder = {
+          id: 'ord-' + (Date.now() + idx),
+          orderNumber: orderNum,
+          motoboyId: pendingOrderData.motoboyId,
+          storeName: activeStore ? activeStore.name : 'Minha Loja',
+          deliveryFee: Number(feeValue) || 0,
+          feeName: feeName || 'Taxa Fixa',
+          customerName: (matched && matched.customerName) || (idx === 0 ? pendingOrderData.customerName : '') || '',
+          customerAddress: (matched && matched.customerAddress) || (idx === 0 ? pendingOrderData.customerAddress : '') || '',
+          customerPhone: (matched && matched.customerPhone) || '',
+          deliveryCode: null, // Será preenchido com o PIN de 4 dígitos informado pelo cliente no momento da entrega
+          date: dateStr,
+          createdAt: timeStr,
+          timestamp: Date.now() + idx,
+          status: 'em_loja'
+        };
+
+        motoboyOrders.unshift(newMbOrder);
+        createdOrders.push({ order: newMbOrder, matchedIFood: matched });
+      });
+
+      lastLaunchedMotoboyId = pendingOrderData.motoboyId;
       saveMotoboyOrders();
-
-      const launchedOrderNum = pendingOrderData.orderNumber;
 
       // Reset modal e dados temporários
       closeFeeModal();
@@ -5351,17 +5562,30 @@
       if (custAddrInput) custAddrInput.value = '';
       if (banner) banner.classList.add('hidden');
 
-      // VERIFICA SE O PEDIDO ESTÁ NO IFOOD: DESPACHA AUTOMATICAMENTE!
-      const matchedIFoodOrder = findMatchingIFoodOrder(launchedOrderNum);
-      if (matchedIFoodOrder) {
-        dispatchIFoodOrderOnLaunch(matchedIFoodOrder, motoboy, newMbOrder);
-      } else {
+      // VERIFICA SE OS PEDIDOS ESTÃO NO IFOOD: DESPACHA AUTOMATICAMENTE!
+      let hasDispatchedAny = false;
+      createdOrders.forEach(item => {
+        if (item.matchedIFood) {
+          dispatchIFoodOrderOnLaunch(item.matchedIFood, motoboy, item.order);
+          hasDispatchedAny = true;
+        }
+      });
+
+      if (!hasDispatchedAny) {
         playDoubleBeepAlarm();
-        showToast(
-          'Pedido Lançado com Sucesso!', 
-          `Pedido #${newMbOrder.orderNumber} enviado para ${motoboy ? motoboy.name : 'Motoboy'} (Taxa: ${formatCurrency(newMbOrder.deliveryFee)}).`, 
-          'success'
-        );
+        if (createdOrders.length > 1) {
+          showToast(
+            'Pedidos Lançados com Sucesso!', 
+            `${createdOrders.length} pedidos (#${rawNumbers.join(', #')}) vinculados a ${motoboy ? motoboy.name : 'Motoboy'} (Taxa: ${formatCurrency(Number(feeValue) || 0)} cada).`, 
+            'success'
+          );
+        } else {
+          showToast(
+            'Pedido Lançado com Sucesso!', 
+            `Pedido #${createdOrders[0].order.orderNumber} enviado para ${motoboy ? motoboy.name : 'Motoboy'} (Taxa: ${formatCurrency(Number(feeValue) || 0)}).`, 
+            'success'
+          );
+        }
       }
     }
 
@@ -6893,6 +7117,7 @@
               remoteMb.push(data);
               if (window._firebaseLastSynced) window._firebaseLastSynced[String(data.id)] = JSON.stringify(data);
             });
+            remoteMb.sort((a, b) => (a.order ?? 999999) - (b.order ?? 999999));
           }
           if (typeof window.setMotoboysList === 'function') window.setMotoboysList(remoteMb);
           else window.motoboysList = remoteMb;
