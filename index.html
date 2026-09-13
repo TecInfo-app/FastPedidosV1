@@ -73,7 +73,7 @@
   <!-- PREVENT LOGIN & MAIN INTERFACE FLASH FOR MOTOBOY PORTAL -->
   <script>
     if (window.location.search.includes('portal=motoboy')) {
-      document.write('<style>#login-screen-overlay { display: none !important; } #portal-motoboy-view { display: flex !important; } main, header, footer, #settings-drawer, #drawer-backdrop { display: none !important; }</style>');
+      document.write('<style>#login-screen-overlay { display: none !important; } #portal-motoboy-view { display: flex !important; } #portal-motoboy-view header { display: flex !important; } #portal-motoboy-view main { display: flex !important; } body > header, body > main, body > footer, #settings-drawer, #drawer-backdrop { display: none !important; }</style>');
     }
   </script>
 
