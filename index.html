@@ -6,9 +6,9 @@
   <title>Fast Pedidos - Monitor & Portal Entregador</title>
   
   <!-- PWA & Mobile Web App Meta -->
-  <link rel="manifest" href="/manifest.json">
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+  <link rel="icon" type="image/svg+xml" href="./icon.svg">
   <meta name="theme-color" content="#f59e0b">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -5449,7 +5449,7 @@
     // Registra Service Worker automaticamente no carregamento
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js', { scope: '/' })
+        navigator.serviceWorker.register('./sw.js')
           .then(reg => {
             console.log('[PWA] Service Worker registrado com sucesso:', reg.scope);
             window._swRegistration = reg;
@@ -5619,7 +5619,7 @@
         // 2. Garante registro do Service Worker
         let reg = await navigator.serviceWorker.getRegistration();
         if (!reg) {
-          reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+          reg = await navigator.serviceWorker.register('./sw.js');
         }
         await navigator.serviceWorker.ready;
 
