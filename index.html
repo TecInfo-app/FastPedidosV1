@@ -5290,26 +5290,41 @@
       if (!('Notification' in window)) return;
       if (Notification.permission !== 'granted') return;
 
-      try {
-        const orderNum = order.orderNumber || order.id || 'Novo';
-        const feeFormatted = typeof formatCurrency === 'function' ? formatCurrency(Number(order.deliveryFee) || 0) : `R$ ${order.deliveryFee}`;
-        const title = `🛵 Pedido #${orderNum} Chegou!`;
-        const bodyText = `Nova entrega vinculada!\nTaxa: ${feeFormatted} • Cliente: ${order.customerName || 'Cliente'}\nEndereço: ${order.customerAddress || 'Ver rota no portal'}`;
+      const orderNum = order.orderNumber || order.id || 'Novo';
+      const feeFormatted = typeof formatCurrency === 'function' ? formatCurrency(Number(order.deliveryFee) || 0) : `R$ ${order.deliveryFee}`;
+      const title = `🛵 Pedido #${orderNum} Chegou!`;
+      const bodyText = `Nova entrega vinculada!\nTaxa: ${feeFormatted} • Cliente: ${order.customerName || 'Cliente'}\nEndereço: ${order.customerAddress || 'Ver rota no portal'}`;
 
-        const notif = new Notification(title, {
-          body: bodyText,
-          icon: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="48" fill="%23f59e0b"/><text x="50" y="65" font-size="45" text-anchor="middle">🛵</text></svg>',
-          tag: `motoboy-order-${order.id || Date.now()}`,
-          renotify: true,
-          requireInteraction: true
+      const options = {
+        body: bodyText,
+        icon: './icon.svg',
+        badge: './icon.svg',
+        tag: `motoboy-order-${order.id || Date.now()}`,
+        renotify: true,
+        requireInteraction: true,
+        vibrate: [350, 100, 350, 100, 600]
+      };
+
+      // 1. Tenta disparar via ServiceWorker Registration (compatível com Android / Windows)
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistration().then((reg) => {
+          if (reg && reg.showNotification) {
+            reg.showNotification(title, options).catch(() => {
+              // Fallback se falhar
+              try { new Notification(title, options); } catch(e) {}
+            });
+          } else {
+            try { new Notification(title, options); } catch(e) {}
+          }
+        }).catch(() => {
+          try { new Notification(title, options); } catch(e) {}
         });
-
-        notif.onclick = function() {
-          window.focus();
-          this.close();
-        };
-      } catch (e) {
-        console.warn('Erro ao disparar notificação nativa:', e);
+      } else {
+        try {
+          new Notification(title, options);
+        } catch (e) {
+          console.warn('Erro ao disparar notificação:', e);
+        }
       }
     }
 
