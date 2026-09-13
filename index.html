@@ -77,29 +77,55 @@
       animation: slide-down 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     }
   </style>
-</head>
-<body class="bg-slate-100 font-sans text-slate-800 min-h-screen flex flex-col antialiased selection:bg-ifood-red selection:text-white">
 
-  <!-- SCOPED STYLING FOR MOTOBOY PORTAL MODE -->
+  <!-- INSTANT RUNTIME PORTAL-MODE DETECTION (PREVENTS FLASH OF MAIN LOGIN SCREEN) -->
+  <script>
+    (function() {
+      if (window.location.search.indexOf('portal=motoboy') !== -1) {
+        document.documentElement.classList.add('in-portal-mode');
+      }
+    })();
+  </script>
   <style id="portal-motoboy-style">
-    body.in-portal-mode #login-screen-overlay { display: none !important; }
-    body.in-portal-mode #portal-motoboy-view { display: flex !important; }
-    body.in-portal-mode #portal-motoboy-view header { display: flex !important; }
-    body.in-portal-mode #portal-motoboy-view main { display: flex !important; }
+    html.in-portal-mode #login-screen-overlay,
+    body.in-portal-mode #login-screen-overlay,
+    .in-portal-mode #login-screen-overlay { 
+      display: none !important; 
+      visibility: hidden !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+    html.in-portal-mode #portal-motoboy-view,
+    body.in-portal-mode #portal-motoboy-view,
+    .in-portal-mode #portal-motoboy-view { 
+      display: flex !important; 
+      visibility: visible !important;
+      opacity: 1 !important;
+      z-index: 9999999 !important;
+    }
+    html.in-portal-mode #portal-motoboy-view header,
+    body.in-portal-mode #portal-motoboy-view header { 
+      display: flex !important; 
+    }
+    html.in-portal-mode #portal-motoboy-view main,
+    body.in-portal-mode #portal-motoboy-view main { 
+      display: flex !important; 
+    }
+    html.in-portal-mode > body > header,
+    html.in-portal-mode > body > main,
+    html.in-portal-mode > body > footer,
+    html.in-portal-mode #settings-drawer,
+    html.in-portal-mode #drawer-backdrop,
     body.in-portal-mode > header,
     body.in-portal-mode > main,
     body.in-portal-mode > footer,
     body.in-portal-mode #settings-drawer,
-    body.in-portal-mode #drawer-backdrop { display: none !important; }
-  </style>
-  <script>
-    if (window.location.search.includes('portal=motoboy')) {
-      document.documentElement.classList.add('in-portal-mode');
-      window.addEventListener('DOMContentLoaded', () => {
-        document.body.classList.add('in-portal-mode');
-      });
+    body.in-portal-mode #drawer-backdrop { 
+      display: none !important; 
     }
-  </script>
+  </style>
+</head>
+<body class="bg-slate-100 font-sans text-slate-800 min-h-screen flex flex-col antialiased selection:bg-ifood-red selection:text-white">
 
   <!-- LOGIN SCREEN OVERLAY (AUTENTICAÇÃO DE ACESSO AO SISTEMA) -->
   <div id="login-screen-overlay" class="fixed inset-0 z-[999999] bg-slate-950 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
@@ -4711,7 +4737,7 @@
       const tenantId = getCurrentTenantId();
       const storeParam = tenantId ? `&store=${encodeURIComponent(tenantId)}` : '';
       const portalUrl = `${window.location.origin}${window.location.pathname}?portal=motoboy${storeParam}`;
-      window.open(portalUrl, '_blank') || (window.location.href = portalUrl);
+      window.open(portalUrl, '_blank');
     }
     window.openMotoboyPortal = openMotoboyPortal;
 
@@ -8007,14 +8033,6 @@
           closeCreateMotoboyModal();
         }
       });
-
-      // Auto-abrir portal se acessado via link direto ?portal=motoboy
-      try {
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('portal') === 'motoboy') {
-          openMotoboyPortal();
-        }
-      } catch (e) {}
     });
   </script>
 
