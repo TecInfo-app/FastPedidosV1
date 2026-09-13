@@ -4721,38 +4721,10 @@
     window.filterPortalMotoboySelection = filterPortalMotoboySelection;
 
     function openMotoboyPortal() {
-      const portalView = document.getElementById('portal-motoboy-view');
-      const overlay = document.getElementById('login-screen-overlay');
-      if (overlay) overlay.classList.add('hidden');
-      if (portalView) portalView.classList.remove('hidden');
-
-      document.documentElement.classList.add('in-portal-mode');
-      document.body.classList.add('in-portal-mode');
-      localStorage.setItem('preferred_app_mode', 'portal');
-
-      closeDrawer();
-
-      let tenantId = getCurrentTenantId();
-      if (!tenantId) {
-        tenantId = localStorage.getItem('portal_last_store_id') || localStorage.getItem('last_tenant_id');
-      }
-      if (tenantId) {
-        initTenantSession(tenantId, localStorage.getItem('last_tenant_email') || 'Portal Motoboy');
-      } else {
-        if (typeof autoConnectOrPromptPortalStore === 'function') {
-          autoConnectOrPromptPortalStore();
-        }
-      }
-
-      loadMotoboys();
-
-      // Se já houver um motoboy ativo logado na sessão atual
-      const savedMbId = activePortalMotoboyId || window.activePortalMotoboyId || localStorage.getItem('activePortalMotoboyId');
-      if (savedMbId && (motoboysList || []).some(m => m.id === savedMbId)) {
-        renderPortalDashboard(savedMbId);
-      } else {
-        renderPortalMotoboySelection();
-      }
+      const tenantId = getCurrentTenantId();
+      const storeParam = tenantId ? `&store=${encodeURIComponent(tenantId)}` : '';
+      const portalUrl = `${window.location.origin}${window.location.pathname}?portal=motoboy${storeParam}`;
+      window.open(portalUrl, '_blank') || (window.location.href = portalUrl);
     }
     window.openMotoboyPortal = openMotoboyPortal;
 
@@ -7632,7 +7604,7 @@
     function checkAuthStateOnLoad() {
       try {
         const urlParams = new URLSearchParams(window.location.search);
-        const isPortalMotoboy = urlParams.get('portal') === 'motoboy' || localStorage.getItem('preferred_app_mode') === 'portal' || window.location.hash.includes('portal');
+        const isPortalMotoboy = urlParams.get('portal') === 'motoboy';
         const storeFromUrl = urlParams.get('store');
 
         const savedSession = localStorage.getItem('fast_pedidos_session_v1');
@@ -7675,6 +7647,13 @@
           }
           return;
         }
+
+        // Se NÃO estiver na URL ?portal=motoboy, garante que o modo portal está desativado
+        document.documentElement.classList.remove('in-portal-mode');
+        document.body.classList.remove('in-portal-mode');
+        localStorage.removeItem('preferred_app_mode');
+        const portalView = document.getElementById('portal-motoboy-view');
+        if (portalView) portalView.classList.add('hidden');
 
         if (savedSession) {
           const sess = JSON.parse(savedSession);
