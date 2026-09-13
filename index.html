@@ -4734,10 +4734,32 @@
     window.filterPortalMotoboySelection = filterPortalMotoboySelection;
 
     function openMotoboyPortal() {
-      const tenantId = getCurrentTenantId();
-      const storeParam = tenantId ? `&store=${encodeURIComponent(tenantId)}` : '';
-      const portalUrl = `${window.location.origin}${window.location.pathname}?portal=motoboy${storeParam}`;
-      window.open(portalUrl, '_blank');
+      const portalView = document.getElementById('portal-motoboy-view');
+      const overlay = document.getElementById('login-screen-overlay');
+      if (overlay) overlay.classList.add('hidden');
+      if (portalView) portalView.classList.remove('hidden');
+
+      document.documentElement.classList.add('in-portal-mode');
+      document.body.classList.add('in-portal-mode');
+
+      closeDrawer();
+
+      let tenantId = getCurrentTenantId();
+      if (!tenantId) {
+        tenantId = localStorage.getItem('portal_last_store_id') || localStorage.getItem('last_tenant_id');
+      }
+      if (tenantId) {
+        initTenantSession(tenantId, localStorage.getItem('last_tenant_email') || 'Portal Motoboy');
+      }
+
+      loadMotoboys();
+
+      const savedMbId = activePortalMotoboyId || window.activePortalMotoboyId || localStorage.getItem('activePortalMotoboyId');
+      if (savedMbId && (motoboysList || []).some(m => m.id === savedMbId) && typeof renderPortalDashboard === 'function') {
+        renderPortalDashboard(savedMbId);
+      } else if (typeof renderPortalMotoboySelection === 'function') {
+        renderPortalMotoboySelection();
+      }
     }
     window.openMotoboyPortal = openMotoboyPortal;
 
