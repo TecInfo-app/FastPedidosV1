@@ -1,12 +1,10 @@
 // Fast Pedidos - Service Worker com Suporte a Web Push & PWA Offline
-const CACHE_NAME = 'fastpedidos-v2';
+const CACHE_NAME = 'fastpedidos-v3';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './manifest.json',
-  './icon.svg',
-  './pwa-192x192.png',
-  './pwa-512x512.png'
+  './icon.svg'
 ];
 
 self.addEventListener('install', (event) => {
