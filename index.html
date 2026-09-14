@@ -965,9 +965,11 @@
             <input 
               type="number" 
               step="0.01" 
-              min="0.01"
+              min="0.01" 
+              inputmode="decimal"
               id="modal-custom-fee-input" 
               placeholder="0,00" 
+              onkeydown="if(event.key === 'Enter') submitCustomDeliveryFee()"
               class="w-full pl-9 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
           </div>
@@ -2401,6 +2403,53 @@
           <span>Cadastre pelo menos uma Loja e um Motoboy para registrar pedidos.</span>
         </div>
       </form>
+    </div>
+
+    <!-- HISTÓRICO TEMPORÁRIO DE TAXAS / LANÇAMENTOS RECENTES (15 SEGUNDOS) -->
+    <div id="recent-launches-temporary-card" class="hidden bg-white rounded-2xl border-2 border-emerald-400/80 shadow-md p-4 sm:p-5 space-y-3 animate-fade-in transition-all duration-300">
+      <div class="flex items-center justify-between gap-2 pb-2 border-b border-emerald-100">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center text-sm font-black shadow-xs shrink-0">
+            ✓
+          </div>
+          <div>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <h3 class="text-xs sm:text-sm font-black text-slate-900">Lançamento Recente de Pedido & Taxa</h3>
+              <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-wider">Confirmado</span>
+            </div>
+            <p class="text-[11px] text-slate-500 font-medium flex items-center gap-1 mt-0.5">
+              <span>Exibindo confirmação temporária na tela (auto-oculta em</span>
+              <span id="recent-launches-countdown" class="font-black text-emerald-700 font-mono">15s</span><span>)</span>
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button 
+            type="button" 
+            onclick="openMotoboySpreadsheetModal()" 
+            class="px-2.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 active:scale-95 text-amber-900 border border-amber-300 font-bold text-xs flex items-center gap-1 transition cursor-pointer">
+            <span>🛵 Ver na Planilha</span>
+          </button>
+          <button 
+            type="button" 
+            onclick="dismissRecentLaunchesCard()" 
+            title="Fechar aviso" 
+            class="w-7 h-7 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer">
+            ✕
+          </button>
+        </div>
+      </div>
+
+      <!-- Barra de Progresso do Tempo (15s) -->
+      <div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+        <div id="recent-launches-progress-bar" class="bg-emerald-500 h-full w-full transition-all duration-1000 ease-linear"></div>
+      </div>
+
+      <!-- Lista de Pedidos e Taxas Lançados Recentemente -->
+      <div id="recent-launches-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+        <!-- Itens inseridos dinamicamente -->
+      </div>
     </div>
 
   </main>
@@ -6425,10 +6474,8 @@
 
       if (customInput) customInput.value = '';
       modal.classList.remove('hidden');
-
-      setTimeout(() => {
-        if (customInput) customInput.focus();
-      }, 100);
+      // O teclado NÃO abre automaticamente ao abrir a seleção de taxas.
+      // Abre apenas se o usuário tocar explicitamente no campo de Taxa Avulsa.
     }
 
     function closeFeeModal() {
@@ -6636,6 +6683,107 @@
           );
         }
       }
+
+      // Exibe Histórico Temporário de Lançamento na Tela Inicial (com contagem regressiva de 15 segundos)
+      displayRecentFeeLaunch(createdOrders, motoboy, feeValue, feeName);
+    }
+
+    // Histórico Temporário de Taxas e Lançamentos Recentes na Tela Inicial (Auto-oculta em 15s)
+    let recentLaunchInterval = null;
+    let recentLaunchRemaining = 15;
+
+    function dismissRecentLaunchesCard() {
+      if (recentLaunchInterval) {
+        clearInterval(recentLaunchInterval);
+        recentLaunchInterval = null;
+      }
+      const card = document.getElementById('recent-launches-temporary-card');
+      if (card) {
+        card.classList.add('opacity-0');
+        setTimeout(() => {
+          card.classList.add('hidden');
+          card.classList.remove('opacity-0');
+        }, 300);
+      }
+    }
+
+    function displayRecentFeeLaunch(createdItems, motoboy, feeValue, feeName) {
+      const card = document.getElementById('recent-launches-temporary-card');
+      const list = document.getElementById('recent-launches-list');
+      const countdownEl = document.getElementById('recent-launches-countdown');
+      const progressBar = document.getElementById('recent-launches-progress-bar');
+      if (!card || !list || !createdItems || createdItems.length === 0) return;
+
+      const mbName = motoboy ? motoboy.name : 'Motoboy';
+      const formattedFee = formatCurrency(Number(feeValue) || 0);
+
+      // Constrói cards visuais dos pedidos lançados
+      const itemsHtml = createdItems.map(item => {
+        const ord = item.order;
+        const isIFood = !ord.isAvulso;
+        return `
+          <div class="p-3 bg-slate-50 hover:bg-slate-100/80 border border-slate-200/90 rounded-2xl space-y-1.5 shadow-2xs transition">
+            <div class="flex items-center justify-between gap-1.5">
+              <div class="flex items-center gap-1.5">
+                <span class="text-xs sm:text-sm font-black text-slate-900 font-mono">#${escapeHtml(ord.orderNumber)}</span>
+                ${isIFood ? '<span class="px-1.5 py-0.2 rounded bg-red-100 text-red-700 text-[9px] font-black uppercase">iFood</span>' : '<span class="px-1.5 py-0.2 rounded bg-slate-200 text-slate-700 text-[9px] font-black uppercase">Avulso</span>'}
+              </div>
+              <span class="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black font-mono shadow-2xs border border-emerald-200">
+                ${formattedFee}
+              </span>
+            </div>
+            <div class="flex items-center justify-between gap-1 text-[11px] text-slate-600">
+              <span class="font-bold flex items-center gap-1 text-slate-800 truncate">
+                <span>🛵</span> <span class="text-amber-800 font-extrabold">${escapeHtml(mbName)}</span>
+              </span>
+              <span class="text-[10px] text-slate-400 font-mono">${escapeHtml(ord.createdAt || '')}</span>
+            </div>
+            ${ord.customerName ? `
+              <div class="text-[10px] text-slate-500 font-medium truncate">
+                👤 ${escapeHtml(ord.customerName)}
+              </div>
+            ` : ''}
+            <div class="text-[9px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+              <span>${escapeHtml(feeName || 'Taxa')}</span>
+              <span>${escapeHtml(ord.storeName || '')}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      list.innerHTML = itemsHtml;
+      card.classList.remove('hidden', 'opacity-0');
+
+      // Reseta e inicia cronômetro de 15 segundos
+      if (recentLaunchInterval) {
+        clearInterval(recentLaunchInterval);
+        recentLaunchInterval = null;
+      }
+
+      recentLaunchRemaining = 15;
+      if (countdownEl) countdownEl.innerText = '15s';
+      if (progressBar) {
+        progressBar.style.transition = 'none';
+        progressBar.style.width = '100%';
+        setTimeout(() => {
+          if (progressBar) progressBar.style.transition = 'width 1s linear';
+        }, 50);
+      }
+
+      recentLaunchInterval = setInterval(() => {
+        recentLaunchRemaining--;
+        if (countdownEl) countdownEl.innerText = `${recentLaunchRemaining}s`;
+        if (progressBar) {
+          const pct = Math.max(0, (recentLaunchRemaining / 15) * 100);
+          progressBar.style.width = `${pct}%`;
+        }
+
+        if (recentLaunchRemaining <= 0) {
+          clearInterval(recentLaunchInterval);
+          recentLaunchInterval = null;
+          dismissRecentLaunchesCard();
+        }
+      }, 1000);
     }
 
     // Filtrar Mosaico & Controle de Busca Expansível
