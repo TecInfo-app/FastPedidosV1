@@ -6118,7 +6118,7 @@
     }
 
     // --- IFOOD MATCHING & AUTO-DISPATCH HELPERS ---
-    // Identifica se um número informado corresponde a algum pedido do iFood
+    // Identifica se um número informado corresponde com precisão a algum pedido do iFood
     function findMatchingIFoodOrder(orderNum) {
       if (!orderNum) return null;
       const rawClean = String(orderNum).trim().toLowerCase();
@@ -6130,20 +6130,19 @@
         const oDisplay = String(o.displayId || '').toLowerCase();
         const oIfoodId = String(o.ifoodOrderId || '').toLowerCase();
 
-        // 1. Igualdade direta
+        // 1. Igualdade exata direta
         if (oId === rawClean || oDisplay === rawClean || oIfoodId === rawClean) return true;
 
-        // 2. Comparação sem prefixo (# ou IF-)
+        // 2. Comparação exata sem prefixo (# ou IF-)
         const oIdStripped = oId.replace(/^#/, '').replace(/^if-/, '').replace(/^if/, '').trim();
         if (oIdStripped && prefixStripped && oIdStripped === prefixStripped) return true;
         if (oDisplay && prefixStripped && oDisplay === prefixStripped) return true;
 
-        // 3. Comparação de dígitos para códigos com 2 ou mais dígitos (ex: "7412" -> "#IF-7412")
-        if (digitsOnly && digitsOnly.length >= 2) {
+        // 3. Comparação exata de dígitos (somente se ambos os números forem idênticos)
+        if (digitsOnly && digitsOnly.length >= 3) {
           const oDigits = oId.replace(/\D/g, '');
           const oDisplayDigits = oDisplay.replace(/\D/g, '');
           if (oDigits === digitsOnly || oDisplayDigits === digitsOnly) return true;
-          if (oDigits.endsWith(digitsOnly) || digitsOnly.endsWith(oDigits)) return true;
         }
 
         return false;
@@ -6151,14 +6150,18 @@
     }
 
     function handleQuickOrderInput(val) {
+      const banner = document.getElementById('quick-order-ifood-match-banner');
+      const custNameInput = document.getElementById('quick-customer-name');
+      const custAddrInput = document.getElementById('quick-customer-address');
+
       if (!val) {
-        const banner = document.getElementById('quick-order-ifood-match-banner');
         if (banner) banner.classList.add('hidden');
+        if (custNameInput) custNameInput.value = '';
+        if (custAddrInput) custAddrInput.value = '';
         return;
       }
       const firstToken = val.split(',')[0].trim();
       const match = findMatchingIFoodOrder(firstToken) || findMatchingIFoodOrder(val.trim());
-      const banner = document.getElementById('quick-order-ifood-match-banner');
       const idEl = document.getElementById('quick-order-ifood-id');
       const custEl = document.getElementById('quick-order-ifood-customer');
       const statusEl = document.getElementById('quick-order-ifood-status');
@@ -6183,9 +6186,6 @@
           statusEl.textContent = stMap[match.status] || match.status;
         }
 
-        // Preenchimento automático com os dados do iFood (sobrescrevendo possível lixo anterior)
-        const custNameInput = document.getElementById('quick-customer-name');
-        const custAddrInput = document.getElementById('quick-customer-address');
         if (custNameInput && match.customerName) {
           custNameInput.value = match.customerName;
         }
@@ -6194,6 +6194,13 @@
         }
       } else {
         if (banner) banner.classList.add('hidden');
+        // Se NÃO for pedido do iFood, limpa campos para não puxar dados de clientes errados
+        if (custNameInput && !custNameInput.dataset.manual) {
+          custNameInput.value = '';
+        }
+        if (custAddrInput && !custAddrInput.dataset.manual) {
+          custAddrInput.value = '';
+        }
       }
     }
 
@@ -6491,6 +6498,23 @@
 
       rawNumbers.forEach((orderNum, idx) => {
         const matched = findMatchingIFoodOrder(orderNum);
+
+        let finalCustomerName = '';
+        let finalCustomerAddress = '';
+
+        if (matched) {
+          // Pedido Oficial do iFood: mantemos 100% como já estava (nome e endereço reais do cliente iFood)
+          finalCustomerName = matched.customerName || 'Cliente iFood';
+          finalCustomerAddress = matched.customerAddress || '';
+        } else {
+          // Pedido Avulso (Balcão / Telefone / WhatsApp): NÃO puxa dados de clientes do iFood
+          const typedName = (idx === 0 ? pendingOrderData.customerName : '') || '';
+          const typedAddr = (idx === 0 ? pendingOrderData.customerAddress : '') || '';
+          // Se o operador não digitou nome manual, identifica como Pedido Avulso / Loja
+          finalCustomerName = typedName || (activeStore ? `Pedido Avulso (${activeStore.name})` : 'Pedido Avulso');
+          finalCustomerAddress = typedAddr;
+        }
+
         const newMbOrder = {
           id: 'ord-' + (Date.now() + idx),
           orderNumber: orderNum,
@@ -6498,10 +6522,11 @@
           storeName: activeStore ? activeStore.name : 'Minha Loja',
           deliveryFee: Number(feeValue) || 0,
           feeName: feeName || 'Taxa Fixa',
-          customerName: (matched && matched.customerName) || (idx === 0 ? pendingOrderData.customerName : '') || '',
-          customerAddress: (matched && matched.customerAddress) || (idx === 0 ? pendingOrderData.customerAddress : '') || '',
+          customerName: finalCustomerName,
+          customerAddress: finalCustomerAddress,
           customerPhone: (matched && matched.customerPhone) || '',
           deliveryCode: null, // Será preenchido com o PIN de 4 dígitos informado pelo cliente no momento da entrega
+          isAvulso: !matched,
           date: dateStr,
           createdAt: timeStr,
           timestamp: Date.now() + idx,

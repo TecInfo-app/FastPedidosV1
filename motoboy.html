@@ -1009,7 +1009,7 @@
                 <div class="space-y-1.5 text-xs text-slate-300">
                   ${ord.customerName ? `
                     <div class="flex items-center gap-1.5">
-                      <span class="text-slate-500 font-bold">👤 Cliente:</span>
+                      <span class="text-slate-500 font-bold">${ord.isAvulso || ord.customerName.includes('Avulso') ? '📦 Origem:' : '👤 Cliente:'}</span>
                       <span class="font-bold text-slate-200">${escapeHtml(ord.customerName)}</span>
                     </div>
                   ` : ''}
