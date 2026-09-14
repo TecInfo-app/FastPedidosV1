@@ -2017,6 +2017,15 @@
             <svg class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
           </div>
 
+          <!-- Botão Fechar o Dia -->
+          <button 
+            type="button" 
+            onclick="confirmClearMotoboyOrders()" 
+            class="px-3 py-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-300 hover:text-red-100 transition cursor-pointer flex items-center gap-1.5 text-xs font-bold border border-red-500/40 active:scale-98">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            <span>Fechar o Dia</span>
+          </button>
+
           <!-- Botão Extrato Geral -->
           <button 
             type="button" 
@@ -2392,77 +2401,6 @@
           <span>Cadastre pelo menos uma Loja e um Motoboy para registrar pedidos.</span>
         </div>
       </form>
-    </div>
-
-    <!-- CARD 4: PLANILHA DE PEDIDOS AGRUPADOS POR MOTOBOY (MOSAICO) -->
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 sm:p-5 space-y-4">
-      <div class="flex items-center justify-between gap-2.5 pb-2 border-b border-slate-100 relative min-h-[44px]">
-        <div class="min-w-0 pr-2">
-          <h3 class="text-base sm:text-lg font-black text-slate-900 truncate">Planilha de Pedidos Agrupados por Motoboy</h3>
-          <p id="motoboy-view-hint" class="text-[11px] text-slate-500 font-medium"></p>
-        </div>
-        
-        <!-- Controls: Botão da Lupa & Campo de Busca Expansível -->
-        <div class="flex items-center gap-2 shrink-0">
-          
-          <!-- Botão Fechar o Dia -->
-          <button 
-            type="button" 
-            onclick="confirmClearMotoboyOrders()" 
-            title="Fechar o Dia e Limpar Planilha" 
-            class="px-2.5 h-9 sm:h-10 rounded-xl bg-red-50 hover:bg-red-100 active:scale-95 text-red-700 hover:text-red-900 flex items-center justify-center gap-1.5 font-bold text-xs border border-red-200 transition cursor-pointer shadow-2xs">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-            <span class="hidden sm:inline">Fechar o Dia</span>
-          </button>
-
-          <!-- Botão da Lupa (Visível por padrão) -->
-          <button 
-            type="button" 
-            id="motoboy-search-toggle-btn" 
-            onclick="toggleMotoboySearch()" 
-            title="Pesquisar pedido ou motoboy" 
-            class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 hover:text-slate-950 flex items-center justify-center border border-slate-200 transition cursor-pointer shadow-2xs">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-          </button>
-
-          <!-- Input de Busca (Oculto inicialmente, abre ao clicar na lupa) -->
-          <div id="motoboy-search-box" class="hidden absolute right-0 inset-y-0 my-auto sm:static sm:inset-y-auto flex items-center gap-1.5 bg-white sm:bg-transparent p-1 sm:p-0 rounded-xl shadow-lg sm:shadow-none border sm:border-0 border-slate-200 z-10 w-full sm:w-64">
-            <div class="relative flex-1">
-              <span class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-              </span>
-              <input 
-                type="text" 
-                id="motoboy-search-filter" 
-                oninput="filterMotoboyMosaic(this.value)"
-                placeholder="Buscar pedido ou motoboy..." 
-                class="w-full pl-8 pr-7 py-2 bg-slate-50 border border-slate-300 sm:border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white text-slate-900"
-              />
-              <button 
-                type="button" 
-                id="motoboy-search-clear-btn" 
-                onclick="clearMotoboySearch()" 
-                class="hidden absolute inset-y-0 right-0 pr-2 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
-                title="Limpar pesquisa">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
-              </button>
-            </div>
-            <!-- Botão Fechar Busca -->
-            <button 
-              type="button" 
-              onclick="closeMotoboySearch()" 
-              title="Fechar busca" 
-              class="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition cursor-pointer">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Container das Colunas de Motoboys / Vazio -->
-      <div id="motoboys-spreadsheet-container">
-        <!-- Rendered dynamically -->
-      </div>
     </div>
 
   </main>
