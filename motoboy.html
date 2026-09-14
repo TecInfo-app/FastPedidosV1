@@ -632,19 +632,76 @@
       showToast('🔔 Teste de Alarme', 'Alarme sonoro e vibração disparados com sucesso!', 'success');
     }
 
+    function updateNotificationBadgeUI() {
+      const badge = document.getElementById('portal-push-badge-status');
+      const btn = document.getElementById('portal-btn-activate-push');
+      if (!badge) return;
+
+      if ('Notification' in window) {
+        if (Notification.permission === 'granted') {
+          badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+          badge.innerHTML = '<span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1 animate-pulse"></span> Notificações Ativas';
+          if (btn) {
+            btn.className = 'w-full sm:w-auto px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition cursor-pointer';
+            btn.innerHTML = '<span>🔔 Testar Alerta</span>';
+          }
+        } else if (Notification.permission === 'denied') {
+          badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-red-500/20 text-red-400 border border-red-500/30';
+          badge.innerText = 'Bloqueado no Navegador';
+        } else {
+          badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-slate-800 text-amber-400 border border-amber-500/30';
+          badge.innerText = 'Aguardando Ativação';
+        }
+      }
+    }
+
     function requestPortalNotificationPermission() {
       getAudioContext();
       playDoubleBeepAlarm();
       if ('Notification' in window) {
         Notification.requestPermission().then(permission => {
+          updateNotificationBadgeUI();
           if (permission === 'granted') {
-            showToast('Notificações Ativas! 🔔', 'Você receberá avisos sonoros de novos pedidos.', 'success');
-          } else {
-            showToast('Aviso', 'Permissão de notificação negada no navegador.', 'warning');
+            showToast('Notificações Ativas! 🔔', 'Você receberá avisos sonoros e pop-ups de novos pedidos.', 'success');
+            sendNativeNotification('🔔 Alertas Habilitados!', 'Você agora receberá alertas sonoros e pop-ups quando um novo pedido for lançado.');
+          } else if (permission === 'denied') {
+            showToast('Aviso', 'Permissão negada. Toque no cadeado ao lado do link do site para permitir notificações.', 'warning');
           }
         }).catch(() => {});
       } else {
         showToast('Áudio Ativado', 'Alertas sonoros habilitados para esta sessão.', 'info');
+      }
+    }
+
+    function sendNativeNotification(title, body) {
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+      const notifOptions = {
+        body: body,
+        icon: './icon.svg',
+        badge: './icon.svg',
+        vibrate: [300, 100, 300, 100, 400],
+        tag: 'motoboy-order-' + Date.now(),
+        renotify: true,
+        requireInteraction: true,
+        silent: false
+      };
+
+      // Tenta via Service Worker primeiro (obrigatório para Android/Chrome Mobile e tela bloqueada)
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then(reg => {
+          if (reg && typeof reg.showNotification === 'function') {
+            reg.showNotification(title, notifOptions).catch(() => {
+              try { new Notification(title, notifOptions); } catch (e) {}
+            });
+          } else {
+            try { new Notification(title, notifOptions); } catch (e) {}
+          }
+        }).catch(() => {
+          try { new Notification(title, notifOptions); } catch (e) {}
+        });
+      } else {
+        try { new Notification(title, notifOptions); } catch (e) {}
       }
     }
 
@@ -660,14 +717,10 @@
         banner.classList.remove('hidden');
       }
 
-      if ('Notification' in window && Notification.permission === 'granted') {
-        try {
-          new Notification('🛵 NOVO PEDIDO PARA ENTREGA!', {
-            body: `Pedido #${order.orderNumber} atribuído a você. Taxa: ${formatCurrency(order.deliveryFee || 0)}`,
-            icon: './pwa-192x192.png'
-          });
-        } catch (e) {}
-      }
+      sendNativeNotification(
+        '🛵 NOVO PEDIDO PARA ENTREGA!',
+        `Pedido #${order.orderNumber} atribuído a você. Taxa: ${formatCurrency(order.deliveryFee || 0)}${order.customerName ? ' • ' + order.customerName : ''}`
+      );
     }
 
     function dismissPortalNewOrderBanner() {
@@ -1010,6 +1063,8 @@
           }).join('');
         }
       }
+
+      updateNotificationBadgeUI();
     }
 
     // Modal de Código de Entrega (PIN de 4 dígitos)
