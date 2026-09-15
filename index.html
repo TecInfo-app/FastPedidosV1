@@ -3245,6 +3245,18 @@
           for (const upd of data.updatedEvents) {
             const target = orders.find(o => o.ifoodOrderId === upd.ifoodOrderId || (o.displayId && o.displayId === upd.displayId));
             if (target) {
+              if (upd.driverEvent) {
+                if (upd.driverEvent === 'ASSIGNED') {
+                  target.ifoodDriverStatus = 'ASSIGNED';
+                  target.driverName = upd.driverName || 'Entregador iFood';
+                  showToast('🛵 Motoboy iFood Alocado!', `${target.driverName} a caminho para o pedido ${target.id}!`, 'success');
+                } else if (upd.driverEvent === 'ARRIVED') {
+                  target.ifoodDriverStatus = 'ARRIVED_AT_ORIGIN';
+                  showToast('📍 Motoboy iFood Chegou!', `Entregador do pedido ${target.id} chegou na loja!`, 'ifood');
+                }
+                updatedAny = true;
+              }
+
               if (upd.newStatus && target.status !== upd.newStatus) {
                 // Previne regressão se o pedido já estiver concluído no sistema local
                 const isLocalConcluded = target.status === 'concluido';
