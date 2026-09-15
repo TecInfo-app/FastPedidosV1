@@ -2524,10 +2524,10 @@
     function getCurrentTenantId() {
       if (currentTenantId) return currentTenantId;
       const urlParams = new URLSearchParams(window.location.search);
-      const storeFromUrl = urlParams.get('store');
+      const storeFromUrl = urlParams.get('store') || urlParams.get('loja') || urlParams.get('s') || urlParams.get('tenant');
       if (storeFromUrl) {
-        currentTenantId = storeFromUrl;
-        return storeFromUrl;
+        currentTenantId = storeFromUrl.trim();
+        return currentTenantId;
       }
       try {
         const savedSession = localStorage.getItem('fast_pedidos_session_v1');
@@ -2537,7 +2537,7 @@
             currentTenantId = sess.tenantId;
             return sess.tenantId;
           }
-          if (sess && sess.username && sess.username.includes('@')) {
+          if (sess && sess.username) {
             currentTenantId = sess.username.replace(/[^a-zA-Z0-9_-]/g, '_');
             return currentTenantId;
           }
@@ -2553,7 +2553,34 @@
         currentTenantId = lastTenant;
         return lastTenant;
       }
-      return '';
+      const lastEmail = localStorage.getItem('last_tenant_email');
+      if (lastEmail) {
+        currentTenantId = lastEmail.replace(/[^a-zA-Z0-9_-]/g, '_');
+        return currentTenantId;
+      }
+      // Se houver lojas cadastradas em storesList
+      try {
+        const savedStores = localStorage.getItem('cia_stores_list_v2') || localStorage.getItem('stores');
+        if (savedStores) {
+          const list = JSON.parse(savedStores);
+          if (Array.isArray(list) && list.length > 0) {
+            const active = list.find(s => s.active) || list[0];
+            const name = active.name || active.id;
+            if (name) {
+              currentTenantId = 'loja_' + name.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+              localStorage.setItem('portal_last_store_id', currentTenantId);
+              localStorage.setItem('last_tenant_id', currentTenantId);
+              return currentTenantId;
+            }
+          }
+        }
+      } catch (e) {}
+
+      // Fallback padrão estável
+      currentTenantId = 'loja_principal';
+      localStorage.setItem('portal_last_store_id', currentTenantId);
+      localStorage.setItem('last_tenant_id', currentTenantId);
+      return currentTenantId;
     }
     window.getCurrentTenantId = getCurrentTenantId;
 
@@ -2962,6 +2989,14 @@
         window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "config", "settings"), payload, { merge: true })
           .then(() => console.log("🔥 [Firebase]: Configurações sincronizadas na nuvem."))
           .catch(e => console.warn("Falha ao salvar na nuvem:", e));
+
+        const activeStore = (storesList && storesList.find(s => s.active)) || (storesList && storesList[0]);
+        const storeName = (activeStore && activeStore.name) || apiCredentials.storeName || tenantId;
+        window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores_directory", tenantId), {
+          id: tenantId,
+          name: storeName,
+          updatedAt: Date.now()
+        }, { merge: true }).catch(() => {});
       } catch(e) {}
     }
 
@@ -4640,6 +4675,22 @@
             </div>
           </div>
           <div class="flex items-center gap-1 shrink-0">
+            <!-- Enviar WhatsApp com link direto da loja -->
+            <button 
+              type="button" 
+              onclick="shareMotoboyWhatsApp('${mb.id}')" 
+              class="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition cursor-pointer" 
+              title="Enviar link do portal com a loja vinculada no WhatsApp">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+            </button>
+            <!-- Copiar link direto do motoboy -->
+            <button 
+              type="button" 
+              onclick="copyMotoboyPortalLink('${mb.id}')" 
+              class="p-1.5 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition cursor-pointer" 
+              title="Copiar link do portal com a loja vinculada">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+            </button>
             <button onclick="openEditMotoboyModal('${mb.id}')" class="p-1.5 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition cursor-pointer" title="Editar Motoboy & Senha">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
             </button>
@@ -4809,115 +4860,54 @@
     }
     window.filterPortalMotoboySelection = filterPortalMotoboySelection;
 
-    function getMotoboyPortalUrl() {
+    function getMotoboyPortalUrl(motoboyId = null) {
       const tenantId = getCurrentTenantId();
-      const storeParam = tenantId ? `?store=${encodeURIComponent(tenantId)}` : '';
+      const storeParam = `?store=${encodeURIComponent(tenantId)}`;
+      const mbParam = motoboyId ? `&mb=${encodeURIComponent(motoboyId)}` : '';
       const currentPath = window.location.pathname;
       const basePath = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
-      return `${window.location.origin}${basePath}motoboy.html${storeParam}`;
+      return `${window.location.origin}${basePath}motoboy.html${storeParam}${mbParam}`;
     }
     window.getMotoboyPortalUrl = getMotoboyPortalUrl;
 
-    function openMotoboyPortal() {
-      const url = getMotoboyPortalUrl();
+    function openMotoboyPortal(motoboyId = null) {
+      const url = getMotoboyPortalUrl(motoboyId);
       window.open(url, '_blank');
     }
     window.openMotoboyPortal = openMotoboyPortal;
 
-    function closeMotoboyPortal() {
-      exitPortalToMainApp();
-    }
-
-    function exitPortalToMainApp() {
-      document.documentElement.classList.remove('in-portal-mode');
-      document.body.classList.remove('in-portal-mode');
-      localStorage.removeItem('preferred_app_mode');
-      localStorage.removeItem('activePortalMotoboyId');
-      activePortalMotoboyId = null;
-      window.activePortalMotoboyId = null;
-
-      const portalView = document.getElementById('portal-motoboy-view');
-      if (portalView) portalView.classList.add('hidden');
-
-      // Limpar parâmetro portal da URL sem recarregar a página
-      try {
-        const url = new URL(window.location.href);
-        url.searchParams.delete('portal');
-        window.history.replaceState(null, '', url.pathname + (url.search ? url.search : ''));
-      } catch(e) {}
-
-      // Verifica autenticação para exibir dashboard ou tela de login
-      checkAuthStateOnLoad();
-      showToast('Painel Principal', 'Alternado para o painel de pedidos da loja.', 'info');
-    }
-    window.exitPortalToMainApp = exitPortalToMainApp;
-
-    function openPortalStoreSelectorModal() {}
-    window.openPortalStoreSelectorModal = openPortalStoreSelectorModal;
-
-    function closePortalStoreSelectorModal() {}
-    window.closePortalStoreSelectorModal = closePortalStoreSelectorModal;
-
-    function selectStoreForPortal(storeId, storeName) {
-      if (!storeId) return;
-      localStorage.setItem('portal_last_store_id', storeId);
-      localStorage.setItem('last_tenant_id', storeId);
-      if (storeName) localStorage.setItem('last_tenant_email', storeName);
-      currentTenantId = storeId;
-      initTenantSession(storeId, storeName || storeId);
-      loadMotoboys();
-      renderPortalMotoboySelection();
-    }
-    window.selectStoreForPortal = selectStoreForPortal;
-
-    async function autoConnectOrPromptPortalStore() {
-      // Conecta automaticamente à loja disponível sem solicitar seleção
-      if (window.firebaseGetDocs && window.firebaseCollection && window.firebaseDb) {
-        try {
-          const snap = await window.firebaseGetDocs(window.firebaseCollection(window.firebaseDb, "stores_directory"));
-          if (snap && !snap.empty) {
-            const list = [];
-            snap.forEach(d => {
-              const data = d.data();
-              if (data && data.id) list.push(data);
-            });
-            if (list.length > 0) {
-              selectStoreForPortal(list[0].id, list[0].name || list[0].id);
-              return;
-            }
-          }
-        } catch(e) {}
-      }
-
-      // Tenta chave salva no localStorage
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k && k.endsWith('_motoboys')) {
-          const tid = k.replace('_motoboys', '');
-          if (tid) {
-            selectStoreForPortal(tid, 'Minha Loja');
-            return;
-          }
-        }
-      }
-    }
-    window.autoConnectOrPromptPortalStore = autoConnectOrPromptPortalStore;
-
-    function promptConnectStoreInPortal() {}
-    window.promptConnectStoreInPortal = promptConnectStoreInPortal;
-
-    function copyMotoboyPortalLink() {
-      const url = getMotoboyPortalUrl();
+    function copyMotoboyPortalLink(motoboyId = null) {
+      const url = getMotoboyPortalUrl(motoboyId);
+      const activeStore = (storesList && storesList.find(s => s.active)) || (storesList && storesList[0]);
+      const storeName = (activeStore && activeStore.name) || 'sua Loja';
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(url).then(() => {
-          showToast('Link Copiado!', 'Link direto do Portal do Entregador (motoboy.html) copiado com sucesso!', 'success');
+          showToast('Link Copiado!', `Link do Portal do Entregador com a loja "${storeName}" vinculada copiado com sucesso!`, 'success');
         }).catch(() => {
-          prompt('Copie o link do Portal do Entregador para sua equipe:', url);
+          prompt(`Copie o link do Portal do Entregador (${storeName}):`, url);
         });
       } else {
-        prompt('Copie o link do Portal do Entregador para sua equipe:', url);
+        prompt(`Copie o link do Portal do Entregador (${storeName}):`, url);
       }
     }
+    window.copyMotoboyPortalLink = copyMotoboyPortalLink;
+
+    function shareMotoboyWhatsApp(motoboyId) {
+      const mb = (motoboysList || []).find(m => m.id === motoboyId);
+      const url = getMotoboyPortalUrl(motoboyId);
+      const activeStore = (storesList && storesList.find(s => s.active)) || (storesList && storesList[0]);
+      const storeName = (activeStore && activeStore.name) || 'nossa loja';
+      const mbName = mb ? mb.name : 'Entregador';
+      const cleanPhone = mb && mb.phone ? mb.phone.replace(/\D/g, '') : '';
+      const phoneParam = cleanPhone ? (cleanPhone.length <= 11 ? '55' + cleanPhone : cleanPhone) : '';
+
+      const msg = `🛵 *Olá, ${mbName}!* Segue o link do seu Portal de Entregas da loja *${storeName}*:\n\n🔗 ${url}\n\nToque no link para ver seus pedidos e taxas em tempo real!`;
+      const waUrl = phoneParam 
+        ? `https://api.whatsapp.com/send?phone=${phoneParam}&text=${encodeURIComponent(msg)}`
+        : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+      window.open(waUrl, '_blank');
+    }
+    window.shareMotoboyWhatsApp = shareMotoboyWhatsApp;
 
     function renderPortalMotoboySelection() {
       const authScreen = document.getElementById('portal-screen-auth');

@@ -1225,12 +1225,12 @@
     function extractStoreId(input) {
       if (!input) return '';
       let str = input.trim();
-      if (str.includes('store=')) {
+      if (str.includes('store=') || str.includes('loja=') || str.includes('tenant=') || str.includes('s=')) {
         try {
           const u = new URL(str, window.location.origin);
-          return u.searchParams.get('store') || '';
+          return u.searchParams.get('store') || u.searchParams.get('loja') || u.searchParams.get('tenant') || u.searchParams.get('s') || '';
         } catch (e) {
-          const match = str.match(/store=([^&]+)/);
+          const match = str.match(/(?:store|loja|tenant|s)=([^&#]+)/);
           if (match) return decodeURIComponent(match[1]);
         }
       }
@@ -1240,7 +1240,7 @@
     function connectPortalToStore(rawInput) {
       const storeId = extractStoreId(rawInput);
       if (!storeId) {
-        showToast('Código Inválido', 'Por favor, digite ou cole o código ou link da loja.', 'warning');
+        showToast('Código Inválido', 'Por favor, digite ou selecione a loja.', 'warning');
         return;
       }
 
@@ -1248,14 +1248,14 @@
       localStorage.setItem('portal_last_store_id', storeId);
       localStorage.setItem('last_tenant_id', storeId);
 
-      // Atualiza URL no navegador
+      // Atualiza URL no navegador sem recarregar
       try {
         const newUrl = new URL(window.location.href);
         newUrl.searchParams.set('store', storeId);
         window.history.replaceState({}, '', newUrl.toString());
       } catch (e) {}
 
-      showToast('Conectando...', 'Buscando dados da loja...', 'info');
+      showToast('Conectando...', 'Carregando dados da loja...', 'info');
 
       if (window.startPortalSync) {
         window.startPortalSync(storeId);
@@ -1274,6 +1274,10 @@
     window.handleManualStoreConnect = handleManualStoreConnect;
 
     function promptSwitchPortalStore() {
+      if (window.promptStorePicker) {
+        window.promptStorePicker();
+        return;
+      }
       const current = currentTenantId || localStorage.getItem('portal_last_store_id') || '';
       const entered = prompt('Digite ou cole o novo Código da Loja (ou Link do Portal):', current);
       if (entered !== null && entered.trim() !== '') {
@@ -1287,16 +1291,17 @@
     // Inicialização ao carregar
     window.addEventListener('DOMContentLoaded', () => {
       const urlParams = new URLSearchParams(window.location.search);
-      currentTenantId = urlParams.get('store') || localStorage.getItem('portal_last_store_id') || localStorage.getItem('last_tenant_id') || '';
+      const urlStore = urlParams.get('store') || urlParams.get('loja') || urlParams.get('s') || urlParams.get('tenant');
+      currentTenantId = urlStore || localStorage.getItem('portal_last_store_id') || localStorage.getItem('last_tenant_id') || '';
 
-      if (urlParams.get('store')) {
-        localStorage.setItem('portal_last_store_id', urlParams.get('store'));
-        localStorage.setItem('last_tenant_id', urlParams.get('store'));
+      if (urlStore) {
+        localStorage.setItem('portal_last_store_id', urlStore);
+        localStorage.setItem('last_tenant_id', urlStore);
       }
 
       const storeNameEl = document.getElementById('portal-current-store-name');
       if (storeNameEl) {
-        storeNameEl.innerText = localStorage.getItem('portal_store_name') || currentTenantId || 'Aguardando Loja';
+        storeNameEl.innerText = localStorage.getItem('portal_store_name') || currentTenantId || 'Buscando Loja...';
       }
     });
   </script>
@@ -1304,7 +1309,7 @@
   <!-- FIREBASE REAL-TIME SYNC MODULE (ISOLADO PARA O PORTAL DO ENTREGADOR) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, collection, onSnapshot, setDoc, doc, query, limit, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getFirestore, collection, onSnapshot, setDoc, doc, query, limit, getDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBow5AERyHHi3_zpmPwiV9SKhHfW-ltCHY",
@@ -1317,6 +1322,7 @@
 
     let unsubMotoboys = null;
     let unsubOrders = null;
+    let unsubSettings = null;
 
     try {
       const app = initializeApp(firebaseConfig);
@@ -1325,6 +1331,66 @@
       window.firebaseDb = db;
       window.firebaseDoc = doc;
       window.firebaseSetDoc = setDoc;
+
+      function renderStorePickerCard(stores) {
+        const grid = document.getElementById('portal-motoboys-selection-grid');
+        const storeNameEl = document.getElementById('portal-current-store-name');
+        if (storeNameEl) storeNameEl.innerText = 'Selecione sua Loja';
+
+        if (grid) {
+          grid.innerHTML = `
+            <div class="p-6 bg-slate-900 border border-amber-500/40 rounded-3xl text-center space-y-4 shadow-2xl">
+              <div class="w-14 h-14 mx-auto rounded-3xl bg-amber-500/20 border border-amber-400/30 text-amber-400 flex items-center justify-center text-2xl shadow-inner">
+                🏪
+              </div>
+              <div class="space-y-1">
+                <h3 class="text-base font-black text-white">Selecione seu Estabelecimento</h3>
+                <p class="text-xs text-slate-400">Toque na sua loja para carregar os entregadores automaticamente:</p>
+              </div>
+
+              <div class="space-y-2 pt-2">
+                ${stores.map(s => `
+                  <button 
+                    type="button" 
+                    onclick="connectPortalToStore('${escapeHtml(s.id)}')" 
+                    class="w-full p-4 bg-slate-800/90 hover:bg-slate-750 active:scale-98 border border-slate-700/80 hover:border-amber-500/50 rounded-2xl flex items-center justify-between gap-3 text-left transition cursor-pointer shadow-md">
+                    <div class="flex items-center gap-3 min-w-0">
+                      <div class="w-10 h-10 rounded-xl bg-amber-400 text-slate-950 font-black flex items-center justify-center text-base shrink-0">
+                        🏪
+                      </div>
+                      <div class="min-w-0">
+                        <h4 class="text-sm font-black text-white truncate">${escapeHtml(s.name || s.id)}</h4>
+                        <p class="text-[10px] text-slate-400 font-mono truncate">Código: ${escapeHtml(s.id)}</p>
+                      </div>
+                    </div>
+                    <span class="px-3 py-1.5 rounded-xl bg-amber-500/20 text-amber-300 font-bold text-xs shrink-0">Entrar →</span>
+                  </button>
+                `).join('')}
+              </div>
+
+              <div class="pt-2 border-t border-slate-800">
+                <p class="text-[11px] text-slate-500">
+                  Ou digite o código/link fornecido pelo gerente:
+                </p>
+                <div class="mt-2 flex gap-2">
+                  <input 
+                    type="text" 
+                    id="portal-connect-store-input"
+                    placeholder="Código da loja..."
+                    class="flex-1 px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs font-mono text-white placeholder:text-slate-600 focus:outline-none"
+                  />
+                  <button 
+                    type="button" 
+                    onclick="handleManualStoreConnect()"
+                    class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl transition cursor-pointer">
+                    Conectar
+                  </button>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+      }
 
       function renderStoreNotConnectedCard() {
         const grid = document.getElementById('portal-motoboys-selection-grid');
@@ -1358,7 +1424,7 @@
               </div>
 
               <p class="text-[11px] text-slate-500">
-                Peça ao gerente no caixa para clicar em <strong>"Copiar Link do Portal"</strong> e enviar pelo WhatsApp.
+                Peça ao gerente no caixa para clicar em <strong>"Copiar Link do Portal"</strong> ou enviar pelo WhatsApp.
               </p>
             </div>
           `;
@@ -1366,9 +1432,30 @@
       }
       window.renderStoreNotConnectedCard = renderStoreNotConnectedCard;
 
+      async function promptStorePicker() {
+        try {
+          const snap = await getDocs(collection(db, "stores_directory"));
+          if (snap && !snap.empty) {
+            const list = [];
+            snap.forEach(d => {
+              const data = d.data();
+              if (data && (data.id || d.id)) {
+                list.push({ id: data.id || d.id, name: data.name || data.storeName || (data.id || d.id) });
+              }
+            });
+            if (list.length > 0) {
+              renderStorePickerCard(list);
+              return;
+            }
+          }
+        } catch (e) {}
+        renderStoreNotConnectedCard();
+      }
+      window.promptStorePicker = promptStorePicker;
+
       function startPortalSync(tenantId) {
         if (!tenantId) {
-          renderStoreNotConnectedCard();
+          promptStorePicker();
           return;
         }
 
@@ -1381,17 +1468,30 @@
         // Cancela listeners anteriores se houver
         if (unsubMotoboys) unsubMotoboys();
         if (unsubOrders) unsubOrders();
+        if (unsubSettings) unsubSettings();
 
-        // Busca nome da loja
-        getDoc(doc(db, "stores", tenantId, "config", "settings")).then(snap => {
+        // 0. Sincroniza nome da loja em tempo real
+        unsubSettings = onSnapshot(doc(db, "stores", tenantId, "config", "settings"), (snap) => {
           if (snap.exists()) {
             const data = snap.data();
             if (data) {
               const activeStore = (data.storesList && data.storesList.find(s => s.active)) || (data.storesList && data.storesList[0]);
-              const storeName = (activeStore && activeStore.name) || tenantId;
+              const storeName = (activeStore && activeStore.name) || data.storeName || tenantId;
               localStorage.setItem('portal_store_name', storeName);
               const storeNameEl = document.getElementById('portal-current-store-name');
               if (storeNameEl) storeNameEl.innerText = storeName;
+            }
+          }
+        }, (err) => console.warn('Erro ao carregar settings:', err));
+
+        // Busca também no stores_directory
+        getDoc(doc(db, "stores_directory", tenantId)).then(snap => {
+          if (snap.exists()) {
+            const data = snap.data();
+            if (data && data.name) {
+              localStorage.setItem('portal_store_name', data.name);
+              const storeNameEl = document.getElementById('portal-current-store-name');
+              if (storeNameEl) storeNameEl.innerText = data.name;
             }
           }
         }).catch(() => {});
@@ -1409,6 +1509,14 @@
             list.sort((a, b) => (a.order ?? 999999) - (b.order ?? 999999));
           }
           motoboysList = list;
+
+          // Se veio parâmetro de motoboy específico na URL (?mb=xxx), abre o prompt direto
+          const urlParams = new URLSearchParams(window.location.search);
+          const targetMbId = urlParams.get('mb') || urlParams.get('motoboy');
+          if (!activePortalMotoboyId && targetMbId && list.some(m => m.id === targetMbId)) {
+            selectMotoboyForPortalAuth(targetMbId);
+            return;
+          }
 
           if (activePortalMotoboyId && motoboysList.some(m => m.id === activePortalMotoboyId)) {
             renderPortalDashboard(activePortalMotoboyId);
@@ -1456,14 +1564,36 @@
       }
       window.startPortalSync = startPortalSync;
 
-      // Executa inicialização
+      // Executa inicialização automática inteligente
       const urlParams = new URLSearchParams(window.location.search);
-      let initialTenantId = urlParams.get('store') || localStorage.getItem('portal_last_store_id') || localStorage.getItem('last_tenant_id');
+      let initialTenantId = urlParams.get('store') || urlParams.get('loja') || urlParams.get('s') || urlParams.get('tenant') || localStorage.getItem('portal_last_store_id') || localStorage.getItem('last_tenant_id');
       
       if (initialTenantId) {
         startPortalSync(initialTenantId);
       } else {
-        renderStoreNotConnectedCard();
+        // Tenta auto-detectar loja no Firestore stores_directory
+        getDocs(collection(db, "stores_directory")).then(snap => {
+          if (snap && !snap.empty) {
+            const stores = [];
+            snap.forEach(d => {
+              const data = d.data();
+              if (data && (data.id || d.id)) {
+                stores.push({ id: data.id || d.id, name: data.name || data.storeName || (data.id || d.id) });
+              }
+            });
+            if (stores.length === 1) {
+              startPortalSync(stores[0].id);
+            } else if (stores.length > 1) {
+              renderStorePickerCard(stores);
+            } else {
+              renderStoreNotConnectedCard();
+            }
+          } else {
+            renderStoreNotConnectedCard();
+          }
+        }).catch(() => {
+          renderStoreNotConnectedCard();
+        });
       }
 
     } catch (e) {
