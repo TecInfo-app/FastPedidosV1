@@ -3318,25 +3318,28 @@
               clientSecret: apiCredentials.clientSecret
             })
           });
-          const contentType = res.headers.get('content-type') || '';
-          if (res.ok && contentType.includes('application/json')) {
-            const data = await res.json();
-            if (!data.success) {
-              console.warn('Aviso API iFood requestDriver:', data.message);
-              showToast('Erro ao chamar entregador', data.message || 'O iFood recusou o chamado.', 'error');
-              return;
-            } else {
-              showToast('iFood Recebeu Chamado', 'O iFood está buscando um entregador...', 'success');
-            }
+
+          let data = null;
+          try {
+            data = await res.json();
+          } catch (_) {}
+
+          if (!res.ok || (data && data.success === false)) {
+            const errorMsg = (data && (data.message || data.error)) || `iFood recusou o chamado (HTTP ${res.status}). Verifique se a loja possui o serviço Entrega Sob Demanda ativo no portal iFood.`;
+            console.warn('Falha na API iFood requestDriver:', res.status, errorMsg);
+            showToast('Não foi possível chamar motoboy', errorMsg, 'error');
+            return;
           }
+
+          showToast('iFood Recebeu Chamado', 'O iFood está buscando um entregador...', 'success');
         } catch (e) {
           console.warn('Erro ao chamar endpoint de requestDriver:', e);
-          showToast('Erro de Rede', 'Não foi possível solicitar o entregador.', 'error');
+          showToast('Erro de Conexão', 'Não foi possível se comunicar com o serviço de entrega.', 'error');
           return;
         }
       }
 
-      // Atualiza estado do pedido apenas para Busca
+      // Atualiza estado do pedido apenas se não houve erro
       order.ifoodDriverStatus = 'SEARCHING';
       saveOrders();
       renderKanban();
@@ -3356,7 +3359,6 @@
       // Se for pedido real com credenciais, tenta avisar a API
       if (order.ifoodOrderId && apiCredentials.clientId && apiCredentials.clientSecret) {
         try {
-          // Usamos a request de order-action. No Worker deve ser tratado
           await fetch(`${getApiBaseUrl()}/api/ifood/order-action`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -3376,7 +3378,7 @@
       order.ifoodDriverStatus = null;
       saveOrders();
       renderKanban();
-      showToast('Busca Cancelada', 'A busca pelo entregador iFood foi interrompida.', 'info');
+      showToast('Busca Cancelada', 'A busca pelo entregador iFood foi cancelada.', 'info');
     }
 
     // --- CANCELLATION MODAL & REASONS LOGIC ---
