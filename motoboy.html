@@ -455,7 +455,7 @@
         </div>
         
         <p class="text-[11px] text-slate-300">
-          Para concluir oficialmente no iFood, abra o portal do iFood e digite o código do cliente:
+          Localizador identificado! Copie ou abra o portal do iFood:
         </p>
 
         <!-- Card com Localizador de 8 dígitos para Copiar -->
@@ -473,14 +473,22 @@
           </button>
         </div>
 
-        <!-- Botão Abrir Portal Oficial do iFood -->
-        <button 
-          type="button" 
-          onclick="openOfficialIFoodDeliveryPortal()" 
-          class="w-full py-2.5 bg-red-600 hover:bg-red-500 active:scale-98 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-red-600/30 transition cursor-pointer">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-          <span>Abrir Confirmação Oficial do iFood ↗</span>
-        </button>
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <!-- Botão Abrir no Modal Interno -->
+          <button 
+            type="button" 
+            onclick="openIFoodIframeModal()" 
+            class="py-2.5 px-2 bg-red-600 hover:bg-red-500 active:scale-98 text-white font-black text-[11px] rounded-xl flex items-center justify-center gap-1 shadow-md shadow-red-600/30 transition cursor-pointer">
+            <span>📱 Abrir Aqui</span>
+          </button>
+          <!-- Botão Abrir em Nova Aba -->
+          <button 
+            type="button" 
+            onclick="openOfficialIFoodDeliveryPortal()" 
+            class="py-2.5 px-2 bg-slate-800 hover:bg-slate-700 active:scale-98 text-slate-200 border border-slate-700 font-bold text-[11px] rounded-xl flex items-center justify-center gap-1 transition cursor-pointer">
+            <span>Nova Aba ↗</span>
+          </button>
+        </div>
       </div>
 
       <div class="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -541,6 +549,74 @@
           Cancelar
         </button>
       </form>
+    </div>
+  </div>
+
+  <!-- MODAL EMBEDDED DENTRO DO APP PARA CONFIRMAÇÃO OFICIAL IFOOD (SEM SAIR DA TELA) -->
+  <div id="modal-ifood-embedded" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/90 backdrop-blur-md hidden animate-slide-down">
+    <div class="bg-slate-900 border border-red-500/40 rounded-3xl w-full max-w-lg h-[90vh] max-h-[750px] shadow-2xl flex flex-col overflow-hidden">
+      <!-- Header do Modal iFood -->
+      <div class="p-3.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="text-xl">🔴</span>
+          <div class="min-w-0">
+            <h3 class="text-xs font-black text-white truncate">Confirmação de Entrega iFood</h3>
+            <div class="flex items-center gap-1.5 text-[10px]">
+              <span class="text-slate-400">Localizador:</span>
+              <span id="embedded-ifood-loc-display" class="font-mono font-bold text-amber-400">---- ----</span>
+              <button 
+                type="button" 
+                onclick="copyIFoodLocator()" 
+                class="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[9px] font-bold border border-slate-700">
+                Copiar
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button 
+            type="button" 
+            onclick="openOfficialIFoodDeliveryPortal()" 
+            class="px-2.5 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 text-[10px] font-bold rounded-xl border border-red-500/30 transition">
+            Abrir Externo ↗
+          </button>
+          <button 
+            type="button" 
+            onclick="closeIFoodIframeModal()" 
+            class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-bold flex items-center justify-center">
+            ✕
+          </button>
+        </div>
+      </div>
+
+      <!-- Banner de Dica -->
+      <div class="bg-red-950/40 px-3 py-1.5 border-b border-red-900/30 flex items-center justify-between text-[11px] text-red-200">
+        <span>💡 Cole o localizador e digite o código de 4 dígitos do cliente.</span>
+        <button type="button" onclick="copyIFoodLocator()" class="font-bold underline text-amber-400">
+          Copiar Localizador
+        </button>
+      </div>
+
+      <!-- Container do iFrame / Visualização -->
+      <div class="flex-1 w-full bg-white relative">
+        <iframe 
+          id="ifood-delivery-iframe" 
+          src="about:blank" 
+          class="w-full h-full border-none"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+        ></iframe>
+      </div>
+
+      <!-- Rodapé com Conclusão no App -->
+      <div class="p-3 bg-slate-950 border-t border-slate-800 flex items-center justify-between gap-2 shrink-0">
+        <span class="text-[11px] text-slate-400">Confirmou no iFood?</span>
+        <button 
+          type="button" 
+          onclick="finalizeFromEmbeddedModal()" 
+          class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 font-black text-xs rounded-xl transition shadow-md">
+          ✓ Marcar como Entregue no App
+        </button>
+      </div>
     </div>
   </div>
 
@@ -1140,6 +1216,67 @@
       window.open('https://confirmacao-entrega-propria.ifood.com.br/', '_blank');
     }
     window.openOfficialIFoodDeliveryPortal = openOfficialIFoodDeliveryPortal;
+
+    let activeEmbeddedOrderId = null;
+
+    function openIFoodIframeModal() {
+      const orderIdInput = document.getElementById('code-modal-order-id');
+      const orderId = orderIdInput ? orderIdInput.value : '';
+      activeEmbeddedOrderId = orderId;
+
+      copyIFoodLocator();
+
+      const modal = document.getElementById('modal-ifood-embedded');
+      const locDisplay = document.getElementById('embedded-ifood-loc-display');
+      const iframe = document.getElementById('ifood-delivery-iframe');
+
+      if (locDisplay) {
+        locDisplay.innerText = currentModalIFoodLocator || 'Ver na Comanda';
+      }
+
+      if (iframe) {
+        iframe.src = 'https://confirmacao-entrega-propria.ifood.com.br/';
+      }
+
+      if (modal) modal.classList.remove('hidden');
+      closeDeliveryCodeModal();
+    }
+    window.openIFoodIframeModal = openIFoodIframeModal;
+
+    function closeIFoodIframeModal() {
+      const modal = document.getElementById('modal-ifood-embedded');
+      const iframe = document.getElementById('ifood-delivery-iframe');
+      if (modal) modal.classList.add('hidden');
+      if (iframe) iframe.src = 'about:blank';
+    }
+    window.closeIFoodIframeModal = closeIFoodIframeModal;
+
+    function finalizeFromEmbeddedModal() {
+      if (!activeEmbeddedOrderId) {
+        closeIFoodIframeModal();
+        return;
+      }
+      const ord = (motoboyOrders || []).find(o => o.id === activeEmbeddedOrderId);
+      if (ord) {
+        const now = new Date();
+        ord.status = 'entregue';
+        ord.deliveredAt = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        ord.deliveredDate = now.toLocaleDateString('pt-BR');
+        ord.confirmedByCode = true;
+
+        if (window.firebaseSetDoc && window.firebaseDoc && window.firebaseDb && currentTenantId) {
+          window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", currentTenantId, "motoboyOrders", String(ord.id)), ord, { merge: true }).catch(err => console.warn('Erro ao salvar no Firestore:', err));
+        }
+
+        playDoubleBeepAlarm();
+        if (activePortalMotoboyId) {
+          renderPortalDashboard(activePortalMotoboyId);
+        }
+        showToast('🎉 Entrega Finalizada!', `Pedido #${ord.orderNumber} marcado como entregue!`, 'success');
+      }
+      closeIFoodIframeModal();
+    }
+    window.finalizeFromEmbeddedModal = finalizeFromEmbeddedModal;
 
     function openIFoodConfirmationDirect(orderId) {
       const ord = (motoboyOrders || []).find(o => o.id === orderId);
