@@ -2931,13 +2931,13 @@
     }
 
     function getApiBaseUrl() {
+      let url = '';
       if (apiCredentials && apiCredentials.customApiUrl && apiCredentials.customApiUrl.trim() !== '') {
-        return apiCredentials.customApiUrl.trim().replace(/\/+$/, '');
+        url = apiCredentials.customApiUrl.trim();
+      } else if (window.location.hostname.includes('github.io')) {
+        url = 'https://ifood-integracao.iranildo-jobs.workers.dev';
       }
-      if (window.location.hostname.includes('github.io')) {
-        return 'https://ifood-integracao.iranildo-jobs.workers.dev';
-      }
-      return '';
+      return url.replace(/\/+$/, '');
     }
 
     function loadCredentials() {
