@@ -3311,41 +3311,23 @@
             const data = await res.json();
             if (!data.success) {
               console.warn('Aviso API iFood requestDriver:', data.message);
+              showToast('Erro ao chamar entregador', data.message || 'O iFood recusou o chamado.', 'error');
+              return;
+            } else {
+              showToast('iFood Recebeu Chamado', 'O iFood está buscando um entregador...', 'success');
             }
           }
         } catch (e) {
           console.warn('Erro ao chamar endpoint de requestDriver:', e);
+          showToast('Erro de Rede', 'Não foi possível solicitar o entregador.', 'error');
+          return;
         }
       }
 
-      // Atualiza estado do pedido
+      // Atualiza estado do pedido apenas para Busca
       order.ifoodDriverStatus = 'SEARCHING';
       saveOrders();
       renderKanban();
-
-      // Simulação / Feedback Interativo de Logística iFood
-      setTimeout(() => {
-        const current = orders.find(o => o.id === orderId);
-        if (current && current.ifoodDriverStatus === 'SEARCHING') {
-          current.ifoodDriverStatus = 'ASSIGNED';
-          current.driverName = 'Lucas Motoboy (iFood)';
-          saveOrders();
-          renderKanban();
-          playDoubleBeepAlarm();
-          showToast('🛵 Motoboy iFood Alocado!', `Lucas Motoboy (iFood Entrega) está a caminho da loja para retirar o pedido ${current.id}!`, 'success');
-
-          setTimeout(() => {
-            const arrived = orders.find(o => o.id === orderId);
-            if (arrived && (arrived.ifoodDriverStatus === 'ASSIGNED' || arrived.ifoodDriverStatus === 'GOING_TO_ORIGIN')) {
-              arrived.ifoodDriverStatus = 'ARRIVED_AT_ORIGIN';
-              saveOrders();
-              renderKanban();
-              playDoubleBeepAlarm();
-              showToast('📍 Motoboy iFood Chegou!', `O entregador Lucas do iFood chegou na loja para coletar o pedido ${arrived.id}!`, 'ifood');
-            }
-          }, 7000);
-        }
-      }, 3500);
     }
 
     // --- CANCELLATION MODAL & REASONS LOGIC ---
