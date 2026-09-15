@@ -3330,6 +3330,43 @@
       renderKanban();
     }
 
+    // --- CANCEL IFOOD DRIVER SEARCH ---
+    async function cancelIFoodDriverSearch(orderId) {
+      const order = orders.find(o => o.id === orderId);
+      if (!order) return;
+
+      if (!confirm('Deseja realmente cancelar a busca por um entregador parceiro do iFood?')) {
+        return;
+      }
+
+      showToast('Cancelando busca...', 'Avisando iFood para cancelar a busca do entregador.', 'info');
+
+      // Se for pedido real com credenciais, tenta avisar a API
+      if (order.ifoodOrderId && apiCredentials.clientId && apiCredentials.clientSecret) {
+        try {
+          // Usamos a request de order-action. No Worker deve ser tratado
+          await fetch(`${getApiBaseUrl()}/api/ifood/order-action`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ifoodOrderId: order.ifoodOrderId,
+              action: 'cancelDriver', 
+              clientId: apiCredentials.clientId,
+              clientSecret: apiCredentials.clientSecret
+            })
+          });
+        } catch (e) {
+          console.warn('Erro ao cancelar motoboy na API:', e);
+        }
+      }
+
+      // Restaura o status para permitir chamar novamente ou despachar manual
+      order.ifoodDriverStatus = null;
+      saveOrders();
+      renderKanban();
+      showToast('Busca Cancelada', 'A busca pelo entregador iFood foi interrompida.', 'info');
+    }
+
     // --- CANCELLATION MODAL & REASONS LOGIC ---
     let currentCancellingOrderId = null;
     let availableReasonsList = [];
@@ -3755,15 +3792,22 @@
 
               <!-- iFood Driver Logistics Status / Dispatch -->
               ${order.ifoodDriverStatus === 'SEARCHING' ? `
-                <div class="mt-1.5 flex items-center justify-between gap-1.5 text-[10px] font-bold text-amber-950 bg-amber-100 border border-amber-300 px-2.5 py-1 rounded-lg">
-                  <div class="flex items-center gap-1.5">
-                    <span class="relative flex h-2 w-2">
-                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75"></span>
-                      <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-600"></span>
-                    </span>
-                    <span>Buscando Motoboy iFood...</span>
+                <div class="mt-1.5 flex flex-col gap-1.5 text-[10px] font-bold text-amber-950 bg-amber-100 border border-amber-300 px-2.5 py-1.5 rounded-lg">
+                  <div class="flex items-center justify-between w-full">
+                    <div class="flex items-center gap-1.5">
+                      <span class="relative flex h-2 w-2">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-600"></span>
+                      </span>
+                      <span>Buscando Motoboy iFood...</span>
+                    </div>
+                    <span class="text-[9px] bg-white text-amber-900 px-1.5 py-0.5 rounded font-black border border-amber-200">Logística</span>
                   </div>
-                  <span class="text-[9px] bg-white text-amber-900 px-1.5 py-0.5 rounded font-black border border-amber-200">Logística</span>
+                  <button 
+                    onclick="cancelIFoodDriverSearch('${order.id}')"
+                    class="w-full mt-0.5 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-md border border-red-300 transition-colors flex items-center justify-center gap-1">
+                    <span>✕ Cancelar Chamado</span>
+                  </button>
                 </div>
               ` : order.ifoodDriverStatus === 'ASSIGNED' || order.ifoodDriverStatus === 'GOING_TO_ORIGIN' ? `
                 <div class="mt-1.5 flex items-center justify-between gap-1.5 text-[10px] font-bold text-purple-950 bg-purple-100 border border-purple-300 px-2.5 py-1 rounded-lg">
