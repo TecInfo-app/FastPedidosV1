@@ -1281,7 +1281,7 @@
     function openIFoodConfirmationDirect(orderId) {
       const ord = (motoboyOrders || []).find(o => o.id === orderId);
       if (!ord) return;
-      const loc = ord.locator || ord.deliveryLocator || ord.orderLocator || (ord.id ? String(ord.id).replace(/\D/g, '').slice(-8) : '');
+      const loc = ord.locator || ord.deliveryLocator || ord.orderLocator || '';
       currentModalIFoodLocator = loc ? loc.replace(/(\d{4})(\d{4})/, '$1 $2') : '';
       
       activeEmbeddedOrderId = orderId;
