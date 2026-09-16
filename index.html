@@ -2337,10 +2337,7 @@
       <div class="flex items-center justify-between gap-2 mb-1">
         <div class="flex items-center gap-2">
           <span class="text-amber-500 text-base">📦</span>
-          <h3 class="text-sm sm:text-base font-black text-slate-900">Lançamento Rápido de Pedido</h3>
-        </div>
-        <div>
-          <span class="text-[11px] font-medium text-slate-400">Pressione Enter para Confirmar</span>
+          <h3 class="text-sm sm:text-base font-black text-slate-900">Lançamento Rápido</h3>
         </div>
       </div>
 
@@ -4296,10 +4293,10 @@
             <button 
               type="button"
               onclick="selectActiveStore('${store.id}')" 
-              class="w-full py-3 px-3 rounded-2xl text-xs font-black bg-[#0f172a] text-white border-2 border-amber-400 flex items-center justify-center gap-2 shadow-sm transition active:scale-98 cursor-pointer">
-              <span class="text-amber-400 text-sm shrink-0">🍺</span>
+              class="w-full py-1.5 sm:py-3 px-2 sm:px-3 rounded-xl sm:rounded-2xl text-[10px] sm:text-xs font-black bg-[#0f172a] text-white border sm:border-2 border-amber-400 flex items-center justify-center gap-1.5 sm:gap-2 shadow-sm transition active:scale-98 cursor-pointer">
+              <span class="text-amber-400 text-xs sm:text-sm shrink-0">🍺</span>
               <span class="tracking-wide uppercase truncate">${escapeHtml(store.name)}</span>
-              <span class="text-amber-400 text-xs font-black shrink-0">✔</span>
+              <span class="text-amber-400 text-[10px] sm:text-xs font-black shrink-0">✔</span>
             </button>
           `;
         } else {
@@ -4307,8 +4304,8 @@
             <button 
               type="button"
               onclick="selectActiveStore('${store.id}')" 
-              class="w-full py-3 px-3 rounded-2xl text-xs font-bold bg-slate-50 hover:bg-slate-100 hover:border-slate-300 text-slate-700 hover:text-slate-950 border border-slate-200 flex items-center justify-center gap-2 transition active:scale-98 cursor-pointer">
-              <span class="text-slate-400 text-sm shrink-0">🏪</span>
+              class="w-full py-1.5 sm:py-3 px-2 sm:px-3 rounded-xl sm:rounded-2xl text-[10px] sm:text-xs font-bold bg-slate-50 hover:bg-slate-100 hover:border-slate-300 text-slate-700 hover:text-slate-950 border border-slate-200 flex items-center justify-center gap-1.5 sm:gap-2 transition active:scale-98 cursor-pointer">
+              <span class="text-slate-400 text-xs sm:text-sm shrink-0">🏪</span>
               <span class="uppercase truncate">${escapeHtml(store.name)}</span>
             </button>
           `;
@@ -6971,23 +6968,9 @@
 
     // Filtrar Mosaico & Controle de Busca Expansível
     function toggleMotoboySearchAndFocus() {
-      const box = document.getElementById('motoboy-search-box');
-      const toggleBtn = document.getElementById('motoboy-search-toggle-btn');
-      const input = document.getElementById('motoboy-search-filter');
-      if (!box) return;
-
-      if (box.classList.contains('hidden')) {
-        box.classList.remove('hidden');
-        if (toggleBtn) toggleBtn.classList.add('hidden');
-      }
-
-      // Rola suavemente até a planilha se necessário e foca no input
-      const cardPlanilha = document.getElementById('motoboy-orders-mosaic');
-      if (cardPlanilha) {
-        cardPlanilha.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-
+      openMotoboySpreadsheetModal();
       setTimeout(() => {
+        const input = document.getElementById('modal-motoboy-search-input');
         if (input) {
           input.focus();
           input.select();
@@ -7567,7 +7550,20 @@
 
       // Mosaico com colunas por motoboy
       const mosaicColumnsHtml = displayedMotoboys.map(mb => {
-        const assignedOrders = motoboyOrders.filter(o => o.motoboyId === mb.id);
+        let assignedOrders = motoboyOrders.filter(o => o.motoboyId === mb.id);
+
+        if (motoboySearchFilter) {
+          const nameMatch = mb.name.toLowerCase().includes(motoboySearchFilter);
+          const plateMatch = (mb.plate || '').toLowerCase().includes(motoboySearchFilter);
+          if (!nameMatch && !plateMatch) {
+            assignedOrders = assignedOrders.filter(o => 
+              o.orderNumber.toLowerCase().includes(motoboySearchFilter) ||
+              (o.customerName && o.customerName.toLowerCase().includes(motoboySearchFilter)) ||
+              (o.customerAddress && o.customerAddress.toLowerCase().includes(motoboySearchFilter))
+            );
+          }
+        }
+
         const totalFeesToPay = assignedOrders.reduce((acc, o) => acc + (Number(o.deliveryFee) || 0), 0);
         const initial = mb.name ? mb.name.charAt(0).toUpperCase() : 'M';
 
