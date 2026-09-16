@@ -4279,7 +4279,9 @@
       const container = document.getElementById('store-selector-chips');
       if (!container) return;
 
-      if (!storesList || storesList.length === 0) {
+      const visibleStores = storesList.filter(store => !store.isHidden || store.active);
+
+      if (!visibleStores || visibleStores.length === 0) {
         container.innerHTML = `
           <div class="col-span-full py-3 text-center text-xs text-slate-500 font-semibold bg-slate-50 rounded-2xl border border-dashed border-slate-200">
             Nenhuma loja cadastrada. Use o <strong>Menu Painel ⚙️</strong> para cadastrar.
@@ -4288,7 +4290,7 @@
         return;
       }
 
-      container.innerHTML = storesList.map(store => {
+      container.innerHTML = visibleStores.map(store => {
         if (store.active) {
           return `
             <button 
@@ -6541,17 +6543,19 @@
         }
       }
 
-      if (!motoboysList || motoboysList.length === 0) {
+      const visibleMotoboys = (motoboysList || []).filter(mb => !mb.isHidden);
+
+      if (visibleMotoboys.length === 0) {
         list.innerHTML = `
           <div class="py-6 text-center text-slate-500 text-xs font-semibold">
-            Nenhum motoboy cadastrado no momento.
+            Nenhum motoboy disponível no momento.
             <button onclick="closeMotoboyModal(); addMotoboyPrompt();" class="mt-3 block mx-auto px-4 py-2 bg-slate-900 text-white font-bold rounded-xl text-xs">
               + Cadastrar Motoboy Agora
             </button>
           </div>
         `;
       } else {
-        list.innerHTML = motoboysList.map(mb => `
+        list.innerHTML = visibleMotoboys.map(mb => `
           <button 
             type="button" 
             onclick="selectMotoboyForPendingOrder('${mb.id}')"
@@ -6637,7 +6641,9 @@
         ];
       }
 
-      list.innerHTML = deliveryFeesList.map(fee => `
+      const visibleFees = (deliveryFeesList || []).filter(fee => !fee.isHidden);
+
+      list.innerHTML = visibleFees.map(fee => `
         <button 
           type="button" 
           onclick="selectFixedFee('${fee.id}')"
@@ -7075,7 +7081,9 @@
       if (codeInput) codeInput.value = ord.deliveryCode || generateDeliveryCode();
 
       if (storeSelect) {
-        storeSelect.innerHTML = storesList.map(s => `
+        storeSelect.innerHTML = storesList
+          .filter(s => !s.isHidden || s.name === ord.storeName)
+          .map(s => `
           <option value="${escapeHtml(s.name)}" ${s.name === ord.storeName ? 'selected' : ''}>
             ${escapeHtml(s.name)}
           </option>
@@ -7083,7 +7091,9 @@
       }
 
       if (mbSelect) {
-        mbSelect.innerHTML = motoboysList.map(mb => `
+        mbSelect.innerHTML = motoboysList
+          .filter(mb => !mb.isHidden || mb.id === ord.motoboyId)
+          .map(mb => `
           <option value="${mb.id}" ${mb.id === ord.motoboyId ? 'selected' : ''}>
             ${escapeHtml(mb.name)}
           </option>
