@@ -361,6 +361,29 @@
           </div>
         </div>
 
+        <!-- PREFERÊNCIAS DE VISUALIZAÇÃO -->
+        <div class="space-y-2.5 pt-4 pb-2 border-b border-slate-200">
+          <span class="text-xs font-bold text-slate-800 block mb-2">Preferências de Visualização</span>
+          <div class="space-y-2">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="cfg-hide-stores" onchange="toggleHideElement('stores', this.checked)" class="rounded text-ifood-red focus:ring-ifood-red">
+              <span class="text-xs text-slate-700 font-medium">Ocultar aba "Lojas" do menu</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="cfg-hide-motoboys" onchange="toggleHideElement('motoboys', this.checked)" class="rounded text-ifood-red focus:ring-ifood-red">
+              <span class="text-xs text-slate-700 font-medium">Ocultar aba "Motoboys" do menu</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="cfg-hide-card-drivers" onchange="toggleHideElement('cardDrivers', this.checked)" class="rounded text-ifood-red focus:ring-ifood-red">
+              <span class="text-xs text-slate-700 font-medium">Ocultar botão "Chamar Motoboy iFood" nos pedidos</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="cfg-hide-taxes" onchange="toggleHideElement('taxes', this.checked)" class="rounded text-ifood-red focus:ring-ifood-red">
+              <span class="text-xs text-slate-700 font-medium">Ocultar seção "Taxas de Entrega"</span>
+            </label>
+          </div>
+        </div>
+
         <!-- Gerenciamento Operacional (Lojas, Motoboys & Limpar Planilha) -->
         <div class="space-y-2.5 pt-1">
           <!-- SEÇÃO DESTACADA: PORTAL DO MOTOBOY COM LINK E ACESSO -->
@@ -612,7 +635,7 @@
           </div>
 
           <!-- SEÇÃO 2: TABELA DE TAXAS DE ENTREGA -->
-          <div class="space-y-3 pt-4 border-t border-slate-200">
+          <div id="taxes-section-container" class="space-y-3 pt-4 border-t border-slate-200">
             <div class="flex items-center justify-between">
               <div>
                 <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Taxas de Entrega</h3>
@@ -2818,6 +2841,55 @@
       }
     }
 
+    // --- PREFERÊNCIAS DE VISUALIZAÇÃO (OCULTAR ELEMENTOS) ---
+    function toggleHideElement(elementKey, shouldHide) {
+      if (elementKey === 'stores') {
+        const el = document.getElementById('dtab-btn-stores');
+        if (el) el.style.display = shouldHide ? 'none' : 'flex';
+        localStorage.setItem('fastpedidos_hide_stores', shouldHide ? 'true' : 'false');
+      } else if (elementKey === 'motoboys') {
+        const el = document.getElementById('dtab-btn-motoboys');
+        if (el) el.style.display = shouldHide ? 'none' : 'flex';
+        localStorage.setItem('fastpedidos_hide_motoboys', shouldHide ? 'true' : 'false');
+      } else if (elementKey === 'cardDrivers') {
+        const styleId = 'custom-hide-card-drivers-style';
+        let s = document.getElementById(styleId);
+        if (!s) {
+          s = document.createElement('style');
+          s.id = styleId;
+          document.head.appendChild(s);
+        }
+        s.innerHTML = shouldHide ? 'button[onclick^="requestIFoodDriver"] { display: none !important; }' : '';
+        localStorage.setItem('fastpedidos_hide_card_drivers', shouldHide ? 'true' : 'false');
+      } else if (elementKey === 'taxes') {
+        const el = document.getElementById('taxes-section-container');
+        if (el) el.style.display = shouldHide ? 'none' : 'block';
+        localStorage.setItem('fastpedidos_hide_taxes', shouldHide ? 'true' : 'false');
+      }
+    }
+
+    function loadHeaderVisibilityPreferences() {
+      const hideStores = localStorage.getItem('fastpedidos_hide_stores') === 'true';
+      const hideMotoboys = localStorage.getItem('fastpedidos_hide_motoboys') === 'true';
+      const hideCardDrivers = localStorage.getItem('fastpedidos_hide_card_drivers') === 'true';
+      const hideTaxes = localStorage.getItem('fastpedidos_hide_taxes') === 'true';
+
+      const chkStores = document.getElementById('cfg-hide-stores');
+      const chkMotoboys = document.getElementById('cfg-hide-motoboys');
+      const chkCardDrivers = document.getElementById('cfg-hide-card-drivers');
+      const chkTaxes = document.getElementById('cfg-hide-taxes');
+
+      if (chkStores) chkStores.checked = hideStores;
+      if (chkMotoboys) chkMotoboys.checked = hideMotoboys;
+      if (chkCardDrivers) chkCardDrivers.checked = hideCardDrivers;
+      if (chkTaxes) chkTaxes.checked = hideTaxes;
+
+      if (hideStores) toggleHideElement('stores', true);
+      if (hideMotoboys) toggleHideElement('motoboys', true);
+      if (hideCardDrivers) toggleHideElement('cardDrivers', true);
+      if (hideTaxes) toggleHideElement('taxes', true);
+    }
+
     function updateAudioUI() {
       const drawerIconOn = document.getElementById('drawer-audio-icon-on');
       const drawerIconOff = document.getElementById('drawer-audio-icon-off');
@@ -4242,20 +4314,40 @@
       }).join('');
     }
 
+    function toggleStoreVisibility(id) {
+      const idx = storesList.findIndex(s => s.id === id);
+      if (idx !== -1) {
+        storesList[idx].isHidden = !storesList[idx].isHidden;
+        saveStores();
+        renderDrawerStores();
+        if (typeof renderStoreChips === 'function') renderStoreChips();
+      }
+    }
+
     function renderDrawerStores() {
       const container = document.getElementById('drawer-stores-list');
       if (!container) return;
 
-      container.innerHTML = storesList.map((store) => `
-        <div class="p-3 bg-white border ${store.active ? 'border-amber-400 ring-1 ring-amber-400' : 'border-slate-200'} rounded-xl flex items-center justify-between gap-2 shadow-2xs">
+      container.innerHTML = storesList.map((store) => {
+        const opacityClass = store.isHidden ? 'opacity-40 grayscale' : '';
+        const eyeIcon = store.isHidden 
+          ? '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path></svg>'
+          : '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>';
+        
+        return `
+        <div class="p-3 bg-white border ${store.active ? 'border-amber-400 ring-1 ring-amber-400' : 'border-slate-200'} rounded-xl flex items-center justify-between gap-2 shadow-2xs transition ${opacityClass}">
           <div class="space-y-0.5">
             <div class="flex items-center gap-1.5">
               <span class="text-xs font-bold text-slate-900">${store.name}</span>
               ${store.active ? '<span class="text-[9px] bg-amber-500 text-slate-950 font-black px-1.5 py-0.5 rounded">ATIVA</span>' : ''}
+              ${store.isHidden ? '<span class="text-[9px] bg-slate-200 text-slate-600 font-bold px-1.5 py-0.5 rounded">OCULTA</span>' : ''}
             </div>
             <p class="text-[11px] text-slate-500 font-sans">Loja própria da operação interna</p>
           </div>
           <div class="flex items-center gap-1.5">
+            <button onclick="toggleStoreVisibility('${store.id}')" class="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition cursor-pointer" title="${store.isHidden ? 'Mostrar Loja' : 'Ocultar Loja'}">
+              ${eyeIcon}
+            </button>
             ${!store.active ? `
               <button onclick="selectActiveStore('${store.id}')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 text-[11px] font-bold rounded-lg border border-amber-200 transition cursor-pointer">
                 Ativar
@@ -4270,7 +4362,7 @@
             `}
           </div>
         </div>
-      `).join('');
+      `}).join('');
     }
 
     // --- MODAIS DE CADASTRO (LOJAS, TAXAS E MOTOBOYS - SEM PROMPT BLOQUEADO NO IFRAME) ---
@@ -4360,6 +4452,14 @@
       showToast('Ordem Alterada', `Taxa "${item.name}" movida para a posição ${targetIndex + 1}.`, 'info');
     }
 
+    function toggleFeeVisibility(id) {
+      const idx = deliveryFeesList.findIndex(f => f.id === id);
+      if (idx !== -1) {
+        deliveryFeesList[idx].isHidden = !deliveryFeesList[idx].isHidden;
+        saveDeliveryFees();
+      }
+    }
+
     function renderDrawerFees() {
       const container = document.getElementById('drawer-fees-list');
       if (!container) return;
@@ -4373,8 +4473,14 @@
         return;
       }
 
-      container.innerHTML = deliveryFeesList.map((fee, idx) => `
-        <div class="p-2.5 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-2 shadow-2xs hover:border-slate-300 transition">
+      container.innerHTML = deliveryFeesList.map((fee, idx) => {
+        const opacityClass = fee.isHidden ? 'opacity-40 grayscale' : '';
+        const eyeIcon = fee.isHidden 
+          ? '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path></svg>'
+          : '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>';
+          
+        return `
+        <div class="p-2.5 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-2 shadow-2xs hover:border-slate-300 transition ${opacityClass}">
           <div class="flex items-center gap-2.5 min-w-0">
             <div class="flex flex-col items-center justify-center gap-0.5 shrink-0 bg-slate-50 p-1 rounded-lg border border-slate-200/60">
               <button 
@@ -4401,6 +4507,9 @@
             </div>
           </div>
           <div class="flex items-center gap-1 shrink-0">
+            <button onclick="toggleFeeVisibility('${fee.id}')" class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition cursor-pointer" title="${fee.isHidden ? 'Mostrar Taxa' : 'Ocultar Taxa'}">
+              ${eyeIcon}
+            </button>
             <button onclick="openEditFeeModal('${fee.id}')" class="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition cursor-pointer" title="Editar Taxa">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
             </button>
@@ -4416,12 +4525,14 @@
       const select = document.getElementById('quick-fee-select');
       if (!select) return;
 
-      if (deliveryFeesList.length === 0) {
+      const visibleFees = deliveryFeesList.filter(f => !f.isHidden);
+
+      if (visibleFees.length === 0) {
         select.innerHTML = '<option value="7.00">Taxa Padrão (R$ 7,00)</option>';
         return;
       }
 
-      select.innerHTML = deliveryFeesList.map(fee => `
+      select.innerHTML = visibleFees.map(fee => `
         <option value="${fee.value}" data-fee-name="${fee.name}">${fee.name} - ${formatCurrency(fee.value)}</option>
       `).join('');
     }
@@ -4668,16 +4779,29 @@
       }
     }
 
+    function toggleMotoboyVisibility(id) {
+      const idx = motoboysList.findIndex(m => m.id === id);
+      if (idx !== -1) {
+        motoboysList[idx].isHidden = !motoboysList[idx].isHidden;
+        saveMotoboys();
+        renderDrawerMotoboys();
+        if (typeof renderMotoboyMosaic === 'function') renderMotoboyMosaic();
+        if (typeof renderMainMotoboyList === 'function') renderMainMotoboyList();
+      }
+    }
+
     function populateMotoboySelect() {
       const select = document.getElementById('quick-motoboy-select');
       if (!select) return;
 
-      if (motoboysList.length === 0) {
-        select.innerHTML = '<option value="">Nenhum motoboy cadastrado</option>';
+      const visibleMotoboys = motoboysList.filter(mb => !mb.isHidden);
+
+      if (visibleMotoboys.length === 0) {
+        select.innerHTML = '<option value="">Nenhum motoboy disponível</option>';
         return;
       }
 
-      select.innerHTML = motoboysList.map(mb => `
+      select.innerHTML = visibleMotoboys.map(mb => `
         <option value="${mb.id}">${escapeHtml(mb.name)} (${mb.phone || 'Entregador'})</option>
       `).join('');
     }
@@ -4695,8 +4819,14 @@
         return;
       }
 
-      container.innerHTML = motoboysList.map((mb, idx) => `
-        <div class="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-2 shadow-2xs hover:border-slate-300 transition">
+      container.innerHTML = motoboysList.map((mb, idx) => {
+        const opacityClass = mb.isHidden ? 'opacity-40 grayscale' : '';
+        const eyeIcon = mb.isHidden 
+          ? '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path></svg>'
+          : '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>';
+
+        return `
+        <div class="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-2 shadow-2xs hover:border-slate-300 transition ${opacityClass}">
           <div class="flex items-center gap-2.5 min-w-0">
             <!-- Posição e botões de ordenação -->
             <div class="flex flex-col items-center justify-center gap-0.5 shrink-0 bg-slate-50 p-1 rounded-lg border border-slate-200/60">
@@ -4744,6 +4874,9 @@
               class="p-1.5 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition cursor-pointer" 
               title="Copiar link do portal com a loja vinculada">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+            </button>
+            <button onclick="toggleMotoboyVisibility('${mb.id}')" class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition cursor-pointer" title="${mb.isHidden ? 'Mostrar Motoboy' : 'Ocultar Motoboy'}">
+              ${eyeIcon}
             </button>
             <button onclick="openEditMotoboyModal('${mb.id}')" class="p-1.5 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition cursor-pointer" title="Editar Motoboy & Senha">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
@@ -7354,9 +7487,9 @@
         return;
       }
 
-      // Filtra estritamente apenas motoboys QUE POSSUEM ENTREGAS (pedidos atribuídos)
+      // Filtra estritamente apenas motoboys QUE POSSUEM ENTREGAS e NÃO ESTÃO OCULTOS
       // "MOTOBOYS SEM ENTREGAS, NÃO É PRA ABRIR MOSAICO OK."
-      let displayedMotoboys = [...motoboysList].filter(mb => {
+      let displayedMotoboys = [...motoboysList].filter(mb => !mb.isHidden).filter(mb => {
         const assignedOrders = (motoboyOrders || []).filter(o => o.motoboyId === mb.id);
         return assignedOrders.length > 0;
       }).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
@@ -8044,6 +8177,7 @@
 
     // --- EVENT LISTENERS & INITIALIZATION ---
     document.addEventListener('DOMContentLoaded', () => {
+      loadHeaderVisibilityPreferences();
       checkAuthStateOnLoad();
       loadCredentials();
       loadStores();
