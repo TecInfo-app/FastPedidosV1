@@ -360,33 +360,71 @@
             </button>
           </div>
         </div>
+      </div>
 
-        <!-- PREFERÊNCIAS DE VISUALIZAÇÃO -->
-        <div class="space-y-2.5 pt-4 pb-2 border-b border-slate-200">
-          <span class="text-xs font-bold text-slate-800 block mb-2">Preferências de Visualização</span>
+      <!-- Drawer Navigation Tabs (Acesso direto e limpo às seções) -->
+      <div id="drawer-tabs-bar" class="sticky top-0 z-20 flex items-center border-y border-slate-200 bg-slate-50/95 backdrop-blur-xs px-3 overflow-x-auto no-scrollbar shrink-0 text-xs font-semibold shadow-2xs">
+        <button onclick="switchDrawerTab('tab-stores')" id="dtab-btn-stores" class="drawer-tab-btn py-3 px-3.5 border-b-2 border-ifood-red text-ifood-red font-bold hover:text-slate-900 flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+          <span>🏪 Lojas</span>
+        </button>
+        <button onclick="switchDrawerTab('tab-motoboys')" id="dtab-btn-motoboys" class="drawer-tab-btn py-3 px-3.5 border-b-2 border-transparent text-slate-600 hover:text-slate-900 flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+          <span>🛵 Motoboys</span>
+        </button>
+        <button onclick="switchDrawerTab('tab-advanced')" id="dtab-btn-advanced" class="drawer-tab-btn py-3 px-3.5 border-b-2 border-transparent text-slate-600 hover:text-slate-900 flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+          <span>🔒 Avançado</span>
+        </button>
+      </div>
+
+      <!-- Drawer Body (Conteúdo exclusivo e categorizado de cada Aba) -->
+      <div class="p-4 sm:p-5 space-y-5 bg-white flex-1">
+
+        <!-- ============================================================== -->
+        <!-- ABA 1: LOJAS (CADASTROS & GERENCIAMENTO DE UNIDADES) -->
+        <!-- ============================================================== -->
+        <div id="tab-stores" class="drawer-tab-content space-y-4">
+          <div class="bg-amber-50 rounded-xl p-3.5 border border-amber-200 text-xs text-amber-900">
+            <span class="font-bold block mb-1">🏪 Lojas do Restaurante (Operação Interna)</span>
+            Cadastre suas lojas físicas ou unidades de entrega. A loja ativa será selecionada automaticamente no lançamento rápido para motoboy.
+          </div>
+
+          <!-- Ação Cadastrar Loja -->
           <div class="space-y-2">
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" id="cfg-hide-stores" onchange="toggleHideElement('stores', this.checked)" class="rounded text-ifood-red focus:ring-ifood-red">
-              <span class="text-xs text-slate-700 font-medium">Ocultar aba "Lojas" do menu</span>
-            </label>
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" id="cfg-hide-motoboys" onchange="toggleHideElement('motoboys', this.checked)" class="rounded text-ifood-red focus:ring-ifood-red">
-              <span class="text-xs text-slate-700 font-medium">Ocultar aba "Motoboys" do menu</span>
-            </label>
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" id="cfg-hide-card-drivers" onchange="toggleHideElement('cardDrivers', this.checked)" class="rounded text-ifood-red focus:ring-ifood-red">
-              <span class="text-xs text-slate-700 font-medium">Ocultar botão "Chamar Motoboy iFood" nos pedidos</span>
-            </label>
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" id="cfg-hide-taxes" onchange="toggleHideElement('taxes', this.checked)" class="rounded text-ifood-red focus:ring-ifood-red">
-              <span class="text-xs text-slate-700 font-medium">Ocultar seção "Taxas de Entrega"</span>
-            </label>
+            <span class="text-[10px] font-black text-slate-500 uppercase tracking-wider block">Cadastro de Lojas</span>
+            <button 
+              type="button" 
+              onclick="addNewStorePrompt()" 
+              class="w-full p-3 bg-white hover:bg-amber-50 active:scale-98 border-2 border-dashed border-amber-300 rounded-2xl text-left flex items-center justify-between transition cursor-pointer group shadow-2xs">
+              <div class="flex items-center gap-2.5">
+                <span class="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-black text-sm shrink-0 group-hover:bg-amber-500 group-hover:text-white transition">
+                  ➕
+                </span>
+                <div>
+                  <span class="text-xs font-black text-slate-800 block">+ Cadastrar Loja</span>
+                  <span class="text-[10px] text-slate-500 font-medium block">Adicionar nova unidade ou filial</span>
+                </div>
+              </div>
+              <span class="text-xs text-amber-600 font-bold">Cadastrar &rarr;</span>
+            </button>
+          </div>
+
+          <div class="pt-2">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Lojas Cadastradas</h3>
+              <span class="text-[11px] text-slate-400 font-medium">Editar / Excluir</span>
+            </div>
+
+            <div id="drawer-stores-list" class="space-y-2.5">
+              <!-- Rendered dynamically -->
+            </div>
           </div>
         </div>
 
-        <!-- Gerenciamento Operacional (Lojas, Motoboys & Limpar Planilha) -->
-        <div class="space-y-2.5 pt-1">
-          <!-- SEÇÃO DESTACADA: PORTAL DO MOTOBOY COM LINK E ACESSO -->
+        <!-- ============================================================== -->
+        <!-- ABA 2: MOTOBOYS (PORTAL, CADASTROS, TAXAS E FECHAMENTO) -->
+        <!-- ============================================================== -->
+        <div id="tab-motoboys" class="drawer-tab-content hidden space-y-5">
+          
+          <!-- 1. SEÇÃO DESTACADA: PORTAL DO MOTOBOY COM LINK E ACESSO -->
           <div class="p-3.5 bg-gradient-to-br from-purple-950 via-slate-900 to-indigo-950 text-white rounded-2xl shadow-md border border-purple-800/40 space-y-2.5">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
@@ -428,109 +466,86 @@
             </div>
           </div>
 
-          <span class="text-[10px] font-black text-slate-500 uppercase tracking-wider block">Cadastros & Equipe</span>
-          
-          <div class="grid grid-cols-2 gap-2">
-            <!-- + Cadastrar Loja -->
-            <button 
-              type="button" 
-              onclick="addNewStorePrompt()" 
-              class="p-2.5 bg-white hover:bg-amber-50 active:scale-98 border border-slate-200 hover:border-amber-300 rounded-xl text-left flex items-center gap-2 transition cursor-pointer group shadow-2xs">
-              <span class="w-7 h-7 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-xs shrink-0 group-hover:bg-amber-500 group-hover:text-white transition">
-                ➕
-              </span>
-              <div class="min-w-0">
-                <span class="text-xs font-bold text-slate-800 block truncate">+ Cadastrar Loja</span>
-                <span class="text-[10px] text-slate-400 font-medium block">Nova unidade</span>
-              </div>
-            </button>
-
-            <!-- + Novo Motoboy -->
+          <!-- 2. AÇÃO CADASTRAR MOTOBOY -->
+          <div class="space-y-2">
+            <span class="text-[10px] font-black text-slate-500 uppercase tracking-wider block">Cadastro de Equipe</span>
             <button 
               type="button" 
               onclick="addMotoboyPrompt()" 
-              class="p-2.5 bg-white hover:bg-purple-50 active:scale-98 border border-slate-200 hover:border-purple-300 rounded-xl text-left flex items-center gap-2 transition cursor-pointer group shadow-2xs">
-              <span class="w-7 h-7 rounded-lg bg-purple-100 text-purple-800 flex items-center justify-center font-bold text-xs shrink-0 group-hover:bg-purple-600 group-hover:text-white transition">
-                🛵
-              </span>
-              <div class="min-w-0">
-                <span class="text-xs font-bold text-slate-800 block truncate">+ Motoboys</span>
-                <span class="text-[10px] text-slate-400 font-medium block">Cadastrar com senha</span>
+              class="w-full p-3 bg-white hover:bg-purple-50 active:scale-98 border-2 border-dashed border-purple-300 rounded-2xl text-left flex items-center justify-between transition cursor-pointer group shadow-2xs">
+              <div class="flex items-center gap-2.5">
+                <span class="w-8 h-8 rounded-xl bg-purple-100 text-purple-800 flex items-center justify-center font-black text-sm shrink-0 group-hover:bg-purple-600 group-hover:text-white transition">
+                  🛵
+                </span>
+                <div>
+                  <span class="text-xs font-black text-slate-800 block">+ Cadastrar Motoboy</span>
+                  <span class="text-[10px] text-slate-500 font-medium block">Cadastrar com senha e taxa padrão</span>
+                </div>
               </div>
-            </button>
-
-            <!-- Gerenciar Lojas (Aba) -->
-            <button 
-              type="button" 
-              onclick="switchDrawerTab('tab-stores', true)" 
-              class="p-2.5 bg-white hover:bg-slate-50 active:scale-98 border border-slate-200 rounded-xl text-left flex items-center gap-2 transition cursor-pointer shadow-2xs">
-              <span class="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-xs shrink-0">
-                🏪
-              </span>
-              <div class="min-w-0">
-                <span class="text-xs font-bold text-slate-800 block truncate">Lista de Lojas</span>
-                <span class="text-[10px] text-slate-400 font-medium block">Editar / Excluir</span>
-              </div>
-            </button>
-
-            <!-- Gerenciar Motoboys (Aba) -->
-            <button 
-              type="button" 
-              onclick="switchDrawerTab('tab-motoboys', true)" 
-              class="p-2.5 bg-white hover:bg-slate-50 active:scale-98 border border-slate-200 rounded-xl text-left flex items-center gap-2 transition cursor-pointer shadow-2xs">
-              <span class="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-xs shrink-0">
-                👥
-              </span>
-              <div class="min-w-0">
-                <span class="text-xs font-bold text-slate-800 block truncate">Lista Motoboys</span>
-                <span class="text-[10px] text-slate-400 font-medium block">Senhas & Taxas</span>
-              </div>
+              <span class="text-xs text-purple-600 font-bold">Cadastrar &rarr;</span>
             </button>
           </div>
 
-          <!-- Botão Fechar o Dia -->
-          <button 
-            type="button" 
-            onclick="confirmClearMotoboyOrders()" 
-            class="w-full py-2.5 px-3 bg-red-50 hover:bg-red-100 active:scale-98 border border-red-200 rounded-xl text-red-700 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-2xs mb-2">
-            <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-            <span>Fechar o Dia / Limpar Planilha</span>
-          </button>
+          <!-- 3. LISTA DE MOTOBOYS -->
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Equipe de Motoboys</h3>
+                <p class="text-[11px] text-slate-500">Entregadores cadastrados, senhas e taxas</p>
+              </div>
+            </div>
 
-          <!-- Botões de Backup -->
-          <div class="grid grid-cols-2 gap-2">
-            <button type="button" onclick="exportMotoboyOrdersBackup()" class="w-full py-2 px-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-slate-700 text-[11px] font-bold flex items-center justify-center gap-1 transition cursor-pointer">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-              Exportar
+            <div id="drawer-motoboys-list" class="space-y-2.5">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+
+          <!-- 4. TABELA DE TAXAS DE ENTREGA -->
+          <div id="taxes-section-container" class="space-y-3 pt-4 border-t border-slate-200">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Taxas de Entrega</h3>
+                <p class="text-[11px] text-slate-500">Opções disponíveis para selecionar no lançamento de pedidos</p>
+              </div>
+              <button onclick="addDeliveryFeePrompt()" class="text-xs font-bold text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer">
+                + Nova Taxa
+              </button>
+            </div>
+
+            <div id="drawer-fees-list" class="space-y-2">
+              <!-- Rendered dynamically via JS -->
+            </div>
+          </div>
+
+          <!-- 5. FECHAMENTO DO DIA & BACKUP -->
+          <div class="space-y-2.5 pt-4 border-t border-slate-200">
+            <span class="text-[10px] font-black text-slate-500 uppercase tracking-wider block">Fechamento & Backup da Planilha</span>
+            
+            <button 
+              type="button" 
+              onclick="confirmClearMotoboyOrders()" 
+              class="w-full py-2.5 px-3 bg-red-50 hover:bg-red-100 active:scale-98 border border-red-200 rounded-xl text-red-700 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-2xs">
+              <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+              <span>Fechar o Dia / Limpar Planilha</span>
             </button>
-            <label class="w-full py-2 px-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-slate-700 text-[11px] font-bold flex items-center justify-center gap-1 transition cursor-pointer m-0">
-              <input type="file" accept=".json" class="hidden" onchange="importMotoboyOrdersBackup(event)">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-              Importar
-            </label>
+
+            <div class="grid grid-cols-2 gap-2">
+              <button type="button" onclick="exportMotoboyOrdersBackup()" class="w-full py-2 px-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-slate-700 text-[11px] font-bold flex items-center justify-center gap-1 transition cursor-pointer">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                Exportar
+              </button>
+              <label class="w-full py-2 px-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-slate-700 text-[11px] font-bold flex items-center justify-center gap-1 transition cursor-pointer m-0">
+                <input type="file" accept=".json" class="hidden" onchange="importMotoboyOrdersBackup(event)">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                Importar
+              </label>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- Drawer Navigation Tabs (Sticky ao rolar para acesso rápido às seções) -->
-      <div id="drawer-tabs-bar" class="sticky top-0 z-20 flex items-center border-y border-slate-200 bg-slate-50/95 backdrop-blur-xs px-3 overflow-x-auto no-scrollbar shrink-0 text-xs font-semibold shadow-2xs">
-        <button onclick="switchDrawerTab('tab-stores')" id="dtab-btn-stores" class="drawer-tab-btn py-3 px-3 border-b-2 border-ifood-red text-ifood-red font-bold hover:text-slate-900 flex items-center gap-1.5 whitespace-nowrap">
-          <span>🏪 Lojas</span>
-        </button>
-        <button onclick="switchDrawerTab('tab-motoboys')" id="dtab-btn-motoboys" class="drawer-tab-btn py-3 px-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 flex items-center gap-1.5 whitespace-nowrap">
-          <span>🛵 Motoboys</span>
-        </button>
-        <button onclick="switchDrawerTab('tab-advanced')" id="dtab-btn-advanced" class="drawer-tab-btn py-3 px-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 flex items-center gap-1.5 whitespace-nowrap">
-          <span>🔒 Avançado</span>
-        </button>
-      </div>
-
-      <!-- Drawer Body (Tab Contents) -->
-      <div class="p-4 sm:p-5 space-y-5 bg-white flex-1">
-        
-        <!-- TAB 1: CONFIGURAÇÕES DA API IFOOD -->
-        
-        <!-- TAB AVANÇADO (API e Homologação) - Protegido -->
+        <!-- ============================================================== -->
+        <!-- ABA 3: AVANÇADO (API, PREFERÊNCIAS E HOMOLOGAÇÃO) -->
+        <!-- ============================================================== -->
         <div id="tab-advanced" class="drawer-tab-content hidden space-y-4">
           <div id="advanced-auth-container" class="space-y-4">
             <div class="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-center">
@@ -551,164 +566,133 @@
                 <span>🔒 Bloquear</span>
               </button>
             </div>
+
+            <!-- Preferências de Visualização -->
+            <div class="space-y-2.5 p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
+              <span class="text-xs font-bold text-slate-800 block">Preferências de Visualização</span>
+              <div class="space-y-2">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="cfg-hide-stores" onchange="toggleHideElement('stores', this.checked)" class="rounded text-ifood-red focus:ring-ifood-red">
+                  <span class="text-xs text-slate-700 font-medium">Ocultar aba "Lojas" do menu</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="cfg-hide-motoboys" onchange="toggleHideElement('motoboys', this.checked)" class="rounded text-ifood-red focus:ring-ifood-red">
+                  <span class="text-xs text-slate-700 font-medium">Ocultar aba "Motoboys" do menu</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="cfg-hide-card-drivers" onchange="toggleHideElement('cardDrivers', this.checked)" class="rounded text-ifood-red focus:ring-ifood-red">
+                  <span class="text-xs text-slate-700 font-medium">Ocultar botão "Chamar Motoboy iFood" nos pedidos</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="cfg-hide-taxes" onchange="toggleHideElement('taxes', this.checked)" class="rounded text-ifood-red focus:ring-ifood-red">
+                  <span class="text-xs text-slate-700 font-medium">Ocultar seção "Taxas de Entrega"</span>
+                </label>
+              </div>
+            </div>
             
             <div class="space-y-4">
               <h4 class="text-xs font-black text-slate-900 uppercase tracking-wider text-ifood-red">⚙️ API iFood</h4>
 
-          <div class="bg-amber-50 rounded-xl p-3.5 border border-amber-200 text-xs text-amber-900">
-            <span class="font-bold block mb-1">🔐 Credenciais de Acesso iFood Developer</span>
-            Configure seu Client ID e Client Secret para receber pedidos em tempo real.
-          </div>
-
-          <form id="drawer-config-form" class="space-y-3.5">
-            <div>
-              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nome da Loja (Sistema)</label>
-              <input type="text" id="drawer-cfg-store-name" placeholder="ex: Minha Loja" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition bg-white">
-            </div>
-            <div>
-              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Client ID</label>
-              <input type="text" id="drawer-cfg-client-id" placeholder="ex: 93c04258-3fce-4529-b8fb-0991403cf13a" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono focus:ring-2 focus:ring-ifood-red focus:border-ifood-red outline-none transition bg-white">
-            </div>
-
-            <div>
-              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Client Secret</label>
-              <input type="password" id="drawer-cfg-client-secret" placeholder="ex: hjvqfm9lpfk1fe5b971nu01ugzt7uu0ksddp9mis" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono focus:ring-2 focus:ring-ifood-red focus:border-ifood-red outline-none transition bg-white">
-            </div>
-
-            <div>
-              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Merchant ID(s)</label>
-              <textarea id="drawer-cfg-merchant-id" rows="2" placeholder="Cole os IDs das suas lojas separados por vírgula (ex: id_loja_1, id_loja_2)..." class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono focus:ring-2 focus:ring-ifood-red focus:border-ifood-red outline-none transition bg-white"></textarea>
-              <span class="text-[11px] text-slate-500 mt-1 block">Suporta múltiplas lojas separadas por vírgula.</span>
-            </div>
-
-            <div>
-              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">URL da API / Cloudflare Worker (opcional)</label>
-              <input type="text" id="drawer-cfg-custom-url" placeholder="https://ifood-integracao.iranildo-jobs.workers.dev" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono focus:ring-2 focus:ring-ifood-red focus:border-ifood-red outline-none transition bg-white">
-              <span class="text-[11px] text-slate-500 mt-1 block">Padrão para GitHub Pages: <code>https://ifood-integracao.iranildo-jobs.workers.dev</code></span>
-            </div>
-
-            <div class="pt-2 flex flex-col gap-2">
-              <button type="submit" class="w-full py-2.5 bg-ifood-red hover:bg-ifood-darkRed text-white font-bold rounded-xl text-xs shadow-md shadow-red-500/20 transition cursor-pointer">
-                Salvar Credenciais
-              </button>
-              <button type="button" id="drawer-test-api-btn" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs border border-slate-300 transition cursor-pointer flex items-center justify-center gap-1.5">
-                <span>Testar Conexão com iFood</span>
-              </button>
-            </div>
-          </form>
-
-          <div class="pt-4 border-t border-slate-200">
-            <h4 class="text-xs font-bold text-slate-700 mb-2">Status da Conexão</h4>
-            <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs space-y-1.5">
-              <div class="flex items-center justify-between">
-                <span class="text-slate-500">Status API:</span>
-                <span id="api-status-badge" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  <span id="api-status-text">Conectado (Polling)</span>
-                </span>
+              <div class="bg-amber-50 rounded-xl p-3.5 border border-amber-200 text-xs text-amber-900">
+                <span class="font-bold block mb-1">🔐 Credenciais de Acesso iFood Developer</span>
+                Configure seu Client ID e Client Secret para receber pedidos em tempo real.
               </div>
-              <div class="flex items-center justify-between">
-                <span class="text-slate-500">Intervalo Polling:</span>
-                <span class="font-mono text-slate-700 font-semibold">2.5s (SLA &lt; 3s)</span>
+
+              <form id="drawer-config-form" class="space-y-3.5">
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nome da Loja (Sistema)</label>
+                  <input type="text" id="drawer-cfg-store-name" placeholder="ex: Minha Loja" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition bg-white">
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Client ID</label>
+                  <input type="text" id="drawer-cfg-client-id" placeholder="ex: 93c04258-3fce-4529-b8fb-0991403cf13a" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono focus:ring-2 focus:ring-ifood-red focus:border-ifood-red outline-none transition bg-white">
+                </div>
+
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Client Secret</label>
+                  <input type="password" id="drawer-cfg-client-secret" placeholder="ex: hjvqfm9lpfk1fe5b971nu01ugzt7uu0ksddp9mis" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono focus:ring-2 focus:ring-ifood-red focus:border-ifood-red outline-none transition bg-white">
+                </div>
+
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Merchant ID(s)</label>
+                  <textarea id="drawer-cfg-merchant-id" rows="2" placeholder="Cole os IDs das suas lojas separados por vírgula (ex: id_loja_1, id_loja_2)..." class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono focus:ring-2 focus:ring-ifood-red focus:border-ifood-red outline-none transition bg-white"></textarea>
+                  <span class="text-[11px] text-slate-500 mt-1 block">Suporta múltiplas lojas separadas por vírgula.</span>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">URL da API / Cloudflare Worker (opcional)</label>
+                  <input type="text" id="drawer-cfg-custom-url" placeholder="https://ifood-integracao.iranildo-jobs.workers.dev" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono focus:ring-2 focus:ring-ifood-red focus:border-ifood-red outline-none transition bg-white">
+                  <span class="text-[11px] text-slate-500 mt-1 block">Padrão para GitHub Pages: <code>https://ifood-integracao.iranildo-jobs.workers.dev</code></span>
+                </div>
+
+                <div class="pt-2 flex flex-col gap-2">
+                  <button type="submit" class="w-full py-2.5 bg-ifood-red hover:bg-ifood-darkRed text-white font-bold rounded-xl text-xs shadow-md shadow-red-500/20 transition cursor-pointer">
+                    Salvar Credenciais
+                  </button>
+                  <button type="button" id="drawer-test-api-btn" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs border border-slate-300 transition cursor-pointer flex items-center justify-center gap-1.5">
+                    <span>Testar Conexão com iFood</span>
+                  </button>
+                </div>
+              </form>
+
+              <div class="pt-4 border-t border-slate-200">
+                <h4 class="text-xs font-bold text-slate-700 mb-2">Status da Conexão</h4>
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs space-y-1.5">
+                  <div class="flex items-center justify-between">
+                    <span class="text-slate-500">Status API:</span>
+                    <span id="api-status-badge" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      <span id="api-status-text">Conectado (Polling)</span>
+                    </span>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-slate-500">Intervalo Polling:</span>
+                    <span class="font-mono text-slate-700 font-semibold">2.5s (SLA &lt; 3s)</span>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-slate-500">Última checagem:</span>
+                    <span id="store-last-sync" class="font-mono text-slate-700">Agora</span>
+                  </div>
+                </div>
               </div>
-              <div class="flex items-center justify-between">
-                <span class="text-slate-500">Última checagem:</span>
-                <span id="store-last-sync" class="font-mono text-slate-700">Agora</span>
+            </div>
+
+            <!-- Relatório de Homologação e Testes -->
+            <div class="space-y-4 pt-4 border-t border-slate-200">
+              <h4 class="text-xs font-black text-slate-900 uppercase tracking-wider text-emerald-600">📊 Homologação e Testes</h4>
+              
+              <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-emerald-900">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-xs font-bold uppercase tracking-wider">Status Oficial</span>
+                  <span class="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-bold">100% APROVADO</span>
+                </div>
+                <p class="text-xl font-black text-emerald-700">60 / 60 Pontos</p>
+                <p class="text-xs text-emerald-800 mt-1">Todos os 6 cenários validados com sucesso no iFood Developer Portal.</p>
+              </div>
+
+              <div class="bg-slate-900 text-slate-200 rounded-xl p-4 text-xs space-y-2 font-mono">
+                <div class="text-[11px] text-amber-400 font-bold border-b border-slate-800 pb-1">ANÁLISE TOQAN - HOMOLOGAÇÃO</div>
+                <p>✓ Pedido Confirmado: 10/10 (Completo)</p>
+                <p>✓ Pedido Cancelado: 10/10 (Completo)</p>
+                <p>✓ Pedido Despachado Imediato: 10/10 (Completo)</p>
+                <p>✓ Pedido Despachado Agendado: 10/10 (Completo)</p>
+                <p>✓ Validação Heartbeat Firefly: 10/10 (Completo)</p>
+                <p>✓ Validação Eventos Firefly Audit: 10/10 (Completo)</p>
+              </div>
+
+              <div class="text-xs text-slate-500 space-y-1">
+                <p><strong>App:</strong> cia-do-chopp</p>
+                <p><strong>Team ID:</strong> 1f603e08-d759-4275-b73d-d60e34fbf53a</p>
+                <p><strong>Protocolo:</strong> POLLING (SLA &lt; 2.5s)</p>
+              </div>
+
+              <div class="pt-2">
+                <button id="drawer-test-sound-btn" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs border border-slate-300 transition flex items-center justify-center gap-1.5 cursor-pointer">
+                  <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                  <span>Testar Alarme Sonoro</span>
+                </button>
               </div>
             </div>
-          </div>
-        </div>
 
-        <!-- TAB 2: GERENCIAMENTO DE LOJAS (PRÓPRIAS / OPERAÇÃO INTERNA) -->
-        <div id="tab-stores" class="drawer-tab-content space-y-4">
-          <div class="bg-amber-50 rounded-xl p-3 border border-amber-200 text-xs text-amber-900">
-            <span class="font-bold block mb-1">🏪 Lojas do Restaurante (Operação Interna)</span>
-            Cadastre suas lojas físicas ou unidades de entrega. A loja ativa será selecionada automaticamente no lançamento rápido para motoboy.
-          </div>
-
-          <div class="flex items-center justify-between">
-            <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Lojas Cadastradas</h3>
-            <button onclick="addNewStorePrompt()" class="text-xs font-bold text-amber-600 hover:text-amber-800 hover:underline cursor-pointer flex items-center gap-1">
-              <span>+ Nova Loja</span>
-            </button>
-          </div>
-
-          <div id="drawer-stores-list" class="space-y-2.5">
-            <!-- Rendered dynamically -->
-          </div>
-        </div>
-
-        <!-- TAB 3: GESTÃO DE MOTOBOYS & TABELA DE TAXAS -->
-        <div id="tab-motoboys" class="drawer-tab-content hidden space-y-5">
-          <!-- SEÇÃO 1: MOTOBOYS -->
-          <div class="space-y-3">
-            <div class="flex items-center justify-between">
-              <div>
-                <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Equipe de Motoboys</h3>
-                <p class="text-[11px] text-slate-500">Cadastre os entregadores disponíveis</p>
-              </div>
-              <button onclick="addMotoboyPrompt()" class="text-xs font-bold text-amber-600 hover:text-amber-700 hover:underline cursor-pointer">
-                + Novo Motoboy
-              </button>
-            </div>
-
-            <div id="drawer-motoboys-list" class="space-y-2.5">
-              <!-- Rendered dynamically -->
-            </div>
-          </div>
-
-          <!-- SEÇÃO 2: TABELA DE TAXAS DE ENTREGA -->
-          <div id="taxes-section-container" class="space-y-3 pt-4 border-t border-slate-200">
-            <div class="flex items-center justify-between">
-              <div>
-                <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Taxas de Entrega</h3>
-                <p class="text-[11px] text-slate-500">Opções disponíveis para selecionar no lançamento de pedidos</p>
-              </div>
-              <button onclick="addDeliveryFeePrompt()" class="text-xs font-bold text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer">
-                + Nova Taxa
-              </button>
-            </div>
-
-            <div id="drawer-fees-list" class="space-y-2">
-              <!-- Rendered dynamically via JS -->
-            </div>
-          </div>
-        </div>
-
-        <!-- TAB 4: RELATÓRIO DE HOMOLOGAÇÃO -->
-        
-            <hr class="border-slate-200">
-            <h4 class="text-xs font-black text-slate-900 uppercase tracking-wider text-emerald-600">📊 Homologação e Testes</h4>
-            
-          <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-emerald-900">
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-xs font-bold uppercase tracking-wider">Status Oficial</span>
-              <span class="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-bold">100% APROVADO</span>
-            </div>
-            <p class="text-xl font-black text-emerald-700">60 / 60 Pontos</p>
-            <p class="text-xs text-emerald-800 mt-1">Todos os 6 cenários validados com sucesso no iFood Developer Portal.</p>
-          </div>
-
-          <div class="bg-slate-900 text-slate-200 rounded-xl p-4 text-xs space-y-2 font-mono">
-            <div class="text-[11px] text-amber-400 font-bold border-b border-slate-800 pb-1">ANÁLISE TOQAN - HOMOLOGAÇÃO</div>
-            <p>✓ Pedido Confirmado: 10/10 (Completo)</p>
-            <p>✓ Pedido Cancelado: 10/10 (Completo)</p>
-            <p>✓ Pedido Despachado Imediato: 10/10 (Completo)</p>
-            <p>✓ Pedido Despachado Agendado: 10/10 (Completo)</p>
-            <p>✓ Validação Heartbeat Firefly: 10/10 (Completo)</p>
-            <p>✓ Validação Eventos Firefly Audit: 10/10 (Completo)</p>
-          </div>
-
-          <div class="text-xs text-slate-500 space-y-1">
-            <p><strong>App:</strong> cia-do-chopp</p>
-            <p><strong>Team ID:</strong> 1f603e08-d759-4275-b73d-d60e34fbf53a</p>
-            <p><strong>Protocolo:</strong> POLLING (SLA &lt; 2.5s)</p>
-          </div>
-
-          <div class="pt-2">
-            <button id="drawer-test-sound-btn" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs border border-slate-300 transition flex items-center justify-center gap-1.5 cursor-pointer">
-              <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-              <span>Testar Alarme Sonoro</span>
-            </button>
           </div>
         </div>
 
@@ -4202,13 +4186,15 @@
       });
 
       const tabBtnMap = {
-        'tab-config-api': 'dtab-btn-api',
         'tab-stores': 'dtab-btn-stores',
         'tab-motoboys': 'dtab-btn-motoboys',
-        'tab-homolog': 'dtab-btn-homolog'
+        'tab-advanced': 'dtab-btn-advanced',
+        'tab-config-api': 'dtab-btn-advanced',
+        'tab-homolog': 'dtab-btn-advanced'
       };
 
-      const btnId = tabBtnMap[tabId];
+      const resolvedTabId = (tabId === 'tab-config-api' || tabId === 'tab-homolog') ? 'tab-advanced' : tabId;
+      const btnId = tabBtnMap[resolvedTabId] || tabBtnMap[tabId];
       if (btnId) {
         const btn = document.getElementById(btnId);
         if (btn) {
@@ -4226,13 +4212,14 @@
       }
     }
 
-    function openDrawer(tabToOpen = 'tab-config-api') {
+    function openDrawer(tabToOpen = 'tab-stores') {
       const drawer = document.getElementById('side-drawer');
       const backdrop = document.getElementById('drawer-backdrop');
       if (drawer) drawer.classList.remove('translate-x-full');
       if (backdrop) backdrop.classList.remove('hidden');
       document.body.classList.add('overflow-hidden');
-      switchDrawerTab(tabToOpen, false);
+      const resolvedTab = (tabToOpen === 'tab-config-api' || tabToOpen === 'tab-homolog') ? 'tab-advanced' : tabToOpen;
+      switchDrawerTab(resolvedTab, false);
     }
 
     function closeDrawer() {
