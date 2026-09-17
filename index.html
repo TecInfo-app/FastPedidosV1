@@ -514,17 +514,14 @@
 
       <!-- Drawer Navigation Tabs (Sticky ao rolar para acesso rápido às seções) -->
       <div id="drawer-tabs-bar" class="sticky top-0 z-20 flex items-center border-y border-slate-200 bg-slate-50/95 backdrop-blur-xs px-3 overflow-x-auto no-scrollbar shrink-0 text-xs font-semibold shadow-2xs">
-        <button onclick="switchDrawerTab('tab-config-api')" id="dtab-btn-api" class="drawer-tab-btn py-3 px-3 border-b-2 border-ifood-red text-ifood-red font-bold flex items-center gap-1.5 whitespace-nowrap">
-          <span>⚙️ API iFood</span>
-        </button>
-        <button onclick="switchDrawerTab('tab-stores')" id="dtab-btn-stores" class="drawer-tab-btn py-3 px-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 flex items-center gap-1.5 whitespace-nowrap">
+        <button onclick="switchDrawerTab('tab-stores')" id="dtab-btn-stores" class="drawer-tab-btn py-3 px-3 border-b-2 border-ifood-red text-ifood-red font-bold hover:text-slate-900 flex items-center gap-1.5 whitespace-nowrap">
           <span>🏪 Lojas</span>
         </button>
         <button onclick="switchDrawerTab('tab-motoboys')" id="dtab-btn-motoboys" class="drawer-tab-btn py-3 px-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 flex items-center gap-1.5 whitespace-nowrap">
           <span>🛵 Motoboys</span>
         </button>
-        <button onclick="switchDrawerTab('tab-homolog')" id="dtab-btn-homolog" class="drawer-tab-btn py-3 px-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 flex items-center gap-1.5 whitespace-nowrap">
-          <span>📊 Homologação</span>
+        <button onclick="switchDrawerTab('tab-advanced')" id="dtab-btn-advanced" class="drawer-tab-btn py-3 px-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 flex items-center gap-1.5 whitespace-nowrap">
+          <span>🔒 Avançado</span>
         </button>
       </div>
 
@@ -532,7 +529,32 @@
       <div class="p-4 sm:p-5 space-y-5 bg-white flex-1">
         
         <!-- TAB 1: CONFIGURAÇÕES DA API IFOOD -->
-        <div id="tab-config-api" class="drawer-tab-content space-y-4">
+        
+        <!-- TAB AVANÇADO (API e Homologação) - Protegido -->
+        <div id="tab-advanced" class="drawer-tab-content hidden space-y-4">
+          <div id="advanced-auth-container" class="space-y-4">
+            <div class="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-center">
+              <h3 class="text-sm font-black text-slate-900 mb-2">Acesso Restrito</h3>
+              <p class="text-xs text-slate-500 mb-4">Insira a senha de administrador para acessar configurações de API e Homologação.</p>
+              <input type="password" id="advanced-auth-pwd" placeholder="Senha..." class="w-full max-w-[200px] mx-auto px-4 py-2 border border-slate-300 rounded-xl mb-3 focus:ring-2 focus:ring-indigo-500 text-center">
+              <button type="button" onclick="unlockAdvancedTab()" class="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs transition cursor-pointer shadow-sm">
+                Desbloquear
+              </button>
+              <p id="advanced-auth-err" class="text-xs text-red-600 font-semibold mt-2 hidden">Senha incorreta!</p>
+            </div>
+          </div>
+          
+          <div id="advanced-content-container" class="hidden space-y-6">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+              <h3 class="text-sm font-black text-slate-900">Configurações Avançadas</h3>
+              <button type="button" onclick="lockAdvancedTab()" class="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1 font-semibold cursor-pointer">
+                <span>🔒 Bloquear</span>
+              </button>
+            </div>
+            
+            <div class="space-y-4">
+              <h4 class="text-xs font-black text-slate-900 uppercase tracking-wider text-ifood-red">⚙️ API iFood</h4>
+
           <div class="bg-amber-50 rounded-xl p-3.5 border border-amber-200 text-xs text-amber-900">
             <span class="font-bold block mb-1">🔐 Credenciais de Acesso iFood Developer</span>
             Configure seu Client ID e Client Secret para receber pedidos em tempo real.
@@ -597,7 +619,7 @@
         </div>
 
         <!-- TAB 2: GERENCIAMENTO DE LOJAS (PRÓPRIAS / OPERAÇÃO INTERNA) -->
-        <div id="tab-stores" class="drawer-tab-content hidden space-y-4">
+        <div id="tab-stores" class="drawer-tab-content space-y-4">
           <div class="bg-amber-50 rounded-xl p-3 border border-amber-200 text-xs text-amber-900">
             <span class="font-bold block mb-1">🏪 Lojas do Restaurante (Operação Interna)</span>
             Cadastre suas lojas físicas ou unidades de entrega. A loja ativa será selecionada automaticamente no lançamento rápido para motoboy.
@@ -653,7 +675,10 @@
         </div>
 
         <!-- TAB 4: RELATÓRIO DE HOMOLOGAÇÃO -->
-        <div id="tab-homolog" class="drawer-tab-content hidden space-y-4">
+        
+            <hr class="border-slate-200">
+            <h4 class="text-xs font-black text-slate-900 uppercase tracking-wider text-emerald-600">📊 Homologação e Testes</h4>
+            
           <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-emerald-900">
             <div class="flex items-center justify-between mb-2">
               <span class="text-xs font-bold uppercase tracking-wider">Status Oficial</span>
@@ -4137,6 +4162,35 @@
     }
 
     // --- SIDE DRAWER NAVIGATION & SECTIONS ---
+    
+    // Advanced Tab Unlock
+    function unlockAdvancedTab() {
+      const pwdInput = document.getElementById('advanced-auth-pwd');
+      const errText = document.getElementById('advanced-auth-err');
+      const authContainer = document.getElementById('advanced-auth-container');
+      const contentContainer = document.getElementById('advanced-content-container');
+      
+      if (!pwdInput) return;
+      
+      // Senha definida diretamente (pode ser ajustada no código depois)
+      if (pwdInput.value === 'admin123') {
+        if(errText) errText.classList.add('hidden');
+        if(authContainer) authContainer.classList.add('hidden');
+        if(contentContainer) contentContainer.classList.remove('hidden');
+        pwdInput.value = '';
+      } else {
+        if(errText) errText.classList.remove('hidden');
+      }
+    }
+    
+    function lockAdvancedTab() {
+      const authContainer = document.getElementById('advanced-auth-container');
+      const contentContainer = document.getElementById('advanced-content-container');
+      
+      if(authContainer) authContainer.classList.remove('hidden');
+      if(contentContainer) contentContainer.classList.add('hidden');
+    }
+
     function switchDrawerTab(tabId, scrollIntoView = false) {
       document.querySelectorAll('.drawer-tab-content').forEach(el => el.classList.add('hidden'));
       const activeContent = document.getElementById(tabId);
@@ -7290,6 +7344,140 @@
       modal.classList.remove('hidden');
     }
 
+    // RELATÓRIO 3: Extrato Geral de Todos os Motoboys (Botão Extrato Geral)
+    function printAllMotoboysSummary() {
+      const activeOrders = motoboyOrders || [];
+      if (activeOrders.length === 0) {
+        showToast('Sem Pedidos', 'Não há pedidos lançados na planilha para gerar o extrato geral.', 'info');
+        return;
+      }
+
+      // Motoboys com pedidos lançados
+      const motoboysWithOrders = (motoboysList || []).filter(mb => 
+        activeOrders.some(o => o.motoboyId === mb.id)
+      ).map(mb => {
+        const mbOrders = activeOrders.filter(o => o.motoboyId === mb.id);
+        const totalFees = mbOrders.reduce((acc, o) => acc + (Number(o.deliveryFee) || 0), 0);
+        return {
+          id: mb.id,
+          name: mb.name,
+          phone: mb.phone,
+          ordersCount: mbOrders.length,
+          totalFees: totalFees,
+          orders: mbOrders
+        };
+      });
+
+      // Se houver pedidos com motoboy não cadastrado ou removido
+      const unassignedOrders = activeOrders.filter(o => !motoboysList.some(mb => mb.id === o.motoboyId));
+      if (unassignedOrders.length > 0) {
+        const totalFees = unassignedOrders.reduce((acc, o) => acc + (Number(o.deliveryFee) || 0), 0);
+        motoboysWithOrders.push({
+          id: 'outro',
+          name: 'Outros / Sem Motoboy',
+          phone: '',
+          ordersCount: unassignedOrders.length,
+          totalFees: totalFees,
+          orders: unassignedOrders
+        });
+      }
+
+      // Totais por Loja
+      const storeStats = {};
+      activeOrders.forEach(ord => {
+        const sName = ord.storeName || 'Minha Loja';
+        if (!storeStats[sName]) {
+          storeStats[sName] = { count: 0, fees: 0 };
+        }
+        storeStats[sName].count += 1;
+        storeStats[sName].fees += Number(ord.deliveryFee) || 0;
+      });
+
+      const totalGeneralOrders = activeOrders.length;
+      const totalGeneralFees = activeOrders.reduce((acc, o) => acc + (Number(o.deliveryFee) || 0), 0);
+      const printDateStr = getFormattedPrintDate();
+
+      const receiptEl = document.getElementById('printable-receipt-content');
+      const titleEl = document.getElementById('print-modal-title');
+      const modal = document.getElementById('modal-print-receipt');
+      if (!receiptEl || !modal) return;
+
+      if (titleEl) titleEl.innerText = 'Extrato Geral de Entregadores';
+
+      receiptEl.innerHTML = `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #000; text-align: left; padding: 4px;">
+          <div style="text-align: center; margin-bottom: 14px;">
+            <h2 style="font-size: 18px; font-weight: 900; margin: 0 0 4px 0; color: #0f172a; text-transform: uppercase;">Extrato Geral do Dia</h2>
+            <h3 style="font-size: 13px; font-weight: 800; margin: 0 0 4px 0; color: #334155;">Fechamento de Entregas & Taxas</h3>
+            <p style="font-size: 11px; color: #64748b; margin: 0;">Impressão: ${printDateStr}</p>
+          </div>
+
+          <div style="border-top: 2.5px solid #0f172a; margin: 10px 0;"></div>
+
+          <div style="margin-bottom: 12px;">
+            <div style="font-size: 12px; font-weight: 900; text-transform: uppercase; color: #0f172a; margin-bottom: 8px; letter-spacing: 0.5px;">
+              🛵 Resumo por Entregador:
+            </div>
+            ${motoboysWithOrders.map(mb => `
+              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 6px 0; border-bottom: 1px dashed #e2e8f0;">
+                <div>
+                  <span style="font-weight: 800; color: #0f172a;">${escapeHtml(mb.name)}</span>
+                  <span style="font-size: 11px; color: #64748b; margin-left: 4px;">(${mb.ordersCount} ped)</span>
+                </div>
+                <span style="font-weight: 900; font-family: monospace; font-size: 13px; color: #0f172a;">
+                  ${formatCurrency(mb.totalFees)}
+                </span>
+              </div>
+            `).join('')}
+          </div>
+
+          <div style="border-top: 1.5px solid #cbd5e1; margin: 12px 0;"></div>
+
+          <div style="margin-bottom: 12px;">
+            <div style="font-size: 12px; font-weight: 900; text-transform: uppercase; color: #0f172a; margin-bottom: 8px; letter-spacing: 0.5px;">
+              🏪 Resumo por Loja:
+            </div>
+            ${Object.keys(storeStats).map(sName => `
+              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 4px 0;">
+                <div>
+                  <span style="font-weight: 700; color: #1e293b;">${escapeHtml(sName)}</span>
+                  <span style="font-size: 10px; color: #64748b; margin-left: 4px;">(${storeStats[sName].count} ped)</span>
+                </div>
+                <span style="font-weight: 800; font-family: monospace; font-size: 12px; color: #1e293b;">
+                  ${formatCurrency(storeStats[sName].fees)}
+                </span>
+              </div>
+            `).join('')}
+          </div>
+
+          <div style="border-top: 2.5px solid #0f172a; margin: 12px 0;"></div>
+
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; margin: 10px 0;">
+            <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 4px;">
+              <span>Total de Entregadores:</span>
+              <span style="font-weight: 800;">${motoboysWithOrders.length}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 4px;">
+              <span>Total Geral de Pedidos:</span>
+              <span style="font-weight: 800;">${totalGeneralOrders}</span>
+            </div>
+            <div style="border-top: 1px dashed #cbd5e1; margin: 6px 0;"></div>
+            <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 900; color: #0f172a;">
+              <span>TOTAL DE TAXAS:</span>
+              <span style="font-family: monospace; font-size: 15px; color: #0f172a;">${formatCurrency(totalGeneralFees)}</span>
+            </div>
+          </div>
+
+          <div style="margin-top: 36px; text-align: center;">
+            <div style="border-top: 1.5px solid #000; width: 80%; margin: 0 auto 8px auto;"></div>
+            <div style="font-size: 11px; font-weight: 700; color: #334155;">Assinatura do Caixa / Responsável</div>
+          </div>
+        </div>
+      `;
+
+      modal.classList.remove('hidden');
+    }
+
     function closePrintModal() {
       const modal = document.getElementById('modal-print-receipt');
       if (modal) modal.classList.add('hidden');
@@ -8778,3 +8966,7 @@
   </script>
 </body>
 </html>
+
+          </div>
+        </div>
+        <!-- /Drawer Body -->undefined
