@@ -1219,10 +1219,23 @@
           <input 
             type="text" 
             id="create-store-name" 
-            placeholder="Ex: Loja 5 - Chopp Express Sul" 
+            placeholder="Ex: Cia do Chopp ou Loja 2" 
             class="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
             required
           />
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-black text-slate-700 uppercase tracking-wider mb-1.5">
+            MERCHANT ID NO IFOOD (OPCIONAL)
+          </label>
+          <input 
+            type="text" 
+            id="create-store-merchant-id" 
+            placeholder="Ex: 8cf5796b-67a3-4a0b-801b-..." 
+            class="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+          />
+          <span class="text-[10px] text-slate-400 mt-1 block">Se fornecido, os pedidos desta loja serão sincronizados simultaneamente.</span>
         </div>
 
         <button 
@@ -1497,7 +1510,52 @@
     </div>
   </div>
 
-  <!-- MODAL 10: CONFIRMAR ENTREGA COM CÓDIGO DE 4 DÍGITOS (USADO NO PORTAL E NO CAIXA) -->
+  <!-- MODAL 9.5: BUSCAR PEDIDO ESPECÍFICO IFOOD POR ID (IMPORTAÇÃO MANUAL / FORÇADA) -->
+  <div id="modal-fetch-order" style="z-index: 99995;" class="fixed inset-0 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs hidden animate-fade-in" onclick="if(event.target === this) closeFetchOrderModal()">
+    <div class="bg-white rounded-3xl max-w-md w-full shadow-2xl p-6 relative border border-slate-100">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-sm font-bold shadow-2xs">
+            🔍
+          </div>
+          <div>
+            <h3 class="text-sm font-black text-slate-900">Buscar Pedido iFood</h3>
+            <p class="text-[10px] text-slate-500 font-medium">Importar pedido diretamente pelo ID do iFood</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeFetchOrderModal()" class="text-slate-400 hover:text-slate-700 text-xl font-bold cursor-pointer p-1">
+          ✕
+        </button>
+      </div>
+
+      <form onsubmit="submitFetchOrderById(event)" class="space-y-4">
+        <div>
+          <label class="block text-[11px] font-black text-slate-700 uppercase tracking-wider mb-1.5">
+            ID OU UUID DO PEDIDO IFOOD
+          </label>
+          <input 
+            type="text" 
+            id="fetch-order-id-input" 
+            placeholder="Ex: a1b2c3d4-e5f6-7890-abcd-ef1234567890" 
+            class="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            required
+          />
+          <span class="text-[10px] text-slate-400 mt-1 block">Cole o ID completo do pedido encontrado no Gestor de Pedidos do iFood.</span>
+        </div>
+
+        <div id="fetch-order-status-msg" class="text-xs font-semibold text-slate-600 hidden p-2.5 bg-slate-50 rounded-xl border border-slate-100"></div>
+
+        <button 
+          type="submit" 
+          id="btn-submit-fetch-order"
+          class="w-full py-3 bg-amber-500 hover:bg-amber-600 active:scale-98 text-slate-950 font-black text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2 shadow-md transition cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+          <span>Buscar e Adicionar ao Painel</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
   <div id="modal-confirm-delivery-code" style="z-index: 99999;" class="fixed inset-0 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm hidden animate-fade-in" onclick="if(event.target === this) closeDeliveryCodeModal()">
     <div class="bg-slate-900 border border-slate-700/80 rounded-3xl max-w-md w-full shadow-2xl p-6 sm:p-7 relative text-slate-100 animate-slide-down">
       <input type="hidden" id="code-modal-order-id" />
@@ -2188,11 +2246,19 @@
             </div>
 
             <!-- Manual Sync API button -->
-            <button id="manual-sync-btn" title="Buscar novos pedidos iFood agora" class="p-2 text-slate-600 hover:text-ifood-red hover:bg-red-50 rounded-lg transition border border-slate-200 cursor-pointer flex items-center gap-1 text-xs font-semibold">
+            <button id="manual-sync-btn" title="Buscar novos pedidos de todas as lojas iFood agora" class="p-2 text-slate-600 hover:text-ifood-red hover:bg-red-50 rounded-lg transition border border-slate-200 cursor-pointer flex items-center gap-1 text-xs font-semibold">
               <svg id="sync-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
               </svg>
               <span class="hidden sm:inline">Polling iFood</span>
+            </button>
+
+            <!-- Direct Order Fetch by ID -->
+            <button id="btn-open-fetch-modal" onclick="openFetchOrderModal()" title="Importar pedido específico por ID ou UUID do iFood" class="p-2 text-slate-600 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition border border-slate-200 cursor-pointer flex items-center gap-1 text-xs font-semibold">
+              <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+              </svg>
+              <span class="hidden sm:inline">Puxar Pedido</span>
             </button>
 
             <!-- Clear all orders -->
@@ -3263,14 +3329,27 @@
 
       try {
         const activeStore = storesList.find(s => s.active);
-        const merchantIdToUse = (activeStore && activeStore.merchantId) ? activeStore.merchantId : apiCredentials.merchantId;
+
+        // Gather all known merchant IDs from credentials and all registered stores
+        const merchantIdSet = new Set();
+        if (apiCredentials.merchantId && apiCredentials.merchantId.trim() !== '') {
+          apiCredentials.merchantId.split(',').map(s => s.trim()).filter(Boolean).forEach(id => merchantIdSet.add(id));
+        }
+        if (Array.isArray(storesList)) {
+          storesList.forEach(s => {
+            if (s.merchantId && s.merchantId.trim()) {
+              s.merchantId.split(',').map(x => x.trim()).filter(Boolean).forEach(id => merchantIdSet.add(id));
+            }
+          });
+        }
+        const combinedMerchantIds = Array.from(merchantIdSet).join(',');
 
         const response = await fetch(`${getApiBaseUrl()}/api/ifood/poll`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             ...apiCredentials,
-            merchantId: merchantIdToUse,
+            merchantId: combinedMerchantIds || undefined,
             autoConfirm: true // Enables automatic confirmation for Homologation SLA < 3s
           })
         });
@@ -3292,17 +3371,27 @@
           let addedCount = 0;
           for (const newOrd of data.newOrders) {
             // Correção de Fuso Horário (Bypass Cloudflare/Worker UTC bugs)
-            // Recalcula o horário baseado no timestamp local do dispositivo do usuário
             if (newOrd.timestamp) {
               newOrd.createdAt = new Date(newOrd.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
             } else {
               newOrd.createdAt = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
             }
 
-            // Tag with active store name if not already set
-            if (!newOrd.storeName && activeStore) {
-              newOrd.storeName = activeStore.name;
+            // Match with configured store by merchantId or storeName
+            let matchedStore = null;
+            if (newOrd.merchantId && Array.isArray(storesList)) {
+              matchedStore = storesList.find(s => s.merchantId && (s.merchantId.includes(newOrd.merchantId) || newOrd.merchantId.includes(s.merchantId)));
             }
+            if (!matchedStore && newOrd.storeName && Array.isArray(storesList)) {
+              matchedStore = storesList.find(s => s.name && s.name.toLowerCase() === newOrd.storeName.toLowerCase());
+            }
+
+            if (matchedStore) {
+              newOrd.storeName = matchedStore.name;
+            } else if (!newOrd.storeName) {
+              newOrd.storeName = (activeStore && activeStore.name) || apiCredentials.storeName || 'Loja Principal';
+            }
+
             // Auto-confirmação imediata: todos os pedidos do iFood entram direto como 'confirmado'
             if (newOrd.status === 'novo') {
               newOrd.status = 'confirmado';
@@ -3318,17 +3407,28 @@
                 }).catch(() => {});
               }
             }
-            // Prevent duplicate entries
-            if (!orders.some(o => o.id === newOrd.id || o.ifoodOrderId === newOrd.ifoodOrderId)) {
+
+            // Check if order already exists
+            const existingIdx = orders.findIndex(o => o.id === newOrd.id || o.ifoodOrderId === newOrd.ifoodOrderId);
+            if (existingIdx === -1) {
               orders.unshift(newOrd);
               addedCount++;
+            } else {
+              // Update existing order data if necessary
+              const existing = orders[existingIdx];
+              if (existing.status !== 'concluido' && existing.status !== 'cancelado') {
+                if (newOrd.status && newOrd.status !== existing.status) {
+                  existing.status = newOrd.status;
+                  updatedAny = true;
+                }
+              }
             }
           }
 
           if (addedCount > 0) {
             updatedAny = true;
             playDoubleBeepAlarm();
-            showToast('📦 Novo Pedido do iFood Real!', `${addedCount} novo(s) pedido(s) recebido(s) e confirmado(s) via API iFood!`, 'ifood');
+            showToast('📦 Novo Pedido do iFood Real!', `${addedCount} novo(s) pedido(s) recebido(s) de todas as lojas conectadas!`, 'ifood');
           }
         }
 
@@ -4374,17 +4474,21 @@
           ? '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path></svg>'
           : '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>';
         
+        const storeSubtext = store.merchantId 
+          ? `<span class="text-[10px] text-amber-700 font-mono flex items-center gap-1 font-semibold truncate max-w-[170px]"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span> ${store.merchantId}</span>`
+          : '<p class="text-[11px] text-slate-500 font-sans">Loja própria da operação interna</p>';
+
         return `
         <div class="p-3 bg-white border ${store.active ? 'border-amber-400 ring-1 ring-amber-400' : 'border-slate-200'} rounded-xl flex items-center justify-between gap-2 shadow-2xs transition ${opacityClass}">
-          <div class="space-y-0.5">
+          <div class="space-y-0.5 min-w-0">
             <div class="flex items-center gap-1.5">
-              <span class="text-xs font-bold text-slate-900">${store.name}</span>
-              ${store.active ? '<span class="text-[9px] bg-amber-500 text-slate-950 font-black px-1.5 py-0.5 rounded">ATIVA</span>' : ''}
-              ${store.isHidden ? '<span class="text-[9px] bg-slate-200 text-slate-600 font-bold px-1.5 py-0.5 rounded">OCULTA</span>' : ''}
+              <span class="text-xs font-bold text-slate-900 truncate">${escapeHtml(store.name)}</span>
+              ${store.active ? '<span class="text-[9px] bg-amber-500 text-slate-950 font-black px-1.5 py-0.5 rounded shrink-0">ATIVA</span>' : ''}
+              ${store.isHidden ? '<span class="text-[9px] bg-slate-200 text-slate-600 font-bold px-1.5 py-0.5 rounded shrink-0">OCULTA</span>' : ''}
             </div>
-            <p class="text-[11px] text-slate-500 font-sans">Loja própria da operação interna</p>
+            ${storeSubtext}
           </div>
-          <div class="flex items-center gap-1.5">
+          <div class="flex items-center gap-1.5 shrink-0">
             <button onclick="toggleStoreVisibility('${store.id}')" class="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition cursor-pointer" title="${store.isHidden ? 'Mostrar Loja' : 'Ocultar Loja'}">
               ${eyeIcon}
             </button>
@@ -4409,8 +4513,10 @@
     function openCreateStoreModal() {
       const modal = document.getElementById('modal-create-store');
       const input = document.getElementById('create-store-name');
+      const midInput = document.getElementById('create-store-merchant-id');
       if (!modal) return;
       if (input) input.value = '';
+      if (midInput) midInput.value = '';
       modal.classList.remove('hidden');
       setTimeout(() => { if (input) input.focus(); }, 80);
     }
@@ -4423,13 +4529,16 @@
     function submitCreateStore(e) {
       if (e) e.preventDefault();
       const input = document.getElementById('create-store-name');
+      const midInput = document.getElementById('create-store-merchant-id');
       const name = input ? input.value.trim() : '';
+      const mid = midInput ? midInput.value.trim() : '';
       if (!name) return;
 
       const newId = 'store-' + Date.now();
       storesList.push({
         id: newId,
         name: name,
+        merchantId: mid || undefined,
         active: false
       });
       saveStores();
@@ -4461,6 +4570,127 @@
           showToast('Loja Removida', 'A loja foi excluída.', 'info');
         }
       );
+    }
+
+    // --- BUSCA DIRETA DE PEDIDO IFOOD POR ID/UUID ---
+    function openFetchOrderModal() {
+      const modal = document.getElementById('modal-fetch-order');
+      const input = document.getElementById('fetch-order-id-input');
+      const msg = document.getElementById('fetch-order-status-msg');
+      if (!modal) return;
+      if (input) input.value = '';
+      if (msg) {
+        msg.classList.add('hidden');
+        msg.textContent = '';
+      }
+      modal.classList.remove('hidden');
+      setTimeout(() => { if (input) input.focus(); }, 80);
+    }
+
+    function closeFetchOrderModal() {
+      const modal = document.getElementById('modal-fetch-order');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    async function submitFetchOrderById(e) {
+      if (e) e.preventDefault();
+      const input = document.getElementById('fetch-order-id-input');
+      const msg = document.getElementById('fetch-order-status-msg');
+      const btn = document.getElementById('btn-submit-fetch-order');
+      const orderIdVal = input ? input.value.trim() : '';
+
+      if (!orderIdVal) {
+        showToast('ID Necessário', 'Informe o ID ou UUID do pedido iFood.', 'warning');
+        return;
+      }
+
+      if (!apiCredentials.clientId || !apiCredentials.clientSecret) {
+        showToast('Credenciais Ausentes', 'Configure o Client ID e Client Secret da API iFood primeiro.', 'warning');
+        openDrawer('tab-config-api');
+        return;
+      }
+
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span>Buscando no iFood...</span>`;
+      }
+      if (msg) {
+        msg.classList.remove('hidden');
+        msg.textContent = 'Consultando pedido nos servidores do iFood...';
+      }
+
+      try {
+        const res = await fetch(`${getApiBaseUrl()}/api/ifood/fetch-order-by-id`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: orderIdVal,
+            clientId: apiCredentials.clientId,
+            clientSecret: apiCredentials.clientSecret
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success || !data.order) {
+          throw new Error(data.message || 'Pedido não encontrado ou credenciais inválidas.');
+        }
+
+        const newOrd = data.order;
+
+        // Formata horário local
+        if (newOrd.timestamp) {
+          newOrd.createdAt = new Date(newOrd.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        } else {
+          newOrd.createdAt = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // Match store name
+        const activeStore = storesList.find(s => s.active);
+        let matchedStore = null;
+        if (newOrd.merchantId && Array.isArray(storesList)) {
+          matchedStore = storesList.find(s => s.merchantId && (s.merchantId.includes(newOrd.merchantId) || newOrd.merchantId.includes(s.merchantId)));
+        }
+        if (!matchedStore && newOrd.storeName && Array.isArray(storesList)) {
+          matchedStore = storesList.find(s => s.name && s.name.toLowerCase() === newOrd.storeName.toLowerCase());
+        }
+
+        if (matchedStore) {
+          newOrd.storeName = matchedStore.name;
+        } else if (!newOrd.storeName) {
+          newOrd.storeName = (activeStore && activeStore.name) || apiCredentials.storeName || 'Loja Principal';
+        }
+
+        // Auto-confirmação se novo
+        if (newOrd.status === 'novo') {
+          newOrd.status = 'confirmado';
+        }
+
+        // Remove duplicado ou insere
+        const existIndex = orders.findIndex(o => o.id === newOrd.id || o.ifoodOrderId === newOrd.ifoodOrderId);
+        if (existIndex !== -1) {
+          orders[existIndex] = { ...orders[existIndex], ...newOrd };
+          showToast('Pedido Atualizado', `O pedido #${newOrd.id} foi sincronizado e atualizado.`, 'success');
+        } else {
+          orders.unshift(newOrd);
+          showToast('Pedido Importado!', `Pedido #${newOrd.id} adicionado ao painel com sucesso!`, 'ifood');
+        }
+
+        saveOrders();
+        renderKanban();
+        closeFetchOrderModal();
+
+      } catch (err) {
+        if (msg) {
+          msg.textContent = 'Erro: ' + (err.message || 'Falha ao buscar pedido.');
+          msg.classList.remove('hidden');
+        }
+        showToast('Erro ao Buscar Pedido', err.message || 'Verifique o ID digitado.', 'warning');
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg><span>Buscar e Adicionar ao Painel</span>`;
+        }
+      }
     }
 
     // --- DELIVERY FEES MANAGEMENT (DRAWER TAB 3 & SELECT) ---
