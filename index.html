@@ -3453,12 +3453,14 @@
               }
 
               if (upd.newStatus && target.status !== upd.newStatus) {
-                // Previne regressão se o pedido já estiver concluído no sistema local
+                // Previne regressão ou saltos indevidos
                 const isLocalConcluded = target.status === 'concluido';
                 const isLocalDispatched = target.status === 'despachado';
                 const isIncomingConfirm = upd.newStatus === 'confirmado' || upd.newStatus === 'novo';
+                // Previne que pedido em preparo/confirmado pule direto para concluído sem passar por despacho
+                const isDirectJumpToConcluded = (target.status === 'confirmado' || target.status === 'novo' || target.status === 'preparando') && upd.newStatus === 'concluido';
 
-                if (!(isLocalConcluded && isIncomingConfirm) && !(isLocalDispatched && isIncomingConfirm)) {
+                if (!(isLocalConcluded && isIncomingConfirm) && !(isLocalDispatched && isIncomingConfirm) && !isDirectJumpToConcluded) {
                   target.status = upd.newStatus;
                   updatedAny = true;
                   showToast('Evento iFood', `Pedido ${target.id} atualizado para '${upd.newStatus}'.`, 'info');

@@ -384,6 +384,8 @@ export default {
         ];
 
         const CANCEL_CODES = ['CAN', 'CANCELLED', 'CANCELLATION_REQUESTED', 'CAR'];
+        const DISPATCH_CODES = ['DSP', 'DISPATCHED'];
+        const CONCLUDED_CODES = ['CON', 'CONCLUDED', 'DELIVERED'];
         const DRIVER_ASSIGNED_CODES = ['COLLECT_READY', 'DRIVER_ASSIGNED', 'DRIVER_DISPATCHED', 'ASSIGN_DRIVER'];
         const DRIVER_ARRIVED_CODES = ['DRIVER_ARRIVED_AT_MERCHANT', 'ARRIVED_AT_ORIGIN'];
 
@@ -392,20 +394,19 @@ export default {
             ackEvents.push({ id: evt.id });
             const code = String(evt.code || '').toUpperCase();
             const fullCode = String(evt.fullCode || '').toUpperCase();
-            const allCodes = `${code} ${fullCode}`;
             const orderId = evt.orderId || evt.correlationId || evt.id;
 
-            if (DRIVER_ASSIGNED_CODES.some(c => allCodes.includes(c))) {
+            if (DRIVER_ASSIGNED_CODES.includes(code) || DRIVER_ASSIGNED_CODES.includes(fullCode)) {
               updatedEvents.push({ 
                 ifoodOrderId: orderId, 
                 driverEvent: 'ASSIGNED', 
                 driverName: evt.metadata?.driverName || 'Entregador iFood' 
               });
-            } else if (DRIVER_ARRIVED_CODES.some(c => allCodes.includes(c))) {
+            } else if (DRIVER_ARRIVED_CODES.includes(code) || DRIVER_ARRIVED_CODES.includes(fullCode)) {
               updatedEvents.push({ ifoodOrderId: orderId, driverEvent: 'ARRIVED' });
             }
 
-            const shouldFetchOrder = FETCH_ORDER_CODES.some(c => allCodes.includes(c));
+            const shouldFetchOrder = FETCH_ORDER_CODES.includes(code) || FETCH_ORDER_CODES.includes(fullCode);
 
             if (shouldFetchOrder && orderId) {
               try {
@@ -431,14 +432,15 @@ export default {
               } catch (oErr) {
                 console.error('Erro ao buscar detalhes do pedido iFood:', orderId, oErr);
               }
-            }
-
-            if (CANCEL_CODES.some(c => allCodes.includes(c))) {
-              updatedEvents.push({ ifoodOrderId: orderId, newStatus: 'cancelado' });
-            } else if (allCodes.includes('DSP') || allCodes.includes('DISPATCH')) {
-              updatedEvents.push({ ifoodOrderId: orderId, newStatus: 'despachado' });
-            } else if (allCodes.includes('CON') || allCodes.includes('DELIVERED')) {
-              updatedEvents.push({ ifoodOrderId: orderId, newStatus: 'concluido' });
+            } else {
+              // Somente processa como transição de status se não foi um evento de novo pedido/criação
+              if (CANCEL_CODES.includes(code) || CANCEL_CODES.includes(fullCode)) {
+                updatedEvents.push({ ifoodOrderId: orderId, newStatus: 'cancelado' });
+              } else if (DISPATCH_CODES.includes(code) || DISPATCH_CODES.includes(fullCode)) {
+                updatedEvents.push({ ifoodOrderId: orderId, newStatus: 'despachado' });
+              } else if (CONCLUDED_CODES.includes(code) || CONCLUDED_CODES.includes(fullCode)) {
+                updatedEvents.push({ ifoodOrderId: orderId, newStatus: 'concluido' });
+              }
             }
           }
 
