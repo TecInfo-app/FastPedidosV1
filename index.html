@@ -3342,7 +3342,8 @@
             }
           });
         }
-        const combinedMerchantIds = Array.from(merchantIdSet).join(',');
+        const merchantIdArray = Array.from(merchantIdSet);
+        const combinedMerchantIds = merchantIdArray.join(',');
 
         const response = await fetch(`${getApiBaseUrl()}/api/ifood/poll`, {
           method: 'POST',
@@ -3350,6 +3351,8 @@
           body: JSON.stringify({
             ...apiCredentials,
             merchantId: combinedMerchantIds || undefined,
+            merchantIds: combinedMerchantIds || undefined,
+            allMerchantIds: merchantIdArray.length > 0 ? merchantIdArray : undefined,
             autoConfirm: true // Enables automatic confirmation for Homologation SLA < 3s
           })
         });
