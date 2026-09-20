@@ -1016,6 +1016,40 @@
       }
     }
 
+    // Extrai e formata com precisão o Localizador iFood de 8 dígitos do pedido
+    function getMotoboyOrderLocator(ord) {
+      if (!ord) return '';
+      let loc = ord.locator || ord.phoneLocalizer || ord.deliveryLocator || ord.orderLocator || ord.localizer || '';
+      if (!loc && ord.customerPhone) {
+        const m = String(ord.customerPhone).match(/(?:ID|Loc|Localizador)?[:\s]*([0-9]{4}\s?[0-9]{4}|[0-9]{8})/i);
+        if (m) loc = m[1];
+      }
+      const cleanDigits = String(loc || '').replace(/\D/g, '');
+      if (cleanDigits.length === 8) {
+        return `${cleanDigits.slice(0, 4)} ${cleanDigits.slice(4)}`;
+      }
+      return loc ? String(loc).trim() : '';
+    }
+    window.getMotoboyOrderLocator = getMotoboyOrderLocator;
+
+    function copyOrderLocator(loc) {
+      if (!loc || loc === 'Ver na Comanda' || loc === 'Não informado') {
+        showToast('Aviso', 'Localizador não disponível para este pedido.', 'warning');
+        return;
+      }
+      const raw = String(loc).replace(/\s+/g, '');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(raw).then(() => {
+          showToast('Localizador Copiado!', `Localizador ${loc} copiado com sucesso!`, 'success');
+        }).catch(() => {
+          prompt('Copie o Localizador de 8 dígitos do iFood:', raw);
+        });
+      } else {
+        prompt('Copie o Localizador de 8 dígitos do iFood:', raw);
+      }
+    }
+    window.copyOrderLocator = copyOrderLocator;
+
     // Renderização do Dashboard do Motoboy
     function renderPortalDashboard(motoboyId) {
       if (!motoboyId) {
@@ -1145,6 +1179,28 @@
                       </div>
                     </div>
                   ` : ''}
+
+                  ${(() => {
+                    const loc = getMotoboyOrderLocator(ord);
+                    if (!loc) return '';
+                    return `
+                      <div class="mt-2 flex items-center justify-between gap-2 p-2.5 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-300">
+                        <div class="flex items-center gap-2 min-w-0">
+                          <span class="text-base">🔑</span>
+                          <div>
+                            <span class="text-[10px] font-bold text-amber-400 uppercase tracking-wider block leading-none">Localizador iFood</span>
+                            <span class="font-mono font-black text-xs sm:text-sm text-amber-200 tracking-widest">${escapeHtml(loc)}</span>
+                          </div>
+                        </div>
+                        <button 
+                          type="button" 
+                          onclick="copyOrderLocator('${escapeHtml(loc)}')" 
+                          class="px-2.5 py-1 bg-amber-500/25 hover:bg-amber-500/40 active:scale-95 text-amber-200 rounded-xl text-[10px] font-black border border-amber-400/40 transition cursor-pointer flex items-center gap-1 shrink-0">
+                          <span>📋 Copiar</span>
+                        </button>
+                      </div>
+                    `;
+                  })()}
                 </div>
 
                 <div class="pt-1">
@@ -1224,7 +1280,14 @@
       const orderId = orderIdInput ? orderIdInput.value : '';
       activeEmbeddedOrderId = orderId;
 
-      copyIFoodLocator();
+      const ord = (motoboyOrders || []).find(o => o.id === orderId);
+      if (ord) {
+        currentModalIFoodLocator = getMotoboyOrderLocator(ord);
+      }
+
+      if (currentModalIFoodLocator) {
+        copyIFoodLocator();
+      }
 
       const modal = document.getElementById('modal-ifood-embedded');
       const locDisplay = document.getElementById('embedded-ifood-loc-display');
@@ -1281,11 +1344,12 @@
     function openIFoodConfirmationDirect(orderId) {
       const ord = (motoboyOrders || []).find(o => o.id === orderId);
       if (!ord) return;
-      const loc = ord.locator || ord.deliveryLocator || ord.orderLocator || '';
-      currentModalIFoodLocator = loc ? loc.replace(/(\d{4})(\d{4})/, '$1 $2') : '';
+      currentModalIFoodLocator = getMotoboyOrderLocator(ord);
       
       activeEmbeddedOrderId = orderId;
-      copyIFoodLocator();
+      if (currentModalIFoodLocator) {
+        copyIFoodLocator();
+      }
 
       const modal = document.getElementById('modal-ifood-embedded');
       const locDisplay = document.getElementById('embedded-ifood-loc-display');
@@ -1300,7 +1364,9 @@
       }
 
       if (modal) modal.classList.remove('hidden');
-      showToast('Localizador Copiado!', `Localizador ${currentModalIFoodLocator || ''} copiado! Cole abaixo.`, 'info');
+      if (currentModalIFoodLocator) {
+        showToast('Localizador Copiado!', `Localizador ${currentModalIFoodLocator} copiado! Cole abaixo.`, 'info');
+      }
     }
     window.openIFoodConfirmationDirect = openIFoodConfirmationDirect;
 
@@ -1331,8 +1397,7 @@
 
       // Identifica se é pedido do iFood ou Avulso
       const isIFood = ord.isIFood || (ord.orderNumber && String(ord.orderNumber).length >= 4);
-      const rawLoc = ord.locator || ord.deliveryLocator || ord.orderLocator || (ord.id ? String(ord.id).replace(/\D/g, '').slice(-8) : '');
-      currentModalIFoodLocator = rawLoc ? rawLoc.replace(/(\d{4})(\d{4})/, '$1 $2') : '';
+      currentModalIFoodLocator = getMotoboyOrderLocator(ord);
 
       if (isIFood && ifoodSection) {
         ifoodSection.classList.remove('hidden');
