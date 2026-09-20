@@ -213,7 +213,20 @@ app.get('/api/ifood/merchants-status', async (req, res) => {
 // Helper to format iFood raw order to app order structure
 function formatIFoodOrder(rawOrder: any, defaultStatus = 'confirmado') {
   const customerName = rawOrder.customer?.name || rawOrder.customer?.firstName || 'Cliente iFood';
-  const customerPhone = rawOrder.customer?.phone?.number || rawOrder.customer?.phone || '';
+
+  // Extração 100% dinâmica do Telefone e do ID Localizador exclusivo do iFood
+  const rawPhone = rawOrder.customer?.phone;
+  const phoneNumber = (typeof rawPhone === 'object' ? (rawPhone?.number || '') : String(rawPhone || '')).trim();
+  const rawLocalizer = (typeof rawPhone === 'object' ? (rawPhone?.localizer || '') : '') || rawOrder.delivery?.localizer || rawOrder.localizer || '';
+  const cleanLocalizer = String(rawLocalizer || '').trim();
+  const formattedLocalizer = cleanLocalizer.length === 8 
+    ? `${cleanLocalizer.slice(0, 4)} ${cleanLocalizer.slice(4)}` 
+    : cleanLocalizer;
+
+  let customerPhone = phoneNumber;
+  if (formattedLocalizer) {
+    customerPhone = phoneNumber ? `${phoneNumber} ID: ${formattedLocalizer}` : `ID: ${formattedLocalizer}`;
+  }
 
   // Extract Full Delivery Address
   let customerAddress = '';
@@ -271,6 +284,8 @@ function formatIFoodOrder(rawOrder: any, defaultStatus = 'confirmado') {
     storeName: rawOrder.merchant?.name || '',
     customerName,
     customerPhone,
+    phoneLocalizer: formattedLocalizer,
+    phoneNumberOnly: phoneNumber,
     customerAddress: customerAddress || 'Endereço não informado',
     deliveryMode,
     items: items.length > 0 ? items : [{ name: 'Pedido iFood', price: totalValue || 25.0, quantity: 1, subtotal: totalValue || 25.0 }],

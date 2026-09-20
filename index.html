@@ -3320,9 +3320,13 @@
       showToast('Novo Pedido iFood Simulado!', `${orderId} de ${customer} (${formatCurrency(totalValue)})`, 'ifood');
     }
 
+    let isPollingIFood = false;
+
     // --- REAL IFOOD API POLLING ---
     async function pollIFoodOrders() {
       if (!apiCredentials.clientId || !apiCredentials.clientSecret) return;
+      if (isPollingIFood) return;
+      isPollingIFood = true;
 
       const syncIcon = document.getElementById('sync-icon');
       if (syncIcon) syncIcon.classList.add('animate-spin');
@@ -3330,18 +3334,19 @@
       try {
         const activeStore = storesList.find(s => s.active);
 
-        // Gather all known merchant IDs from credentials and all registered stores
+        // Gather all known merchant IDs from credentials and all registered stores with safe regex extraction
         const merchantIdSet = new Set();
-        if (apiCredentials.merchantId && apiCredentials.merchantId.trim() !== '') {
-          apiCredentials.merchantId.split(',').map(s => s.trim()).filter(Boolean).forEach(id => merchantIdSet.add(id));
+        const rawSources = [
+          apiCredentials.merchantId,
+          ...(Array.isArray(storesList) ? storesList.map(s => s.merchantId) : [])
+        ].filter(Boolean).join(' ');
+
+        const sanitizedSources = rawSources.replace(/[\r\n\t]/g, '');
+        const matchedUUIDs = sanitizedSources.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g);
+        if (matchedUUIDs) {
+          matchedUUIDs.forEach(id => merchantIdSet.add(id.toLowerCase().trim()));
         }
-        if (Array.isArray(storesList)) {
-          storesList.forEach(s => {
-            if (s.merchantId && s.merchantId.trim()) {
-              s.merchantId.split(',').map(x => x.trim()).filter(Boolean).forEach(id => merchantIdSet.add(id));
-            }
-          });
-        }
+
         const merchantIdArray = Array.from(merchantIdSet);
         const combinedMerchantIds = merchantIdArray.join(',');
 
@@ -3366,6 +3371,10 @@
         }
 
         const data = await response.json();
+
+        if (!data.success && data.message) {
+          console.warn('⚠️ [Aviso iFood Polling]:', data.message);
+        }
 
         let updatedAny = false;
 
@@ -3419,6 +3428,14 @@
             } else {
               // Update existing order data if necessary
               const existing = orders[existingIdx];
+              if (newOrd.customerPhone && existing.customerPhone !== newOrd.customerPhone) {
+                existing.customerPhone = newOrd.customerPhone;
+                updatedAny = true;
+              }
+              if (newOrd.phoneLocalizer && existing.phoneLocalizer !== newOrd.phoneLocalizer) {
+                existing.phoneLocalizer = newOrd.phoneLocalizer;
+                updatedAny = true;
+              }
               if (existing.status !== 'concluido' && existing.status !== 'cancelado') {
                 if (newOrd.status && newOrd.status !== existing.status) {
                   existing.status = newOrd.status;
@@ -3486,6 +3503,7 @@
       } catch (err) {
         console.warn('Erro ao consultar polling iFood:', err);
       } finally {
+        isPollingIFood = false;
         if (syncIcon) syncIcon.classList.remove('animate-spin');
       }
     }
@@ -3984,11 +4002,26 @@
                   <svg class="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                   </svg>
-                  <h3 class="font-bold text-slate-800 text-xs truncate">${escapeHtml(order.customerName)}</h3>
+                  <h3 class="font-bold text-slate-800 text-xs truncate" title="${escapeHtml(order.customerName)}">${escapeHtml(order.customerName)}</h3>
                 </div>
-                ${order.customerPhone ? `<span class="text-[10px] text-slate-500 font-medium shrink-0">${escapeHtml(order.customerPhone)}</span>` : ''}
+                ${order.phoneLocalizer ? `
+                  <span class="text-[10px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded shrink-0 flex items-center gap-1" title="ID Localizador iFood do Pedido">
+                    <span class="text-[8px] font-semibold text-amber-700 uppercase">Loc:</span>
+                    <span class="font-mono font-black">${escapeHtml(order.phoneLocalizer)}</span>
+                  </span>
+                ` : ''}
               </div>
-              <p class="text-[10px] text-slate-500 font-medium pl-4 mt-0.5">${escapeHtml(order.paymentMethod || 'iFood')}</p>
+
+              <!-- Payment Method & Phone / Localizer Badge -->
+              <div class="flex items-center justify-between gap-1.5 pl-4 mt-1 flex-wrap">
+                <p class="text-[10px] text-slate-500 font-medium">${escapeHtml(order.paymentMethod || 'iFood')}</p>
+                ${order.customerPhone ? `
+                  <span class="inline-flex items-center gap-1 text-[10px] text-blue-900 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded font-mono font-semibold" title="Telefone de Contato e ID Localizador iFood">
+                    <svg class="w-2.5 h-2.5 text-blue-600 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 4V3z"></path></svg>
+                    <span>${escapeHtml(order.customerPhone)}</span>
+                  </span>
+                ` : ''}
+              </div>
               
               <!-- Customer Delivery Address -->
               ${order.customerAddress ? `

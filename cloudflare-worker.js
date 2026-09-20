@@ -65,38 +65,19 @@ function parseIFoodValue(val) {
 
 function extractMerchantIds(body) {
   const ids = new Set();
-  const rawList = [];
+  const allText = [
+    ...(Array.isArray(body.allMerchantIds) ? body.allMerchantIds : [body.allMerchantIds]),
+    ...(Array.isArray(body.merchantIds) ? body.merchantIds : [body.merchantIds]),
+    ...(Array.isArray(body.merchantId) ? body.merchantId : [body.merchantId])
+  ].filter(Boolean).join(' ');
 
-  if (body.allMerchantIds) {
-    if (Array.isArray(body.allMerchantIds)) {
-      rawList.push(...body.allMerchantIds);
-    } else if (typeof body.allMerchantIds === 'string') {
-      rawList.push(...body.allMerchantIds.split(','));
-    }
+  // Remove quebras de linha e espaços internos que possam ter dividido um UUID
+  const sanitizedText = allText.replace(/[\r\n\t]/g, '');
+  const matches = sanitizedText.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g);
+
+  if (matches) {
+    matches.forEach(m => ids.add(m.toLowerCase().trim()));
   }
-
-  if (body.merchantIds) {
-    if (Array.isArray(body.merchantIds)) {
-      rawList.push(...body.merchantIds);
-    } else if (typeof body.merchantIds === 'string') {
-      rawList.push(...body.merchantIds.split(','));
-    }
-  }
-
-  if (body.merchantId) {
-    if (Array.isArray(body.merchantId)) {
-      rawList.push(...body.merchantId);
-    } else if (typeof body.merchantId === 'string') {
-      rawList.push(...body.merchantId.split(','));
-    }
-  }
-
-  rawList.forEach(id => {
-    if (typeof id === 'string') {
-      const clean = id.trim();
-      if (clean) ids.add(clean);
-    }
-  });
 
   return Array.from(ids);
 }
@@ -155,7 +136,21 @@ function formatIFoodOrder(raw, eventCode = '') {
   }
 
   const customerName = raw.customer?.name || raw.customer?.firstName || 'Cliente iFood';
-  const customerPhone = raw.customer?.phone?.number || raw.customer?.phone || '';
+
+  // Extração 100% dinâmica do Telefone e do ID Localizador exclusivo do iFood
+  const rawPhone = raw.customer?.phone;
+  const phoneNumber = (typeof rawPhone === 'object' ? (rawPhone?.number || '') : String(rawPhone || '')).trim();
+  const rawLocalizer = (typeof rawPhone === 'object' ? (rawPhone?.localizer || '') : '') || raw.delivery?.localizer || raw.localizer || '';
+  const cleanLocalizer = String(rawLocalizer || '').trim();
+  const formattedLocalizer = cleanLocalizer.length === 8 
+    ? `${cleanLocalizer.slice(0, 4)} ${cleanLocalizer.slice(4)}` 
+    : cleanLocalizer;
+
+  let customerPhone = phoneNumber;
+  if (formattedLocalizer) {
+    customerPhone = phoneNumber ? `${phoneNumber} ID: ${formattedLocalizer}` : `ID: ${formattedLocalizer}`;
+  }
+
   const paymentMethod = raw.payments?.methods?.[0]?.name || raw.payments?.methods?.[0]?.method || 'iFood Online';
   
   const orderDate = new Date(raw.createdAt || Date.now());
@@ -172,6 +167,8 @@ function formatIFoodOrder(raw, eventCode = '') {
     storeName: storeName,
     customerName: customerName,
     customerPhone: customerPhone,
+    phoneLocalizer: formattedLocalizer,
+    phoneNumberOnly: phoneNumber,
     customerAddress: fullAddress,
     deliveryMode: raw.delivery?.deliveredBy || 'MERCHANT',
     items: items.length > 0 ? items : [{ name: 'Pedido iFood', price: total, quantity: 1, subtotal: total }],
@@ -333,10 +330,21 @@ export default {
           pollHeaders['x-polling-merchants'] = merchantIdsList.join(',');
         }
 
-        // Tenta endpoint primário de polling v1.0 com suporte a multilojas
-        let pollRes = await fetch('https://merchant-api.ifood.com.br/events/v1.0/events:polling', {
-          headers: pollHeaders
-        });
+        // Consulta polling com categories=ALL para capturar qualquer pedido de qualquer categoria
+        const pollUrl = 'https://merchant-api.ifood.com.br/events/v1.0/events:polling?categories=ALL';
+        let pollRes = await fetch(pollUrl, { headers: pollHeaders });
+
+        // Se falhar e estávamos filtrando por merchant, faz fallback sem x-polling-merchants
+        // (O iFood retorna eventos de todas as lojas vinculadas à conta quando o header não é enviado)
+        if (!pollRes.ok && pollHeaders['x-polling-merchants']) {
+          const fbHeaders = { ...pollHeaders };
+          delete fbHeaders['x-polling-merchants'];
+          const fbRes = await fetch(pollUrl, { headers: fbHeaders });
+          if (fbRes.ok || fbRes.status === 204) {
+            pollRes = fbRes;
+            delete pollHeaders['x-polling-merchants'];
+          }
+        }
 
         // Fallback para /order/v1.0/events:polling se o primário não responder
         if (pollRes.status === 404 || pollRes.status === 400) {
@@ -391,26 +399,54 @@ export default {
 
         if (Array.isArray(events)) {
           for (const evt of events) {
-            ackEvents.push({ id: evt.id });
             const code = String(evt.code || '').toUpperCase();
             const fullCode = String(evt.fullCode || '').toUpperCase();
             const orderId = evt.orderId || evt.correlationId || evt.id;
 
             if (DRIVER_ASSIGNED_CODES.includes(code) || DRIVER_ASSIGNED_CODES.includes(fullCode)) {
+              ackEvents.push({ id: evt.id });
               updatedEvents.push({ 
                 ifoodOrderId: orderId, 
                 driverEvent: 'ASSIGNED', 
                 driverName: evt.metadata?.driverName || 'Entregador iFood' 
               });
             } else if (DRIVER_ARRIVED_CODES.includes(code) || DRIVER_ARRIVED_CODES.includes(fullCode)) {
+              ackEvents.push({ id: evt.id });
               updatedEvents.push({ ifoodOrderId: orderId, driverEvent: 'ARRIVED' });
             }
 
             const shouldFetchOrder = FETCH_ORDER_CODES.includes(code) || FETCH_ORDER_CODES.includes(fullCode);
 
             if (shouldFetchOrder && orderId) {
-              try {
-                // Se for pedido novo colocado e o autoConfirm estiver ativo, confirma no iFood
+              let orderFetched = false;
+              let raw = null;
+
+              // Tenta buscar os dados com 1 retry rápido de 300ms caso o microserviço do iFood tenha atraso
+              for (let attempt = 0; attempt < 2; attempt++) {
+                try {
+                  const orderRes = await fetch(`https://merchant-api.ifood.com.br/order/v1.0/orders/${orderId}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                  });
+
+                  if (orderRes.ok) {
+                    raw = await orderRes.json();
+                    orderFetched = true;
+                    break;
+                  }
+                } catch (fetchErr) {}
+
+                if (attempt === 0) {
+                  await new Promise(r => setTimeout(r, 300));
+                }
+              }
+
+              if (orderFetched && raw) {
+                const formatted = formatIFoodOrder(raw, code);
+                newOrders.push(formatted);
+                // CRÍTICO: SOMENTE confirma recebimento (acknowledgment) se o pedido foi capturado com sucesso!
+                ackEvents.push({ id: evt.id });
+
+                // Auto-confirmação opcional no iFood para pedidos recém-colocados
                 if ((code === 'PLC' || fullCode === 'PLACED') && autoConfirm !== false) {
                   try {
                     await fetch(`https://merchant-api.ifood.com.br/order/v1.0/orders/${orderId}/confirm`, {
@@ -419,21 +455,13 @@ export default {
                     });
                   } catch (confErr) {}
                 }
-
-                const orderRes = await fetch(`https://merchant-api.ifood.com.br/order/v1.0/orders/${orderId}`, {
-                  headers: { Authorization: `Bearer ${token}` }
-                });
-
-                if (orderRes.ok) {
-                  const raw = await orderRes.json();
-                  const formatted = formatIFoodOrder(raw, code);
-                  newOrders.push(formatted);
-                }
-              } catch (oErr) {
-                console.error('Erro ao buscar detalhes do pedido iFood:', orderId, oErr);
+              } else {
+                console.error(`[FAST PEDIDOS] Detalhes do pedido ${orderId} ainda não disponíveis no iFood. Deixando evento na fila para reentrega imediata no próximo poll.`);
+                // NÃO damos ackEvents.push! O iFood reenviará este evento no próximo polling!
               }
             } else {
-              // Somente processa como transição de status se não foi um evento de novo pedido/criação
+              // Somente processa como transição de status se não for criação de novo pedido
+              ackEvents.push({ id: evt.id });
               if (CANCEL_CODES.includes(code) || CANCEL_CODES.includes(fullCode)) {
                 updatedEvents.push({ ifoodOrderId: orderId, newStatus: 'cancelado' });
               } else if (DISPATCH_CODES.includes(code) || DISPATCH_CODES.includes(fullCode)) {
