@@ -3330,6 +3330,70 @@
     }
 
     let isPollingIFood = false;
+    const pendingSilentFetches = new Set();
+
+    // Recuperação silenciosa automática caso chegue evento de pedido que ainda não esteja no painel
+    async function fetchOrderSilently(orderId) {
+      if (!orderId || !apiCredentials.clientId) return;
+      const cleanId = String(orderId).replace(/^#IF-/, '').trim();
+      if (pendingSilentFetches.has(cleanId)) return;
+      pendingSilentFetches.add(cleanId);
+
+      try {
+        const res = await fetch(`${getApiBaseUrl()}/api/ifood/fetch-order-by-id`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: cleanId,
+            clientId: apiCredentials.clientId,
+            clientSecret: apiCredentials.clientSecret
+          })
+        });
+
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data && data.success && data.order) {
+          const newOrd = data.order;
+          if (newOrd.timestamp) {
+            newOrd.createdAt = new Date(newOrd.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          } else {
+            newOrd.createdAt = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          }
+
+          const activeStore = storesList.find(s => s.active);
+          let matchedStore = null;
+          if (newOrd.merchantId && Array.isArray(storesList)) {
+            matchedStore = storesList.find(s => s.merchantId && (s.merchantId.includes(newOrd.merchantId) || newOrd.merchantId.includes(s.merchantId)));
+          }
+          if (!matchedStore && newOrd.storeName && Array.isArray(storesList)) {
+            matchedStore = storesList.find(s => s.name && s.name.toLowerCase() === newOrd.storeName.toLowerCase());
+          }
+
+          if (matchedStore) {
+            newOrd.storeName = matchedStore.name;
+          } else if (!newOrd.storeName) {
+            newOrd.storeName = (activeStore && activeStore.name) || apiCredentials.storeName || 'Loja Principal';
+          }
+
+          if (newOrd.status === 'novo') {
+            newOrd.status = 'confirmado';
+          }
+
+          const existIdx = orders.findIndex(o => o.id === newOrd.id || o.ifoodOrderId === newOrd.ifoodOrderId);
+          if (existIdx === -1) {
+            orders.unshift(newOrd);
+            saveOrders();
+            renderKanban();
+            playDoubleBeepAlarm();
+            showToast('📦 Novo Pedido do iFood Real!', `Pedido ${newOrd.id} recuperado e adicionado ao painel!`, 'ifood');
+          }
+        }
+      } catch (e) {
+        console.warn('Erro ao recuperar pedido silenciosamente:', e);
+      } finally {
+        setTimeout(() => pendingSilentFetches.delete(cleanId), 20000);
+      }
+    }
 
     // --- REAL IFOOD API POLLING ---
     async function pollIFoodOrders() {
@@ -3359,6 +3423,9 @@
         const merchantIdArray = Array.from(merchantIdSet);
         const combinedMerchantIds = merchantIdArray.join(',');
 
+        // Coleta todos os IDs de pedidos locais para informar ao backend/worker quais já temos
+        const knownOrderIds = orders.map(o => o.ifoodOrderId || o.id).filter(Boolean);
+
         const response = await fetch(`${getApiBaseUrl()}/api/ifood/poll`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -3367,6 +3434,7 @@
             merchantId: combinedMerchantIds || undefined,
             merchantIds: combinedMerchantIds || undefined,
             allMerchantIds: merchantIdArray.length > 0 ? merchantIdArray : undefined,
+            knownOrderIds: knownOrderIds.length > 0 ? knownOrderIds : undefined,
             autoConfirm: true // Enables automatic confirmation for Homologation SLA < 3s
           })
         });
@@ -3500,6 +3568,9 @@
                 updatedAny = true;
                 showToast('🛵 Entregador iFood', `Status do entregador: ${upd.driverStatus}`, 'ifood');
               }
+            } else if (upd.ifoodOrderId) {
+              // Redirecionamento de segurança: pedido detectado via evento de status/logística que não estava no painel
+              fetchOrderSilently(upd.ifoodOrderId);
             }
           }
         }

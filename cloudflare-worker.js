@@ -309,6 +309,7 @@ export default {
       if (pathname === '/api/ifood/poll' && request.method === 'POST') {
         const body = await request.json();
         const { clientId, clientSecret, autoConfirm } = body;
+        const knownOrderIds = Array.isArray(body.knownOrderIds) ? body.knownOrderIds : [];
 
         if (!clientId || !clientSecret) {
           return new Response(JSON.stringify({ success: false, message: 'Faltam credenciais.' }), {
@@ -415,9 +416,11 @@ export default {
               updatedEvents.push({ ifoodOrderId: orderId, driverEvent: 'ARRIVED' });
             }
 
-            const shouldFetchOrder = FETCH_ORDER_CODES.includes(code) || FETCH_ORDER_CODES.includes(fullCode);
+            const isKnown = Array.isArray(knownOrderIds) && knownOrderIds.some(id => id === orderId || id.endsWith(orderId) || orderId.endsWith(id));
+            const isCancel = CANCEL_CODES.includes(code) || CANCEL_CODES.includes(fullCode);
+            const shouldFetchOrder = (!isKnown && !isCancel) || FETCH_ORDER_CODES.includes(code) || FETCH_ORDER_CODES.includes(fullCode);
 
-            if (shouldFetchOrder && orderId) {
+            if (shouldFetchOrder && !isKnown && orderId) {
               let orderFetched = false;
               let raw = null;
 
@@ -460,7 +463,7 @@ export default {
                 // NÃO damos ackEvents.push! O iFood reenviará este evento no próximo polling!
               }
             } else {
-              // Somente processa como transição de status se não for criação de novo pedido
+              // Pedido já conhecido ou evento de transição de status
               ackEvents.push({ id: evt.id });
               if (CANCEL_CODES.includes(code) || CANCEL_CODES.includes(fullCode)) {
                 updatedEvents.push({ ifoodOrderId: orderId, newStatus: 'cancelado' });

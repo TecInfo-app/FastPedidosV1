@@ -306,6 +306,7 @@ app.post('/api/ifood/poll', async (req, res) => {
     const clientSecret = req.body.clientSecret || process.env.IFOOD_CLIENT_SECRET;
     const merchantId = req.body.merchantId || process.env.IFOOD_MERCHANT_ID;
     const autoConfirm = req.body.autoConfirm !== undefined ? req.body.autoConfirm : true;
+    const knownOrderIds: string[] = Array.isArray(req.body.knownOrderIds) ? req.body.knownOrderIds : [];
 
     if (!clientId || !clientSecret) {
       return res.status(400).json({
@@ -316,25 +317,57 @@ app.post('/api/ifood/poll', async (req, res) => {
 
     const token = await getIFoodToken(clientId, clientSecret);
 
-    // Call iFood Events Polling
+    // Call iFood Events Polling with categories=ALL
     const headers: Record<string, string> = {
-      'Authorization': `Bearer ${token}`
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/json'
     };
+
+    let cleanMerchants = '';
     if (merchantId && typeof merchantId === 'string' && merchantId.trim() !== '') {
-      // Clean up whitespace between commas: "id1, id2, id3" -> "id1,id2,id3"
-      const cleanMerchants = merchantId.split(',').map((m: string) => m.trim()).filter(Boolean).join(',');
-      if (cleanMerchants) {
-        headers['x-polling-merchants'] = cleanMerchants;
+      cleanMerchants = merchantId.split(',').map((m: string) => m.trim()).filter(Boolean).join(',');
+    }
+
+    // Auto-discover merchants if none provided
+    if (!cleanMerchants) {
+      try {
+        const mRes = await fetch('https://merchant-api.ifood.com.br/merchant/v1.0/merchants', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (mRes.ok) {
+          const mList: any = await mRes.json();
+          if (Array.isArray(mList) && mList.length > 0) {
+            cleanMerchants = mList.map((m: any) => m.id).filter(Boolean).join(',');
+          }
+        }
+      } catch (mErr) {}
+    }
+
+    if (cleanMerchants) {
+      headers['x-polling-merchants'] = cleanMerchants;
+    }
+
+    const pollUrl = 'https://merchant-api.ifood.com.br/events/v1.0/events:polling?categories=ALL';
+    let pollRes = await fetch(pollUrl, { method: 'GET', headers });
+
+    // Fallback without x-polling-merchants if 204 or error to capture account-wide events
+    if ((pollRes.status === 204 || !pollRes.ok) && headers['x-polling-merchants']) {
+      const fbHeaders = { ...headers };
+      delete fbHeaders['x-polling-merchants'];
+      const fbRes = await fetch(pollUrl, { method: 'GET', headers: fbHeaders });
+      if (fbRes.ok && fbRes.status !== 204) {
+        pollRes = fbRes;
+        delete headers['x-polling-merchants'];
       }
     }
 
-    const pollRes = await fetch('https://merchant-api.ifood.com.br/events/v1.0/events:polling', {
-      method: 'GET',
-      headers
-    });
+    if (pollRes.status === 404 || pollRes.status === 400) {
+      pollRes = await fetch('https://merchant-api.ifood.com.br/order/v1.0/events:polling', {
+        headers
+      });
+    }
 
     if (pollRes.status === 204) {
-      // No content / No new events
       return res.json({ success: true, eventsCount: 0, newOrders: [], updatedEvents: [] });
     }
 
@@ -353,110 +386,61 @@ app.post('/api/ifood/poll', async (req, res) => {
 
     const newOrders: any[] = [];
     const updatedEvents: any[] = [];
+    const ackEvents: { id: string }[] = [];
 
-    // STEP 1: ACK IMMEDIATELY (Firefly Audit requires < 10s after polling)
-    const ackEvents = events.map((e: any) => ({ id: e.id }));
-    const ackHeaders: Record<string, string> = {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    };
-    if (headers['x-polling-merchants']) {
-      ackHeaders['x-polling-merchants'] = headers['x-polling-merchants'];
-    }
-
-    try {
-      const ackRes = await fetch('https://merchant-api.ifood.com.br/events/v1.0/events/acknowledgment', {
-        method: 'POST',
-        headers: ackHeaders,
-        body: JSON.stringify(ackEvents)
-      });
-      console.log(`[FIREFLY AUDIT ACK] Timestamp: ${new Date().toISOString()} | Acknowledgment for ${ackEvents.length} events sent. Status: ${ackRes.status}`);
-
-      try {
-        await fetch('https://merchant-api.ifood.com.br/order/v1.0/events/acknowledgment', {
-          method: 'POST',
-          headers: ackHeaders,
-          body: JSON.stringify(ackEvents)
-        });
-      } catch (orderAckErr) {}
-    } catch (ackError) {
-      console.error(`[FIREFLY AUDIT ACK ERROR] Timestamp: ${new Date().toISOString()} | Error sending acknowledgment:`, ackError);
-    }
-
-    // STEP 2: PROCESS EVENTS
     for (const evt of events) {
       const code = String(evt.code || '').toUpperCase();
       const fullCode = String(evt.fullCode || '').toUpperCase();
       const allCodes = `${code} ${fullCode}`;
-
-      // Flexible order ID resolution
       const orderId = evt.orderId || evt.correlationId || evt.metadata?.orderId || evt.metadata?.id || evt.id;
 
-      const isPlaced = code === 'PLC' || fullCode === 'PLACED' || allCodes.includes('PLACED');
-      const isConfirmed = code === 'CFM' || fullCode === 'CONFIRMED' || allCodes.includes('CONFIRMED') || code === 'INT' || fullCode === 'INTEGRATED' || allCodes.includes('INTEGRATED') || allCodes.includes('PREPARATION_STARTED') || code === 'PRS';
-      const isReadyToPickup = code === 'RTP' || fullCode === 'READY_TO_PICKUP' || allCodes.includes('READY_TO_PICKUP') || allCodes.includes('READY');
-      const isDispatched = code === 'DSP' || fullCode === 'DISPATCHED' || allCodes.includes('DISPATCH');
-      
       const isCancellationRequested = (
-        code === 'CAR' ||
-        code === 'CPR' ||
-        code === 'CCR' ||
-        code === 'CRQ' ||
-        allCodes.includes('CANCELLATION_REQUEST') ||
-        allCodes.includes('CANCELLATION_REQUESTED') ||
-        allCodes.includes('CANCEL_REQUEST')
+        code === 'CAR' || code === 'CPR' || code === 'CCR' || code === 'CRQ' ||
+        allCodes.includes('CANCELLATION_REQUEST') || allCodes.includes('CANCELLATION_REQUESTED') || allCodes.includes('CANCEL_REQUEST')
       );
       
       const isCancelled = (
-        code === 'CAN' ||
-        code === 'COD' ||
-        allCodes.includes('CANCELLED') ||
-        allCodes.includes('CANCELED') ||
-        allCodes.includes('CANCELLATION_COMMAND_ACCEPTED') ||
-        allCodes.includes('CANCELLATION_COMMAND_DENIED') ||
-        allCodes.includes('CANCELLATION_REQUEST_FAILED')
+        code === 'CAN' || code === 'COD' || allCodes.includes('CANCELLED') || allCodes.includes('CANCELED')
       );
 
-      // Handle New Orders or Orders needing full details fetch (Placed, Confirmed, Dispatched, etc.)
-      if ((isPlaced || isConfirmed || isReadyToPickup || isDispatched) && orderId) {
-        try {
-          const orderRes = await fetch(`https://merchant-api.ifood.com.br/order/v1.0/orders/${orderId}`, {
-            method: 'GET',
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
+      const isDriverAssigned = code === 'ADR' || fullCode === 'ASSIGNED_DRIVER' || allCodes.includes('ASSIGNED_DRIVER') || allCodes.includes('DRIVER_ASSIGNED');
+      const isDriverGoingToOrigin = code === 'GTO' || fullCode === 'GOING_TO_ORIGIN' || allCodes.includes('GOING_TO_ORIGIN');
+      const isDriverArrivedAtOrigin = code === 'AAO' || fullCode === 'ARRIVED_AT_ORIGIN' || allCodes.includes('ARRIVED_AT_ORIGIN') || allCodes.includes('DRIVER_ARRIVED');
+      const isDriverDispatched = code === 'DCO' || fullCode === 'COLLECTED' || allCodes.includes('COLLECTED') || allCodes.includes('DRIVER_DISPATCHED');
 
-          if (orderRes.ok) {
-            const rawOrder = await orderRes.json();
-
-            // Auto-Confirm PLC order if autoConfirm setting is active
-            let initialStatus = isPlaced ? 'confirmado' : (isReadyToPickup ? 'pronto' : (isDispatched ? 'despachado' : 'confirmado'));
-            if (isPlaced && autoConfirm) {
-              try {
-                const confirmRes = await fetch(`https://merchant-api.ifood.com.br/order/v1.0/orders/${orderId}/confirm`, {
-                  method: 'POST',
-                  headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (confirmRes.ok || confirmRes.status === 202) {
-                  initialStatus = 'confirmado';
-                  console.log(`[FIREFLY AUDIT CONFIRM SUCCESS] Timestamp: ${new Date().toISOString()} | Auto-confirmed order ${orderId} successfully.`);
-                }
-              } catch (confirmErr) {
-                console.error(`Erro no auto-confirm do pedido ${orderId}:`, confirmErr);
-              }
-            }
-
-            const formatted = formatIFoodOrder(rawOrder, initialStatus);
-            newOrders.push(formatted);
-          }
-        } catch (orderErr) {
-          console.error(`Erro ao buscar detalhes do pedido ${orderId}:`, orderErr);
-        }
-      }
-
-      // Cancellation Event Handling
-      if (isCancellationRequested && orderId) {
-        console.log(`[FIREFLY AUDIT CANCEL EVENT RECEIVED] Timestamp: ${new Date().toISOString()} | Event ${code} (${fullCode}) received for order ${orderId}`);
-        
+      if (isDriverAssigned && orderId) {
+        ackEvents.push({ id: evt.id });
+        updatedEvents.push({
+          ifoodOrderId: orderId,
+          code: evt.code,
+          driverStatus: 'ASSIGNED',
+          driverEvent: 'ASSIGNED',
+          driverName: evt.metadata?.driverName || 'Entregador iFood'
+        });
+      } else if (isDriverGoingToOrigin && orderId) {
+        ackEvents.push({ id: evt.id });
+        updatedEvents.push({
+          ifoodOrderId: orderId,
+          code: evt.code,
+          driverStatus: 'GOING_TO_ORIGIN'
+        });
+      } else if (isDriverArrivedAtOrigin && orderId) {
+        ackEvents.push({ id: evt.id });
+        updatedEvents.push({
+          ifoodOrderId: orderId,
+          code: evt.code,
+          driverStatus: 'ARRIVED_AT_ORIGIN',
+          driverEvent: 'ARRIVED'
+        });
+      } else if (isDriverDispatched && orderId) {
+        ackEvents.push({ id: evt.id });
+        updatedEvents.push({
+          ifoodOrderId: orderId,
+          code: evt.code,
+          driverStatus: 'DISPATCHED'
+        });
+      } else if (isCancellationRequested && orderId) {
+        ackEvents.push({ id: evt.id });
         if (!pdvInitiatedCancellations.has(orderId)) {
           try {
             fetch(`https://merchant-api.ifood.com.br/order/v1.0/orders/${orderId}/cancellationReasons`, {
@@ -472,65 +456,123 @@ app.post('/api/ifood/poll', async (req, res) => {
               },
               body: JSON.stringify({})
             });
-          } catch (cancelErr) {
-            console.error(`[FIREFLY AUDIT CANCEL ERROR] Timestamp: ${new Date().toISOString()} | Error handling acceptCancellation for ${orderId}:`, cancelErr);
-          }
+          } catch (cancelErr) {}
         }
-
         updatedEvents.push({
           ifoodOrderId: orderId,
           code: evt.code,
           newStatus: 'cancelado'
         });
-      }
-
-      if (isCancelled && orderId) {
+      } else if (isCancelled && orderId) {
+        ackEvents.push({ id: evt.id });
         pdvInitiatedCancellations.delete(orderId);
         updatedEvents.push({
           ifoodOrderId: orderId,
           code: evt.code,
           newStatus: 'cancelado'
         });
+      } else if (orderId) {
+        const isKnown = knownOrderIds.some(id => id === orderId || id.endsWith(orderId) || orderId.endsWith(id));
+
+        const shouldFetch = !isKnown || (
+          code === 'PLC' || fullCode === 'PLACED' || allCodes.includes('PLACED') ||
+          code === 'CFM' || fullCode === 'CONFIRMED' || allCodes.includes('CONFIRMED') ||
+          code === 'INT' || fullCode === 'INTEGRATED' || allCodes.includes('INTEGRATED') ||
+          code === 'PRP' || allCodes.includes('PREPARATION') ||
+          code === 'RTP' || allCodes.includes('READY') ||
+          code === 'DSP' || allCodes.includes('DISPATCH') ||
+          code === 'SCH' || allCodes.includes('SCHEDULED') ||
+          allCodes.includes('TAKEOUT') || allCodes.includes('DELIVERY')
+        );
+
+        if (shouldFetch && !isKnown) {
+          let orderFetched = false;
+          let rawOrder: any = null;
+
+          for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+              const orderRes = await fetch(`https://merchant-api.ifood.com.br/order/v1.0/orders/${orderId}`, {
+                method: 'GET',
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+
+              if (orderRes.ok) {
+                rawOrder = await orderRes.json();
+                orderFetched = true;
+                break;
+              }
+            } catch (orderErr) {}
+
+            if (attempt === 0) {
+              await new Promise(r => setTimeout(r, 300));
+            }
+          }
+
+          if (orderFetched && rawOrder) {
+            const isPlaced = code === 'PLC' || fullCode === 'PLACED' || allCodes.includes('PLACED');
+            let initialStatus = 'confirmado';
+
+            if (isPlaced && autoConfirm) {
+              try {
+                await fetch(`https://merchant-api.ifood.com.br/order/v1.0/orders/${orderId}/confirm`, {
+                  method: 'POST',
+                  headers: { 'Authorization': `Bearer ${token}` }
+                });
+              } catch (confirmErr) {}
+            }
+
+            const formatted = formatIFoodOrder(rawOrder, initialStatus);
+            newOrders.push(formatted);
+            ackEvents.push({ id: evt.id });
+          } else {
+            console.warn(`[POLL SAFEGUARD] Pedido ${orderId} ainda processando no iFood. Deixando evento na fila para entrega imediata.`);
+            // Critical: DO NOT ack this event so iFood redelivers it on next poll
+          }
+        } else {
+          // Known order update
+          ackEvents.push({ id: evt.id });
+          const isConcluded = code === 'CON' || fullCode === 'CONCLUDED' || allCodes.includes('CONCLUDED') || allCodes.includes('DELIVERED');
+          const isDispatched = code === 'DSP' || fullCode === 'DISPATCHED' || allCodes.includes('DISPATCH');
+          const isReady = code === 'RTP' || fullCode === 'READY_TO_PICKUP' || allCodes.includes('READY');
+
+          if (isConcluded) {
+            updatedEvents.push({ ifoodOrderId: orderId, code: evt.code, newStatus: 'concluido' });
+          } else if (isDispatched) {
+            updatedEvents.push({ ifoodOrderId: orderId, code: evt.code, newStatus: 'despachado' });
+          } else if (isReady) {
+            updatedEvents.push({ ifoodOrderId: orderId, code: evt.code, newStatus: 'pronto' });
+          }
+        }
+      } else {
+        ackEvents.push({ id: evt.id });
+      }
+    }
+
+    // Only acknowledge events that were successfully handled!
+    if (ackEvents.length > 0) {
+      const ackHeaders: Record<string, string> = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
+      if (headers['x-polling-merchants']) {
+        ackHeaders['x-polling-merchants'] = headers['x-polling-merchants'];
       }
 
-      // CON / CONCLUDED = Order finished/completed
-      const isConcluded = code === 'CON' || fullCode === 'CONCLUDED' || allCodes.includes('CONCLUDED');
-      if (isConcluded && orderId) {
-        updatedEvents.push({
-          ifoodOrderId: orderId,
-          code: evt.code,
-          newStatus: 'concluido'
+      try {
+        await fetch('https://merchant-api.ifood.com.br/events/v1.0/events/acknowledgment', {
+          method: 'POST',
+          headers: ackHeaders,
+          body: JSON.stringify(ackEvents)
         });
-      }
+      } catch (ackError) {}
 
-      // Status updates when already locally present
-      if (isDispatched && orderId) {
-        updatedEvents.push({
-          ifoodOrderId: orderId,
-          code: evt.code,
-          newStatus: 'despachado'
+      try {
+        await fetch('https://merchant-api.ifood.com.br/order/v1.0/events/acknowledgment', {
+          method: 'POST',
+          headers: ackHeaders,
+          body: JSON.stringify(ackEvents)
         });
-      }
-
-      // DRIVER / SHIPPING EVENTS (iFood Delivery Logistics)
-      const isDriverAssigned = code === 'ADR' || fullCode === 'ASSIGNED_DRIVER' || allCodes.includes('ASSIGNED_DRIVER');
-      const isDriverGoingToOrigin = code === 'GTO' || fullCode === 'GOING_TO_ORIGIN' || allCodes.includes('GOING_TO_ORIGIN');
-      const isDriverArrivedAtOrigin = code === 'AAO' || fullCode === 'ARRIVED_AT_ORIGIN' || allCodes.includes('ARRIVED_AT_ORIGIN');
-      const isDriverDispatched = code === 'DCO' || fullCode === 'COLLECTED' || allCodes.includes('COLLECTED');
-
-      if (orderId && (isDriverAssigned || isDriverGoingToOrigin || isDriverArrivedAtOrigin || isDriverDispatched)) {
-        let driverStatus = 'ASSIGNED';
-        if (isDriverGoingToOrigin) driverStatus = 'GOING_TO_ORIGIN';
-        if (isDriverArrivedAtOrigin) driverStatus = 'ARRIVED_AT_ORIGIN';
-        if (isDriverDispatched) driverStatus = 'DISPATCHED';
-
-        updatedEvents.push({
-          ifoodOrderId: orderId,
-          code: evt.code,
-          driverStatus: driverStatus,
-          driverInfo: evt.data || null
-        });
-      }
+      } catch (orderAckErr) {}
     }
 
     return res.json({
