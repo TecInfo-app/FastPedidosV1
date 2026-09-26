@@ -3060,6 +3060,28 @@
       }
     }
 
+    let _syncKdsOrdersTimer = null;
+    function syncKdsOrdersStateToFirebase(tenantId) {
+      if (!tenantId || !window.firebaseDb || !window.firebaseSetDoc) return;
+      clearTimeout(_syncKdsOrdersTimer);
+      _syncKdsOrdersTimer = setTimeout(() => {
+        try {
+          const activeOrders = (orders || []).filter(o => !o.archived);
+          const payload = {
+            orders: activeOrders,
+            updatedAt: Date.now(),
+            source: 'kds'
+          };
+          const payloadStr = JSON.stringify(payload);
+          if (window._firebaseLastStateSynced_kds !== payloadStr) {
+            window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "state", "kds_orders"), payload, { merge: true }).then(() => {
+              window._firebaseLastStateSynced_kds = payloadStr;
+            }).catch(() => {});
+          }
+        } catch(e) {}
+      }, 300);
+    }
+
     function saveOrders(skipFirebase = false) {
       const tenantId = getCurrentTenantId();
       const storageKey = getTenantStorageKey('orders');
@@ -3068,6 +3090,7 @@
         renderMotoboySpreadsheet();
       }
       if (!skipFirebase && tenantId && window.firebaseDb && window.firebaseSetDoc) {
+        syncKdsOrdersStateToFirebase(tenantId);
         try {
           orders.forEach(ord => {
             const cleanId = String(ord.id || ord.displayId || Date.now()).replace(/[^a-zA-Z0-9_\-]/g, '_');
@@ -5123,6 +5146,27 @@
       showToast('Ordem Alterada', `Motoboy "${item.name}" movido para a posição ${targetIndex + 1}.`, 'info');
     }
 
+    let _syncMotoboysTimer = null;
+    function syncMotoboysStateToFirebase(tenantId) {
+      if (!tenantId || !window.firebaseDb || !window.firebaseSetDoc) return;
+      clearTimeout(_syncMotoboysTimer);
+      _syncMotoboysTimer = setTimeout(() => {
+        try {
+          const activeMb = (motoboysList || []).filter(m => !m.archived && m.active !== false);
+          const payload = {
+            motoboys: activeMb,
+            updatedAt: Date.now()
+          };
+          const payloadStr = JSON.stringify(payload);
+          if (window._firebaseLastStateSynced_motoboys !== payloadStr) {
+            window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "state", "motoboys"), payload, { merge: true }).then(() => {
+              window._firebaseLastStateSynced_motoboys = payloadStr;
+            }).catch(() => {});
+          }
+        } catch(e) {}
+      }, 300);
+    }
+
     function saveMotoboys(deletedId = null) {
       const tenantId = getCurrentTenantId();
       const storageKey = getTenantStorageKey('motoboys');
@@ -5141,6 +5185,7 @@
         }
       }
       if (tenantId && window.firebaseDb && window.firebaseSetDoc) {
+        syncMotoboysStateToFirebase(tenantId);
         try {
           motoboysList.forEach(mb => {
             if (mb && mb.id) {
@@ -6662,6 +6707,14 @@
                  }, { merge: true }).catch(() => {});
                } catch(e) {}
             });
+            // Reseta o estado em tempo real para 0 pedidos nos portais conectados (1 única gravação)
+            try {
+              window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "state", "motoboy_orders"), {
+                orders: [],
+                updatedAt: Date.now(),
+                source: 'fechar_dia'
+              }, { merge: true }).catch(() => {});
+            } catch(e) {}
           }
 
           // 3. Limpar a tela localmente
@@ -6749,12 +6802,35 @@
       renderMotoboyMosaic();
     }
 
+    let _syncMotoboyOrdersTimer = null;
+    function syncMotoboyOrdersStateToFirebase(tenantId) {
+      if (!tenantId || !window.firebaseDb || !window.firebaseSetDoc) return;
+      clearTimeout(_syncMotoboyOrdersTimer);
+      _syncMotoboyOrdersTimer = setTimeout(() => {
+        try {
+          const activeOrders = (motoboyOrders || []).filter(o => !o.archived);
+          const payload = {
+            orders: activeOrders,
+            updatedAt: Date.now(),
+            source: 'dashboard'
+          };
+          const payloadStr = JSON.stringify(payload);
+          if (window._firebaseLastStateSynced_motoboyOrders !== payloadStr) {
+            window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "state", "motoboy_orders"), payload, { merge: true }).then(() => {
+              window._firebaseLastStateSynced_motoboyOrders = payloadStr;
+            }).catch(err => console.warn("Erro ao salvar state motoboy_orders:", err));
+          }
+        } catch(e) {}
+      }, 250);
+    }
+
     function saveMotoboyOrders(skipFirebase = false) {
       const tenantId = getCurrentTenantId();
       const storageKey = getTenantStorageKey('motoboy_orders');
       localStorage.setItem(storageKey, JSON.stringify(motoboyOrders));
       renderMotoboyMosaic();
       if (!skipFirebase && tenantId && window.firebaseDb && window.firebaseSetDoc) {
+        syncMotoboyOrdersStateToFirebase(tenantId);
         try {
           if (!window._firebaseLastSynced) window._firebaseLastSynced = {};
           motoboyOrders.forEach(ord => {
@@ -8003,6 +8079,7 @@
           saveMotoboyOrders(true);
           const tenantId = getCurrentTenantId();
           if (tenantId && window.firebaseDb && window.firebaseSetDoc) {
+            syncMotoboyOrdersStateToFirebase(tenantId);
             try {
               // Soft Delete: marca como arquivado em vez de gastar cota de exclusões
               window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "motoboyOrders", String(orderId)), {
@@ -9231,7 +9308,7 @@
           }, { merge: true }).catch(() => {});
         } catch(e) {}
 
-        // 1. Configurações da Loja: stores/${tenantId}/config/settings
+        // 1. Configurações da Loja: stores/${tenantId}/config/settings (1 Leitura)
         unsubSettings = onSnapshot(doc(db, "stores", tenantId, "config", "settings"), (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
@@ -9264,39 +9341,52 @@
           }
         }, (err) => console.warn("Firebase Settings error:", err));
 
-        // 2. Motoboys da Loja: stores/${tenantId}/motoboys
-        unsubMotoboys = onSnapshot(collection(db, "stores", tenantId, "motoboys"), (snapshot) => {
-          const remoteMb = [];
-          if (!snapshot.empty) {
-            snapshot.forEach(docSnap => {
-              const data = docSnap.data();
-              if (data && !data.archived && data.active !== false) {
-                remoteMb.push(data);
-              }
-              if (window._firebaseLastSynced) window._firebaseLastSynced[String(data.id)] = JSON.stringify(data);
-            });
-            remoteMb.sort((a, b) => (a.order ?? 999999) - (b.order ?? 999999));
-          }
-          if (typeof window.setMotoboysList === 'function') window.setMotoboysList(remoteMb);
-          else window.motoboysList = remoteMb;
-
-          if (typeof window.getTenantStorageKey === 'function') {
-            localStorage.setItem(window.getTenantStorageKey('motoboys'), JSON.stringify(remoteMb));
-          }
-          
-          if (typeof renderDrawerMotoboys === 'function') renderDrawerMotoboys();
-          if (typeof renderMainMotoboyList === 'function') renderMainMotoboyList();
-          if (typeof populateMotoboySelect === 'function') populateMotoboySelect();
-          if (typeof renderMotoboyMosaic === 'function') renderMotoboyMosaic();
-          
-          const activeMbId = window.activePortalMotoboyId || (typeof window.getActivePortalMotoboyId === 'function' ? window.getActivePortalMotoboyId() : localStorage.getItem('activePortalMotoboyId'));
-          if (activeMbId) {
-            if (typeof renderPortalDashboard === 'function') {
-              renderPortalDashboard(activeMbId);
+        // 2. Motoboys da Loja: stores/${tenantId}/state/motoboys (Consolidado: 1 Leitura)
+        unsubMotoboys = onSnapshot(doc(db, "stores", tenantId, "state", "motoboys"), async (docSnap) => {
+          let remoteMb = [];
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data && Array.isArray(data.motoboys)) {
+              remoteMb = data.motoboys.filter(m => !m.archived && m.active !== false);
             }
           } else {
-            if (typeof renderPortalMotoboySelection === 'function') {
-              renderPortalMotoboySelection();
+            // Migração automática transparente se o documento de estado ainda não existir
+            try {
+              const snap = await getDocs(collection(db, "stores", tenantId, "motoboys"));
+              if (!snap.empty) {
+                snap.forEach(d => {
+                  const data = d.data();
+                  if (data && !data.archived && data.active !== false) remoteMb.push(data);
+                });
+                remoteMb.sort((a, b) => (a.order ?? 999999) - (b.order ?? 999999));
+                setDoc(doc(db, "stores", tenantId, "state", "motoboys"), { motoboys: remoteMb, updatedAt: Date.now() }, { merge: true }).catch(()=>{});
+              }
+            } catch(e) {}
+          }
+
+          if (remoteMb.length > 0 || docSnap.exists()) {
+            remoteMb.sort((a, b) => (a.order ?? 999999) - (b.order ?? 999999));
+            if (typeof window.setMotoboysList === 'function') window.setMotoboysList(remoteMb);
+            else window.motoboysList = remoteMb;
+
+            if (typeof window.getTenantStorageKey === 'function') {
+              localStorage.setItem(window.getTenantStorageKey('motoboys'), JSON.stringify(remoteMb));
+            }
+            
+            if (typeof renderDrawerMotoboys === 'function') renderDrawerMotoboys();
+            if (typeof renderMainMotoboyList === 'function') renderMainMotoboyList();
+            if (typeof populateMotoboySelect === 'function') populateMotoboySelect();
+            if (typeof renderMotoboyMosaic === 'function') renderMotoboyMosaic();
+            
+            const activeMbId = window.activePortalMotoboyId || (typeof window.getActivePortalMotoboyId === 'function' ? window.getActivePortalMotoboyId() : localStorage.getItem('activePortalMotoboyId'));
+            if (activeMbId) {
+              if (typeof renderPortalDashboard === 'function') {
+                renderPortalDashboard(activeMbId);
+              }
+            } else {
+              if (typeof renderPortalMotoboySelection === 'function') {
+                renderPortalMotoboySelection();
+              }
             }
           }
         }, (err) => {
@@ -9306,66 +9396,78 @@
           }
         });
 
-        // 3. Pedidos dos Motoboys da Loja: stores/${tenantId}/motoboyOrders (Até 1000 pedidos por turno)
-        const motoboyOrdersQuery = query(collection(db, "stores", tenantId, "motoboyOrders"), limit(1000));
-        unsubMotoboyOrders = onSnapshot(motoboyOrdersQuery, (snapshot) => {
-          const remoteOrders = [];
-          if (!snapshot.empty) {
-            snapshot.forEach(docSnap => {
-              const data = docSnap.data();
-              if (data && !data.archived) {
-                remoteOrders.push(data);
-              }
-              if (window._firebaseLastSynced) window._firebaseLastSynced[String(data.id)] = JSON.stringify(data);
-            });
-            remoteOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-          }
-          if (typeof window.setMotoboyOrders === 'function') window.setMotoboyOrders(remoteOrders);
-          else window.motoboyOrders = remoteOrders;
-
-          if (typeof window.getTenantStorageKey === 'function') {
-            localStorage.setItem(window.getTenantStorageKey('motoboy_orders'), JSON.stringify(remoteOrders));
-          }
-          
-          // Sincroniza status com o Painel KDS em tempo real
-          let changedKds = false;
-          remoteOrders.forEach(mbOrd => {
-            if (mbOrd.status === 'entregue' && typeof findMatchingIFoodOrder === 'function') {
-              const matched = findMatchingIFoodOrder(mbOrd.orderNumber);
-              if (matched && matched.status !== 'concluido') {
-                matched.status = 'concluido';
-                changedKds = true;
-              }
+        // 3. Pedidos dos Motoboys: stores/${tenantId}/state/motoboy_orders (Consolidado: 1 Leitura)
+        unsubMotoboyOrders = onSnapshot(doc(db, "stores", tenantId, "state", "motoboy_orders"), async (docSnap) => {
+          let remoteOrders = [];
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data && Array.isArray(data.orders)) {
+              remoteOrders = data.orders.filter(o => !o.archived);
             }
-          });
-          if (changedKds && typeof saveOrders === 'function') {
-            saveOrders(true); // pass true to skip Firebase write on local sync
-            if (typeof renderKanban === 'function') renderKanban();
-          }
-
-          if (typeof renderMotoboyMosaic === 'function') renderMotoboyMosaic();
-          if (typeof renderMainMotoboyList === 'function') renderMainMotoboyList();
-
-          const activePortalMb = window.activePortalMotoboyId || (typeof window.getActivePortalMotoboyId === 'function' ? window.getActivePortalMotoboyId() : localStorage.getItem('activePortalMotoboyId'));
-          if (activePortalMb) {
-            if (typeof renderPortalDashboard === 'function') {
-              renderPortalDashboard(activePortalMb);
-            }
-
-            // DETECÇÃO DE NOVO PEDIDO EM TEMPO REAL VIA FIREBASE
-            const myOrders = remoteOrders.filter(o => String(o.motoboyId) === String(activePortalMb));
-            if (!window._initialMotoboySyncDone) {
-              window._knownMotoboyOrderIds = new Set(myOrders.map(o => String(o.id)));
-              window._initialMotoboySyncDone = true;
-            } else {
-              const incomingNewOrders = myOrders.filter(o => !window._knownMotoboyOrderIds.has(String(o.id)));
-              if (incomingNewOrders.length > 0) {
-                incomingNewOrders.forEach(ord => {
-                  window._knownMotoboyOrderIds.add(String(ord.id));
-                  if (typeof triggerMotoboyNewOrderAlert === 'function') {
-                    triggerMotoboyNewOrderAlert(ord);
-                  }
+          } else {
+            // Migração automática transparente se o documento de estado ainda não existir
+            try {
+              const snap = await getDocs(query(collection(db, "stores", tenantId, "motoboyOrders"), limit(300)));
+              if (!snap.empty) {
+                snap.forEach(d => {
+                  const data = d.data();
+                  if (data && !data.archived) remoteOrders.push(data);
                 });
+                remoteOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                setDoc(doc(db, "stores", tenantId, "state", "motoboy_orders"), { orders: remoteOrders, updatedAt: Date.now() }, { merge: true }).catch(()=>{});
+              }
+            } catch(e) {}
+          }
+
+          if (remoteOrders.length > 0 || docSnap.exists()) {
+            remoteOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            if (typeof window.setMotoboyOrders === 'function') window.setMotoboyOrders(remoteOrders);
+            else window.motoboyOrders = remoteOrders;
+
+            if (typeof window.getTenantStorageKey === 'function') {
+              localStorage.setItem(window.getTenantStorageKey('motoboy_orders'), JSON.stringify(remoteOrders));
+            }
+            
+            // Sincroniza status com o Painel KDS em tempo real
+            let changedKds = false;
+            remoteOrders.forEach(mbOrd => {
+              if (mbOrd.status === 'entregue' && typeof findMatchingIFoodOrder === 'function') {
+                const matched = findMatchingIFoodOrder(mbOrd.orderNumber);
+                if (matched && matched.status !== 'concluido') {
+                  matched.status = 'concluido';
+                  changedKds = true;
+                }
+              }
+            });
+            if (changedKds && typeof saveOrders === 'function') {
+              saveOrders(true); // skip write loopback
+              if (typeof renderKanban === 'function') renderKanban();
+            }
+
+            if (typeof renderMotoboyMosaic === 'function') renderMotoboyMosaic();
+            if (typeof renderMainMotoboyList === 'function') renderMainMotoboyList();
+
+            const activePortalMb = window.activePortalMotoboyId || (typeof window.getActivePortalMotoboyId === 'function' ? window.getActivePortalMotoboyId() : localStorage.getItem('activePortalMotoboyId'));
+            if (activePortalMb) {
+              if (typeof renderPortalDashboard === 'function') {
+                renderPortalDashboard(activePortalMb);
+              }
+
+              // DETECÇÃO DE NOVO PEDIDO EM TEMPO REAL VIA FIREBASE
+              const myOrders = remoteOrders.filter(o => String(o.motoboyId) === String(activePortalMb));
+              if (!window._initialMotoboySyncDone) {
+                window._knownMotoboyOrderIds = new Set(myOrders.map(o => String(o.id)));
+                window._initialMotoboySyncDone = true;
+              } else {
+                const incomingNewOrders = myOrders.filter(o => !window._knownMotoboyOrderIds.has(String(o.id)));
+                if (incomingNewOrders.length > 0) {
+                  incomingNewOrders.forEach(ord => {
+                    window._knownMotoboyOrderIds.add(String(ord.id));
+                    if (typeof triggerMotoboyNewOrderAlert === 'function') {
+                      triggerMotoboyNewOrderAlert(ord);
+                    }
+                  });
+                }
               }
             }
           }
@@ -9376,29 +9478,40 @@
           }
         });
 
-        // 4. Pedidos iFood KDS da Loja: stores/${tenantId}/orders (Até 1000 pedidos por turno)
-        const ordersQuery = query(collection(db, "stores", tenantId, "orders"), limit(1000));
-        unsubOrders = onSnapshot(ordersQuery, (snapshot) => {
-          const remoteOrders = [];
-          if (!snapshot.empty) {
-            snapshot.forEach(docSnap => {
-              const data = docSnap.data();
-              if (data && !data.archived) {
-                remoteOrders.push(data);
+        // 4. Pedidos iFood KDS da Loja: stores/${tenantId}/state/kds_orders (Consolidado: 1 Leitura)
+        unsubOrders = onSnapshot(doc(db, "stores", tenantId, "state", "kds_orders"), async (docSnap) => {
+          let remoteOrders = [];
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data && Array.isArray(data.orders)) {
+              remoteOrders = data.orders.filter(o => !o.archived);
+            }
+          } else {
+            // Migração automática transparente se o documento de estado ainda não existir
+            try {
+              const snap = await getDocs(query(collection(db, "stores", tenantId, "orders"), limit(200)));
+              if (!snap.empty) {
+                snap.forEach(d => {
+                  const data = d.data();
+                  if (data && !data.archived) remoteOrders.push(data);
+                });
+                remoteOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                setDoc(doc(db, "stores", tenantId, "state", "kds_orders"), { orders: remoteOrders, updatedAt: Date.now() }, { merge: true }).catch(()=>{});
               }
-              const cleanId = String(data.id || data.displayId || Date.now()).replace(/[^a-zA-Z0-9_\-]/g, '_');
-              if (window._firebaseLastSynced) window._firebaseLastSynced[cleanId] = JSON.stringify(data);
-            });
-            remoteOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            } catch(e) {}
           }
-          if (typeof window.setOrders === 'function') window.setOrders(remoteOrders);
-          else window.orders = remoteOrders;
 
-          if (typeof window.getTenantStorageKey === 'function') {
-            localStorage.setItem(window.getTenantStorageKey('orders'), JSON.stringify(remoteOrders));
+          if (remoteOrders.length > 0 || docSnap.exists()) {
+            remoteOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            if (typeof window.setOrders === 'function') window.setOrders(remoteOrders);
+            else window.orders = remoteOrders;
+
+            if (typeof window.getTenantStorageKey === 'function') {
+              localStorage.setItem(window.getTenantStorageKey('orders'), JSON.stringify(remoteOrders));
+            }
+            
+            if (typeof renderKanban === 'function') renderKanban();
           }
-          
-          if (typeof renderKanban === 'function') renderKanban();
         }, (err) => {
           console.warn("Firebase Orders error:", err);
           if (err && err.message && (err.message.includes('quota') || err.message.includes('Quota') || err.message.includes('resource-exhausted'))) {
