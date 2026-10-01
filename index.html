@@ -2469,6 +2469,7 @@
                 <span id="quick-order-ifood-id" class="text-xs font-black text-slate-900"></span>
                 <span id="quick-order-ifood-customer" class="text-xs font-semibold text-slate-700"></span>
                 <span id="quick-order-ifood-status" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200"></span>
+                <span id="quick-order-ifood-store" class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 hidden"></span>
               </div>
               <span id="quick-order-ifood-address" class="text-[11px] text-slate-600 font-medium block truncate mt-0.5"></span>
               <span class="text-[11px] font-bold text-red-700 block mt-0.5">
@@ -6948,13 +6949,62 @@
     }
     window.copyOrderLocator = copyOrderLocator;
 
+    // Identificação Inteligente da Loja de Origem para Pedidos iFood
+    function getStoreForIFoodOrder(match) {
+      if (!match) return null;
+      if (!Array.isArray(storesList) || storesList.length === 0) {
+        if (match.storeName || match.merchantName) {
+          return { id: null, name: match.storeName || match.merchantName };
+        }
+        return null;
+      }
+
+      // 1. Procurar por merchantId exato ou contido (suporta múltiplos separados por vírgula)
+      if (match.merchantId) {
+        const cleanMatchMid = String(match.merchantId).trim().toLowerCase();
+        const found = storesList.find(s => {
+          if (!s.merchantId) return false;
+          const cleanSMid = String(s.merchantId).toLowerCase();
+          return cleanSMid.includes(cleanMatchMid) || cleanMatchMid.includes(cleanSMid);
+        });
+        if (found) return found;
+      }
+
+      // 2. Procurar por storeName / merchantName exato
+      const candidateNames = [match.storeName, match.merchantName].filter(Boolean).map(n => String(n).trim().toLowerCase());
+      for (const cName of candidateNames) {
+        const foundExact = storesList.find(s => s.name && s.name.trim().toLowerCase() === cName);
+        if (foundExact) return foundExact;
+      }
+
+      // 3. Procurar por substring aproximada
+      for (const cName of candidateNames) {
+        const foundPartial = storesList.find(s => {
+          if (!s.name) return false;
+          const sName = s.name.trim().toLowerCase();
+          return sName.length > 2 && (cName.includes(sName) || sName.includes(cName));
+        });
+        if (foundPartial) return foundPartial;
+      }
+
+      // 4. Se o pedido tiver um nome de loja identificado pelo iFood
+      if (match.storeName || match.merchantName) {
+        return { id: null, name: match.storeName || match.merchantName };
+      }
+
+      return null;
+    }
+    window.getStoreForIFoodOrder = getStoreForIFoodOrder;
+
     function handleQuickOrderInput(val) {
       const banner = document.getElementById('quick-order-ifood-match-banner');
       const custNameInput = document.getElementById('quick-customer-name');
       const custAddrInput = document.getElementById('quick-customer-address');
+      const storeEl = document.getElementById('quick-order-ifood-store');
 
       if (!val) {
         if (banner) banner.classList.add('hidden');
+        if (storeEl) storeEl.classList.add('hidden');
         if (custNameInput) custNameInput.value = '';
         if (custAddrInput) custAddrInput.value = '';
         return;
@@ -6985,6 +7035,20 @@
           statusEl.textContent = stMap[match.status] || match.status;
         }
 
+        // Identificação Automática da Loja do iFood
+        const detectedStore = getStoreForIFoodOrder(match);
+        if (detectedStore) {
+          if (detectedStore.id && !detectedStore.active && typeof selectActiveStore === 'function') {
+            selectActiveStore(detectedStore.id);
+          }
+          if (storeEl) {
+            storeEl.textContent = `🏪 Loja: ${detectedStore.name}`;
+            storeEl.classList.remove('hidden');
+          }
+        } else if (storeEl) {
+          storeEl.classList.add('hidden');
+        }
+
         if (custNameInput && match.customerName) {
           custNameInput.value = match.customerName;
         }
@@ -6993,6 +7057,7 @@
         }
       } else {
         if (banner) banner.classList.add('hidden');
+        if (storeEl) storeEl.classList.add('hidden');
         // Se NÃO for pedido do iFood, limpa campos para não puxar dados de clientes errados
         if (custNameInput && !custNameInput.dataset.manual) {
           custNameInput.value = '';
@@ -7036,10 +7101,17 @@
       // Localiza se o primeiro pedido existe no iFood
       const primaryNum = rawNumbers[0];
       const matchedIFood = findMatchingIFoodOrder(primaryNum) || findMatchingIFoodOrder(orderNumberRaw);
+      let detectedStore = null;
       if (matchedIFood) {
         // Se for um pedido do iFood, forçamos o uso dos dados oficiais
         customerName = matchedIFood.customerName || customerName;
         customerAddress = matchedIFood.customerAddress || customerAddress;
+
+        // Auto-seleciona a loja identificada do iFood
+        detectedStore = getStoreForIFoodOrder(matchedIFood);
+        if (detectedStore && detectedStore.id && !detectedStore.active && typeof selectActiveStore === 'function') {
+          selectActiveStore(detectedStore.id);
+        }
       }
 
       // Guardar dados temporários para o fluxo de modais
@@ -7048,7 +7120,8 @@
         orderNumber: rawNumbers.join(', '),
         customerName: customerName,
         customerAddress: customerAddress,
-        matchedIFoodId: matchedIFood ? matchedIFood.id : null
+        matchedIFoodId: matchedIFood ? matchedIFood.id : null,
+        detectedStoreName: detectedStore ? detectedStore.name : (matchedIFood ? (matchedIFood.storeName || matchedIFood.merchantName) : null)
       };
 
       // Abre a Etapa 1: Seleção de Motoboy
@@ -7065,11 +7138,15 @@
       // Exibe detalhes do pedido e aviso de despacho no topo do modal
       if (infoEl) {
         if (pendingOrderData && pendingOrderData.matchedIFoodId) {
+          const storeBadge = pendingOrderData.detectedStoreName 
+            ? `<span class="inline-flex items-center gap-1 font-black text-emerald-800 bg-emerald-100 border border-emerald-300 px-1.5 py-0.5 rounded text-[10px] mt-0.5">🏪 ${escapeHtml(pendingOrderData.detectedStoreName)}</span>`
+            : '';
           infoEl.innerHTML = `
             <div class="p-3 bg-red-50 border border-red-200 rounded-2xl flex items-center justify-between gap-2 text-xs">
               <div>
                 <span class="font-extrabold text-red-950 block">Pedido iFood #${pendingOrderData.orderNumber}</span>
-                <span class="text-[11px] text-red-800 font-medium">${escapeHtml(pendingOrderData.customerName || 'Cliente iFood')}</span>
+                <span class="text-[11px] text-red-800 font-medium block">${escapeHtml(pendingOrderData.customerName || 'Cliente iFood')}</span>
+                ${storeBadge}
               </div>
               <span class="px-2 py-0.5 rounded-full bg-red-600 text-white font-black text-[10px] uppercase tracking-wider">Despachar no iFood</span>
             </div>
@@ -7155,10 +7232,14 @@
         const mb = motoboysList.find(m => m.id === pendingOrderData.motoboyId);
         const mbName = mb ? mb.name : 'Motoboy';
         if (pendingOrderData.matchedIFoodId) {
+          const storeBadge = pendingOrderData.detectedStoreName 
+            ? `<span class="text-[10px] text-emerald-900 font-extrabold block">🏪 Loja: ${escapeHtml(pendingOrderData.detectedStoreName)}</span>`
+            : '';
           feeInfoEl.innerHTML = `
             <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-2 text-xs">
               <div>
                 <span class="font-extrabold text-emerald-950 block">Pedido iFood #${pendingOrderData.orderNumber} &rarr; ${escapeHtml(mbName)}</span>
+                ${storeBadge}
                 <span class="text-[11px] text-emerald-800 font-semibold">Escolha a taxa para despachar no iFood</span>
               </div>
               <span class="px-2 py-0.5 rounded-full bg-emerald-700 text-white font-bold text-[10px] uppercase">iFood</span>
@@ -7302,11 +7383,14 @@
 
         let finalCustomerName = '';
         let finalCustomerAddress = '';
+        let finalStoreName = '';
 
         if (matched) {
           // Pedido Oficial do iFood: mantemos 100% como já estava (nome e endereço reais do cliente iFood)
           finalCustomerName = matched.customerName || 'Cliente iFood';
           finalCustomerAddress = matched.customerAddress || '';
+          const ordStore = getStoreForIFoodOrder(matched);
+          finalStoreName = (ordStore && ordStore.name) || matched.storeName || matched.merchantName || (activeStore ? activeStore.name : 'Minha Loja');
         } else {
           // Pedido Avulso (Balcão / Telefone / WhatsApp): NÃO puxa dados de clientes do iFood
           const typedName = (idx === 0 ? pendingOrderData.customerName : '') || '';
@@ -7314,6 +7398,7 @@
           // Se o operador não digitou nome manual, identifica como Pedido Avulso / Loja
           finalCustomerName = typedName || (activeStore ? `Pedido Avulso (${activeStore.name})` : 'Pedido Avulso');
           finalCustomerAddress = typedAddr;
+          finalStoreName = activeStore ? activeStore.name : 'Minha Loja';
         }
 
         // Extrai o Localizador de 8 dígitos de forma 100% dinâmica do iFood
@@ -7337,7 +7422,7 @@
           id: 'ord-' + (Date.now() + idx),
           orderNumber: orderNum,
           motoboyId: pendingOrderData.motoboyId,
-          storeName: activeStore ? activeStore.name : 'Minha Loja',
+          storeName: finalStoreName,
           deliveryFee: Number(feeValue) || 0,
           feeName: feeName || 'Taxa Fixa',
           customerName: finalCustomerName,
