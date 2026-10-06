@@ -210,8 +210,31 @@ app.get('/api/ifood/merchants-status', async (req, res) => {
   }
 });
 
-// Cache de coordenadas das lojas iFood (evita consultas repetidas)
+// Cache de coordenadas das lojas iFood e endereços (evita consultas repetidas)
 const merchantCoordsCache: Record<string, { lat: number; lng: number; address?: string }> = {};
+const geocodeCache: Record<string, { lat: number; lng: number }> = {};
+
+async function geocodeAddressServer(addressStr: string): Promise<{ lat: number; lng: number } | null> {
+  if (!addressStr || typeof addressStr !== 'string') return null;
+  const clean = addressStr.replace(/Ref:.*$/i, '').replace(/\([^)]*\)/g, '').trim();
+  if (!clean || clean.length < 5) return null;
+  if (geocodeCache[clean]) return geocodeCache[clean];
+  try {
+    const q = encodeURIComponent(`${clean}, Brasil`);
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${q}`, {
+      headers: { 'User-Agent': 'FastPedidos/1.0 (Logistics Distance Calculator)' }
+    });
+    if (res.ok) {
+      const arr: any = await res.json();
+      if (Array.isArray(arr) && arr.length > 0 && arr[0].lat && arr[0].lon) {
+        const coords = { lat: Number(arr[0].lat), lng: Number(arr[0].lon) };
+        geocodeCache[clean] = coords;
+        return coords;
+      }
+    }
+  } catch (e) {}
+  return null;
+}
 
 function haversineRoadDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const toRad = (deg: number) => (deg * Math.PI) / 180;
@@ -245,13 +268,26 @@ async function calculateRouteDistanceKm(lat1: number, lng1: number, lat2: number
 }
 
 async function getMerchantCoordinates(merchantId: string, token: string): Promise<{ lat: number; lng: number } | null> {
-  if (!merchantId) return null;
-  const cleanId = merchantId.split(',')[0].trim();
-  if (!cleanId) return null;
-  if (merchantCoordsCache[cleanId]) {
+  let cleanId = merchantId ? merchantId.split(',')[0].trim() : '';
+  if (cleanId && merchantCoordsCache[cleanId]) {
     return merchantCoordsCache[cleanId];
   }
   try {
+    // Se não tiver merchantId explícito, busca na lista de lojas do token
+    if (!cleanId) {
+      const listRes = await fetch('https://merchant-api.ifood.com.br/merchant/v1.0/merchants', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (listRes.ok) {
+        const listData: any = await listRes.json();
+        if (Array.isArray(listData) && listData.length > 0 && listData[0].id) {
+          cleanId = listData[0].id;
+          if (merchantCoordsCache[cleanId]) return merchantCoordsCache[cleanId];
+        }
+      }
+    }
+    if (!cleanId) return null;
+
     const res = await fetch(`https://merchant-api.ifood.com.br/merchant/v1.0/merchants/${cleanId}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
@@ -263,6 +299,15 @@ async function getMerchantCoordinates(merchantId: string, token: string): Promis
       if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
         merchantCoordsCache[cleanId] = { lat, lng };
         return merchantCoordsCache[cleanId];
+      }
+      // Fallback: geocodifica o endereço da loja cadastrado no iFood
+      const parts = [addr.streetName, addr.streetNumber, addr.neighborhood, addr.city, addr.state].filter(Boolean);
+      if (parts.length >= 2) {
+        const geo = await geocodeAddressServer(parts.join(', '));
+        if (geo) {
+          merchantCoordsCache[cleanId] = geo;
+          return geo;
+        }
       }
     }
   } catch (e) {}
@@ -395,6 +440,13 @@ async function enrichFormattedOrderDistance(formatted: any, token: string, fallb
       if (mCoords) {
         formatted.storeLat = mCoords.lat;
         formatted.storeLng = mCoords.lng;
+      }
+    }
+    if ((!formatted.customerLat || !formatted.customerLng) && formatted.customerAddress && formatted.customerAddress !== 'Endereço não informado') {
+      const cGeo = await geocodeAddressServer(formatted.customerAddress);
+      if (cGeo) {
+        formatted.customerLat = cGeo.lat;
+        formatted.customerLng = cGeo.lng;
       }
     }
     if (formatted.storeLat && formatted.storeLng && formatted.customerLat && formatted.customerLng) {
@@ -751,7 +803,7 @@ app.post('/api/ifood/fetch-order-by-id', async (req, res) => {
 // API Route: Calculate or Enrich Distance (KM) for an iFood Order
 app.post('/api/ifood/order-distance', async (req, res) => {
   try {
-    const { ifoodOrderId, merchantId, clientId, clientSecret, customerLat, customerLng, storeLat, storeLng } = req.body;
+    const { ifoodOrderId, merchantId, clientId, clientSecret, customerAddress, customerLat, customerLng, storeLat, storeLng } = req.body;
     const cid = clientId || process.env.IFOOD_CLIENT_ID;
     const csec = clientSecret || process.env.IFOOD_CLIENT_SECRET;
     const mid = merchantId || process.env.IFOOD_MERCHANT_ID;
@@ -760,12 +812,13 @@ app.post('/api/ifood/order-distance', async (req, res) => {
     let sLng = Number(storeLng);
     let cLat = Number(customerLat);
     let cLng = Number(customerLng);
+    let resolvedCustomerAddress = customerAddress || '';
 
     if ((isNaN(sLat) || !sLat || isNaN(cLat) || !cLat) && cid && csec) {
       const token = await getIFoodToken(cid, csec);
       let targetMid = mid || '';
 
-      if ((!cLat || isNaN(cLat)) && ifoodOrderId) {
+      if ((!cLat || isNaN(cLat) || !targetMid) && ifoodOrderId) {
         const cleanId = String(ifoodOrderId).replace(/^#IF-/, '').trim();
         const oRes = await fetch(`https://merchant-api.ifood.com.br/order/v1.0/orders/${cleanId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -776,6 +829,10 @@ app.post('/api/ifood/order-distance', async (req, res) => {
           if (cCoords) {
             cLat = cCoords.lat;
             cLng = cCoords.lng;
+          }
+          if (!resolvedCustomerAddress) {
+            const addr = rawOrder?.delivery?.deliveryAddress || {};
+            resolvedCustomerAddress = addr.formattedAddress || [addr.streetName, addr.streetNumber, addr.neighborhood, addr.city, addr.state].filter(Boolean).join(', ');
           }
           if (!targetMid && rawOrder?.merchant?.id) {
             targetMid = rawOrder.merchant.id;
@@ -788,12 +845,20 @@ app.post('/api/ifood/order-distance', async (req, res) => {
         }
       }
 
-      if ((!sLat || isNaN(sLat)) && targetMid) {
+      if (!sLat || isNaN(sLat)) {
         const mCoords = await getMerchantCoordinates(targetMid, token);
         if (mCoords) {
           sLat = mCoords.lat;
           sLng = mCoords.lng;
         }
+      }
+    }
+
+    if ((!cLat || isNaN(cLat)) && resolvedCustomerAddress) {
+      const cGeo = await geocodeAddressServer(resolvedCustomerAddress);
+      if (cGeo) {
+        cLat = cGeo.lat;
+        cLng = cGeo.lng;
       }
     }
 

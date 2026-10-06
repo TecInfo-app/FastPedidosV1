@@ -7142,7 +7142,28 @@
     }
     window.findFeeByDistanceKm = findFeeByDistanceKm;
 
-    const _pendingDistanceResolvers = new Set();
+    const _pendingDistanceResolvers = new Map();
+    const _geocodeAddressCache = {};
+
+    async function geocodeAddressFallbackClient(addressStr) {
+      if (!addressStr || typeof addressStr !== 'string') return null;
+      const clean = addressStr.replace(/Ref:.*$/i, '').replace(/\([^)]*\)/g, '').trim();
+      if (!clean || clean.length < 5) return null;
+      if (_geocodeAddressCache[clean]) return _geocodeAddressCache[clean];
+      try {
+        const q = encodeURIComponent(clean + ', Brasil');
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${q}`);
+        if (res.ok) {
+          const arr = await res.json();
+          if (Array.isArray(arr) && arr.length > 0 && arr[0].lat && arr[0].lon) {
+            const coords = { lat: Number(arr[0].lat), lng: Number(arr[0].lon) };
+            _geocodeAddressCache[clean] = coords;
+            return coords;
+          }
+        }
+      } catch (e) {}
+      return null;
+    }
 
     async function resolveIFoodOrderDistanceKm(order) {
       if (!order) return null;
@@ -7150,7 +7171,7 @@
         return Number(order.distanceKm);
       }
 
-      // Se já tiver coordenadas da loja e do cliente no pedido, calcula imediatamente
+      // 1. Se já tiver coordenadas da loja e do cliente no pedido, calcula imediatamente
       if (order.storeLat && order.storeLng && order.customerLat && order.customerLng) {
         order.distanceKm = haversineRoadDistanceKmClient(
           Number(order.storeLat),
@@ -7158,58 +7179,172 @@
           Number(order.customerLat),
           Number(order.customerLng)
         );
-        // Refina via OSRM em background sem bloquear
+        // Refina via OSRM em background
         try {
           const osrmRes = await fetch(`https://router.project-osrm.org/route/v1/driving/${order.storeLng},${order.storeLat};${order.customerLng},${order.customerLat}?overview=false`);
           if (osrmRes.ok) {
             const osrmData = await osrmRes.json();
             if (osrmData?.routes?.[0]?.distance !== undefined) {
               order.distanceKm = Math.round((Number(osrmData.routes[0].distance) / 1000) * 10) / 10;
-              saveOrders(true); // Salva localmente sem gastar gravação extra no Firebase
+              saveOrders(true);
             }
           }
         } catch (e) {}
         return order.distanceKm;
       }
 
-      // Consulta o backend (/api/ifood/order-distance) caso o pedido tenha vindo sem coordenadas
       const orderKey = order.ifoodOrderId || order.id;
-      if (orderKey && !_pendingDistanceResolvers.has(orderKey) && apiCredentials.clientId && apiCredentials.clientSecret) {
-        _pendingDistanceResolvers.add(orderKey);
-        try {
-          const res = await fetch(`${getApiBaseUrl()}/api/ifood/order-distance`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              ifoodOrderId: order.ifoodOrderId || order.id,
-              merchantId: order.merchantId || apiCredentials.merchantId,
-              clientId: apiCredentials.clientId,
-              clientSecret: apiCredentials.clientSecret,
-              customerLat: order.customerLat,
-              customerLng: order.customerLng,
-              storeLat: order.storeLat,
-              storeLng: order.storeLng
-            })
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data && data.success && data.distanceKm) {
-              order.distanceKm = Number(data.distanceKm);
-              if (data.storeLat) order.storeLat = data.storeLat;
-              if (data.storeLng) order.storeLng = data.storeLng;
-              if (data.customerLat) order.customerLat = data.customerLat;
-              if (data.customerLng) order.customerLng = data.customerLng;
-              saveOrders(true); // Salva localmente sem gastar gravação extra no Firebase
-              return order.distanceKm;
-            }
-          }
-        } catch (e) {
-        } finally {
-          _pendingDistanceResolvers.delete(orderKey);
-        }
+      if (!orderKey) return null;
+
+      // Se já houver uma requisição em andamento para este pedido, aguarda a mesma Promise!
+      if (_pendingDistanceResolvers.has(orderKey)) {
+        return await _pendingDistanceResolvers.get(orderKey);
       }
 
-      return order.distanceKm || null;
+      const resolverPromise = (async () => {
+        try {
+          const detectedStore = getStoreForIFoodOrder(order);
+          const targetMerchantId = order.merchantId || (detectedStore && detectedStore.merchantId) || apiCredentials.merchantId || '';
+
+          // 2. Tenta endpoints de backend (tanto local Node Server quanto getApiBaseUrl se diferente)
+          const baseUrls = [''];
+          const customBase = getApiBaseUrl();
+          if (customBase && !baseUrls.includes(customBase)) {
+            baseUrls.unshift(customBase);
+          }
+
+          if (apiCredentials.clientId && apiCredentials.clientSecret) {
+            for (const base of baseUrls) {
+              try {
+                const res = await fetch(`${base}/api/ifood/order-distance`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    ifoodOrderId: order.ifoodOrderId || order.id,
+                    merchantId: targetMerchantId,
+                    clientId: apiCredentials.clientId,
+                    clientSecret: apiCredentials.clientSecret,
+                    customerAddress: order.customerAddress || '',
+                    customerLat: order.customerLat,
+                    customerLng: order.customerLng,
+                    storeLat: order.storeLat,
+                    storeLng: order.storeLng
+                  })
+                });
+                if (res.ok) {
+                  const ct = res.headers.get('content-type') || '';
+                  if (ct.includes('application/json')) {
+                    const data = await res.json();
+                    if (data && data.success && data.distanceKm) {
+                      order.distanceKm = Number(data.distanceKm);
+                      if (data.storeLat) order.storeLat = data.storeLat;
+                      if (data.storeLng) order.storeLng = data.storeLng;
+                      if (data.customerLat) order.customerLat = data.customerLat;
+                      if (data.customerLng) order.customerLng = data.customerLng;
+                      saveOrders(true);
+                      return order.distanceKm;
+                    }
+                  }
+                }
+              } catch (e) {}
+            }
+
+            // 3. Fallback: Usa a rota /api/ifood/fetch-order-by-id (que já existe no Cloudflare Worker em produção!)
+            if (order.ifoodOrderId) {
+              for (const base of baseUrls) {
+                try {
+                  const res = await fetch(`${base}/api/ifood/fetch-order-by-id`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      orderId: order.ifoodOrderId,
+                      merchantId: targetMerchantId,
+                      clientId: apiCredentials.clientId,
+                      clientSecret: apiCredentials.clientSecret
+                    })
+                  });
+                  if (res.ok) {
+                    const ct = res.headers.get('content-type') || '';
+                    if (ct.includes('application/json')) {
+                      const data = await res.json();
+                      const fetchedOrd = data?.order;
+                      if (fetchedOrd) {
+                        if (fetchedOrd.distanceKm && Number(fetchedOrd.distanceKm) > 0) {
+                          order.distanceKm = Number(fetchedOrd.distanceKm);
+                          order.storeLat = fetchedOrd.storeLat || order.storeLat;
+                          order.storeLng = fetchedOrd.storeLng || order.storeLng;
+                          order.customerLat = fetchedOrd.customerLat || order.customerLat;
+                          order.customerLng = fetchedOrd.customerLng || order.customerLng;
+                          saveOrders(true);
+                          return order.distanceKm;
+                        }
+                        if (fetchedOrd.customerLat && fetchedOrd.customerLng) {
+                          order.customerLat = fetchedOrd.customerLat;
+                          order.customerLng = fetchedOrd.customerLng;
+                        }
+                        if (fetchedOrd.storeLat && fetchedOrd.storeLng) {
+                          order.storeLat = fetchedOrd.storeLat;
+                          order.storeLng = fetchedOrd.storeLng;
+                        }
+                      }
+                    }
+                  }
+                } catch (e) {}
+              }
+            }
+          }
+
+          // 4. Se ainda faltar coordenada do cliente mas tiver endereço em texto, geocodifica automaticamente
+          if ((!order.customerLat || !order.customerLng) && order.customerAddress && order.customerAddress !== 'Retirada no Balcão') {
+            const geoCust = await geocodeAddressFallbackClient(order.customerAddress);
+            if (geoCust) {
+              order.customerLat = geoCust.lat;
+              order.customerLng = geoCust.lng;
+            }
+          }
+
+          // 5. Se tiver coordenadas em outro pedido da mesma loja na memória, reaproveita a coordenada da loja
+          if (!order.storeLat || !order.storeLng) {
+            const donorOrder = (orders || []).find(o => o && o.storeLat && o.storeLng && (
+              (order.merchantId && o.merchantId === order.merchantId) ||
+              (order.storeName && o.storeName === order.storeName)
+            ));
+            if (donorOrder) {
+              order.storeLat = donorOrder.storeLat;
+              order.storeLng = donorOrder.storeLng;
+            }
+          }
+
+          // 6. Se agora temos ambas as coordenadas, calcula via OSRM / Haversine
+          if (order.storeLat && order.storeLng && order.customerLat && order.customerLng) {
+            order.distanceKm = haversineRoadDistanceKmClient(
+              Number(order.storeLat),
+              Number(order.storeLng),
+              Number(order.customerLat),
+              Number(order.customerLng)
+            );
+            try {
+              const osrmRes = await fetch(`https://router.project-osrm.org/route/v1/driving/${order.storeLng},${order.storeLat};${order.customerLng},${order.customerLat}?overview=false`);
+              if (osrmRes.ok) {
+                const osrmData = await osrmRes.json();
+                if (osrmData?.routes?.[0]?.distance !== undefined) {
+                  order.distanceKm = Math.round((Number(osrmData.routes[0].distance) / 1000) * 10) / 10;
+                }
+              }
+            } catch (e) {}
+            saveOrders(true);
+            return order.distanceKm;
+          }
+        } catch (e) {}
+        return order.distanceKm || null;
+      })();
+
+      _pendingDistanceResolvers.set(orderKey, resolverPromise);
+      try {
+        return await resolverPromise;
+      } finally {
+        _pendingDistanceResolvers.delete(orderKey);
+      }
     }
     window.resolveIFoodOrderDistanceKm = resolveIFoodOrderDistanceKm;
 
@@ -9772,11 +9907,14 @@
                 if (typeof updateActiveStoreDisplay === 'function') updateActiveStoreDisplay();
               }
               if (Array.isArray(data.deliveryFeesList) && data.deliveryFeesList.length > 0) {
-                if (typeof window.setDeliveryFeesList === 'function') window.setDeliveryFeesList(data.deliveryFeesList);
-                else window.deliveryFeesList = data.deliveryFeesList;
+                const enrichedFees = typeof window.ensureDefaultFeeKmRanges === 'function'
+                  ? window.ensureDefaultFeeKmRanges(data.deliveryFeesList)
+                  : data.deliveryFeesList;
+                if (typeof window.setDeliveryFeesList === 'function') window.setDeliveryFeesList(enrichedFees);
+                else window.deliveryFeesList = enrichedFees;
 
                 if (typeof window.getTenantStorageKey === 'function') {
-                  localStorage.setItem(window.getTenantStorageKey('delivery_fees'), JSON.stringify(data.deliveryFeesList));
+                  localStorage.setItem(window.getTenantStorageKey('delivery_fees'), JSON.stringify(enrichedFees));
                 }
                 if (typeof renderDrawerFees === 'function') renderDrawerFees();
                 if (typeof populateDeliveryFeeSelect === 'function') populateDeliveryFeeSelect();
