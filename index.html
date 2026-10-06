@@ -7144,24 +7144,71 @@
 
     const _pendingDistanceResolvers = new Map();
     const _geocodeAddressCache = {};
+    const _storeAddressCoordsCache = {};
 
-    async function geocodeAddressFallbackClient(addressStr) {
-      if (!addressStr || typeof addressStr !== 'string') return null;
-      const clean = addressStr.replace(/Ref:.*$/i, '').replace(/\([^)]*\)/g, '').trim();
-      if (!clean || clean.length < 5) return null;
-      if (_geocodeAddressCache[clean]) return _geocodeAddressCache[clean];
-      try {
-        const q = encodeURIComponent(clean + ', Brasil');
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${q}`);
-        if (res.ok) {
-          const arr = await res.json();
-          if (Array.isArray(arr) && arr.length > 0 && arr[0].lat && arr[0].lon) {
-            const coords = { lat: Number(arr[0].lat), lng: Number(arr[0].lon) };
-            _geocodeAddressCache[clean] = coords;
-            return coords;
-          }
+    // Extrai a cidade/estado a partir do endereço de qualquer pedido iFood na memória
+    function detectDefaultCityStateFromOrders() {
+      for (const o of (orders || [])) {
+        if (!o || !o.customerAddress) continue;
+        // Formato comum: "Rua X, 123 - Bairro - Cidade - UF" ou "Rua X, 123 - Bairro - Cidade"
+        const parts = String(o.customerAddress).replace(/Ref:.*$/i, '').split(' - ').map(s => s.trim()).filter(Boolean);
+        if (parts.length >= 3) {
+          return parts[parts.length - 1];
         }
-      } catch (e) {}
+      }
+      return '';
+    }
+
+    async function geocodeAddressFallbackClient(addressStr, cityHint = '') {
+      if (!addressStr || typeof addressStr !== 'string') return null;
+      // Remove referências ("Ref: ...") e complementos entre parênteses ("(Apto 12)") que atrapalham o geocodificador
+      let clean = addressStr
+        .replace(/Ref:.*$/i, '')
+        .replace(/\([^)]*\)/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (!clean || clean.length < 4) return null;
+
+      const cacheKey = `${clean}|${cityHint}`;
+      if (_geocodeAddressCache[cacheKey]) return _geocodeAddressCache[cacheKey];
+
+      // Prepara variações de consulta da mais específica para a mais abrangente (Rua + Número + Cidade)
+      const queries = [];
+      const parts = clean.split(' - ').map(p => p.trim()).filter(Boolean);
+      if (parts.length >= 3) {
+        // Ex: "Rua A, 100 - Centro - Cidade" -> tenta "Rua A, 100, Centro, Cidade, Brasil" e "Rua A, 100, Cidade, Brasil"
+        const streetAndNum = parts[0];
+        const neighborhood = parts[1];
+        const cityPart = parts.slice(2).join(', ');
+        queries.push(`${streetAndNum}, ${neighborhood}, ${cityPart}, Brasil`);
+        queries.push(`${streetAndNum}, ${cityPart}, Brasil`);
+        // Sem o número caso a numeração não conste no mapa
+        const streetOnly = streetAndNum.replace(/,\s*\d+.*$/, '').trim();
+        if (streetOnly !== streetAndNum) {
+          queries.push(`${streetOnly}, ${cityPart}, Brasil`);
+        }
+        queries.push(`${neighborhood}, ${cityPart}, Brasil`);
+      } else {
+        if (cityHint && !clean.toLowerCase().includes(cityHint.toLowerCase())) {
+          queries.push(`${clean}, ${cityHint}, Brasil`);
+        }
+        queries.push(`${clean}, Brasil`);
+      }
+
+      for (const qStr of queries) {
+        try {
+          const q = encodeURIComponent(qStr);
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${q}`);
+          if (res.ok) {
+            const arr = await res.json();
+            if (Array.isArray(arr) && arr.length > 0 && arr[0].lat && arr[0].lon) {
+              const coords = { lat: Number(arr[0].lat), lng: Number(arr[0].lon) };
+              _geocodeAddressCache[cacheKey] = coords;
+              return coords;
+            }
+          }
+        } catch (e) {}
+      }
       return null;
     }
 
@@ -7179,7 +7226,6 @@
           Number(order.customerLat),
           Number(order.customerLng)
         );
-        // Refina via OSRM em background
         try {
           const osrmRes = await fetch(`https://router.project-osrm.org/route/v1/driving/${order.storeLng},${order.storeLat};${order.customerLng},${order.customerLat}?overview=false`);
           if (osrmRes.ok) {
@@ -7205,15 +7251,19 @@
         try {
           const detectedStore = getStoreForIFoodOrder(order);
           const targetMerchantId = order.merchantId || (detectedStore && detectedStore.merchantId) || apiCredentials.merchantId || '';
+          const isGitHubPages = window.location.hostname.includes('github.io');
 
-          // 2. Tenta endpoints de backend (tanto local Node Server quanto getApiBaseUrl se diferente)
-          const baseUrls = [''];
+          // Define as URLs de API válidas (NUNCA chama caminho relativo '' no GitHub Pages para não dar erro 405!)
+          const baseUrls = [];
           const customBase = getApiBaseUrl();
-          if (customBase && !baseUrls.includes(customBase)) {
-            baseUrls.unshift(customBase);
+          if (customBase) {
+            baseUrls.push(customBase);
+          }
+          if (!isGitHubPages && !baseUrls.includes('')) {
+            baseUrls.push('');
           }
 
-          if (apiCredentials.clientId && apiCredentials.clientSecret) {
+          if (apiCredentials.clientId && apiCredentials.clientSecret && baseUrls.length > 0) {
             for (const base of baseUrls) {
               try {
                 const res = await fetch(`${base}/api/ifood/order-distance`, {
@@ -7249,7 +7299,7 @@
               } catch (e) {}
             }
 
-            // 3. Fallback: Usa a rota /api/ifood/fetch-order-by-id (que já existe no Cloudflare Worker em produção!)
+            // 3. Fallback via /api/ifood/fetch-order-by-id (suportado no Cloudflare Worker e no Node Server)
             if (order.ifoodOrderId) {
               for (const base of baseUrls) {
                 try {
@@ -7292,18 +7342,60 @@
                 } catch (e) {}
               }
             }
+
+            // 4. Se ainda não tiver coordenada da loja, consulta /api/ifood/test-credentials (que já existe no Worker antigo e retorna a lista de lojas com endereço!)
+            if ((!order.storeLat || !order.storeLng) && baseUrls.length > 0) {
+              const cacheMidKey = targetMerchantId || 'default_store';
+              if (_storeAddressCoordsCache[cacheMidKey]) {
+                order.storeLat = _storeAddressCoordsCache[cacheMidKey].lat;
+                order.storeLng = _storeAddressCoordsCache[cacheMidKey].lng;
+              } else {
+                for (const base of baseUrls) {
+                  try {
+                    const res = await fetch(`${base}/api/ifood/test-credentials`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        clientId: apiCredentials.clientId,
+                        clientSecret: apiCredentials.clientSecret,
+                        merchantId: targetMerchantId
+                      })
+                    });
+                    if (res.ok) {
+                      const data = await res.json();
+                      const merchants = data?.merchant?.merchants || [];
+                      if (Array.isArray(merchants) && merchants.length > 0) {
+                        const matchedM = merchants.find(m => m.id && targetMerchantId && targetMerchantId.includes(m.id)) || merchants[0];
+                        if (matchedM) {
+                          const mLat = Number(matchedM.address?.latitude ?? matchedM.latitude);
+                          const mLng = Number(matchedM.address?.longitude ?? matchedM.longitude);
+                          if (!isNaN(mLat) && !isNaN(mLng) && mLat !== 0 && mLng !== 0) {
+                            order.storeLat = mLat;
+                            order.storeLng = mLng;
+                            _storeAddressCoordsCache[cacheMidKey] = { lat: mLat, lng: mLng };
+                            break;
+                          }
+                        }
+                      }
+                    }
+                  } catch (e) {}
+                }
+              }
+            }
           }
 
-          // 4. Se ainda faltar coordenada do cliente mas tiver endereço em texto, geocodifica automaticamente
+          const cityHint = detectDefaultCityStateFromOrders();
+
+          // 5. Se ainda faltar coordenada do cliente mas tiver endereço em texto, geocodifica automaticamente no navegador
           if ((!order.customerLat || !order.customerLng) && order.customerAddress && order.customerAddress !== 'Retirada no Balcão') {
-            const geoCust = await geocodeAddressFallbackClient(order.customerAddress);
+            const geoCust = await geocodeAddressFallbackClient(order.customerAddress, cityHint);
             if (geoCust) {
               order.customerLat = geoCust.lat;
               order.customerLng = geoCust.lng;
             }
           }
 
-          // 5. Se tiver coordenadas em outro pedido da mesma loja na memória, reaproveita a coordenada da loja
+          // 6. Se tiver coordenadas em outro pedido da mesma loja na memória, reaproveita a coordenada da loja
           if (!order.storeLat || !order.storeLng) {
             const donorOrder = (orders || []).find(o => o && o.storeLat && o.storeLng && (
               (order.merchantId && o.merchantId === order.merchantId) ||
@@ -7315,7 +7407,24 @@
             }
           }
 
-          // 6. Se agora temos ambas as coordenadas, calcula via OSRM / Haversine
+          // 7. Se a loja cadastrada tiver endereço ou nome + cidade dos pedidos, geocodifica a loja como último recurso
+          if ((!order.storeLat || !order.storeLng) && cityHint) {
+            const storeQueryName = (detectedStore && detectedStore.address) || (detectedStore && detectedStore.name) || order.storeName || apiCredentials.storeName || '';
+            const cacheKey = `store_geo_${storeQueryName}_${cityHint}`;
+            if (_storeAddressCoordsCache[cacheKey]) {
+              order.storeLat = _storeAddressCoordsCache[cacheKey].lat;
+              order.storeLng = _storeAddressCoordsCache[cacheKey].lng;
+            } else if (storeQueryName) {
+              const geoStore = await geocodeAddressFallbackClient(`${storeQueryName}`, cityHint) || await geocodeAddressFallbackClient(`Centro, ${cityHint}`);
+              if (geoStore) {
+                order.storeLat = geoStore.lat;
+                order.storeLng = geoStore.lng;
+                _storeAddressCoordsCache[cacheKey] = geoStore;
+              }
+            }
+          }
+
+          // 8. Se agora temos ambas as coordenadas, calcula via OSRM / Haversine
           if (order.storeLat && order.storeLng && order.customerLat && order.customerLng) {
             order.distanceKm = haversineRoadDistanceKmClient(
               Number(order.storeLat),
