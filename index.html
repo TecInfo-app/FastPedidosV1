@@ -3506,6 +3506,9 @@
 
     // --- REAL IFOOD API POLLING ---
     async function pollIFoodOrders() {
+      // No Portal do Motoboy (celular do entregador), não faz polling direto no iFood (os pedidos vêm via Firebase)
+      const isPortalView = document.documentElement.classList.contains('in-portal-mode') || !document.getElementById('portal-motoboy-view')?.classList.contains('hidden');
+      if (isPortalView) return;
       if (!apiCredentials.clientId || !apiCredentials.clientSecret) return;
       if (isPollingIFood) return;
       isPollingIFood = true;
