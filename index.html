@@ -1295,6 +1295,39 @@
           </div>
         </div>
 
+        <div class="p-3 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-2">
+          <span class="block text-[10px] font-black text-emerald-900 uppercase tracking-wider">
+            📍 Faixa de Quilometragem Automática (iFood)
+          </span>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <label class="block text-[10px] font-bold text-slate-600 mb-1">De (KM Inicial)</label>
+              <input 
+                type="number" 
+                step="0.1" 
+                min="0"
+                id="create-fee-min-km" 
+                placeholder="Ex: 0" 
+                class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-600 mb-1">Até (KM Final)</label>
+              <input 
+                type="number" 
+                step="0.1" 
+                min="0.1"
+                id="create-fee-max-km" 
+                placeholder="Ex: 1" 
+                class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+          </div>
+          <p class="text-[10px] text-emerald-800 leading-tight">
+            Se preenchido, ao lançar um pedido do iFood dentro desta distância (KM), esta taxa será inserida automaticamente.
+          </p>
+        </div>
+
         <button 
           type="submit" 
           class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-black text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2 shadow-md transition cursor-pointer">
@@ -1351,6 +1384,39 @@
             />
           </div>
           <p class="text-[10px] text-slate-400 mt-1">Aceita ponto ou vírgula (ex: 7,50 ou 7.50).</p>
+        </div>
+
+        <div class="p-3 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-2">
+          <span class="block text-[10px] font-black text-emerald-900 uppercase tracking-wider">
+            📍 Faixa de Quilometragem Automática (iFood)
+          </span>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <label class="block text-[10px] font-bold text-slate-600 mb-1">De (KM Inicial)</label>
+              <input 
+                type="number" 
+                step="0.1" 
+                min="0"
+                id="edit-fee-min-km" 
+                placeholder="Ex: 0" 
+                class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-600 mb-1">Até (KM Final)</label>
+              <input 
+                type="number" 
+                step="0.1" 
+                min="0.1"
+                id="edit-fee-max-km" 
+                placeholder="Ex: 5" 
+                class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+          </div>
+          <p class="text-[10px] text-emerald-800 leading-tight">
+            Ex: 0 até 1 km (R$ 6), 1 até 5 km (R$ 12), 5 até 50 km (R$ 17).
+          </p>
         </div>
 
         <button 
@@ -2470,10 +2536,11 @@
                 <span id="quick-order-ifood-customer" class="text-xs font-semibold text-slate-700"></span>
                 <span id="quick-order-ifood-status" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200"></span>
                 <span id="quick-order-ifood-store" class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 hidden"></span>
+                <span id="quick-order-ifood-distance-fee" class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-900 border border-indigo-300 hidden"></span>
               </div>
               <span id="quick-order-ifood-address" class="text-[11px] text-slate-600 font-medium block truncate mt-0.5"></span>
-              <span class="text-[11px] font-bold text-red-700 block mt-0.5">
-                ⚡ Ao lançar para o motoboy e escolher a taxa, este pedido será <strong>DESPACHADO no iFood</strong> automaticamente.
+              <span id="quick-order-ifood-action-hint" class="text-[11px] font-bold text-red-700 block mt-0.5">
+                ⚡ Ao selecionar o motoboy, a taxa por KM e o <strong>DESPACHO no iFood</strong> serão aplicados automaticamente.
               </span>
             </div>
           </div>
@@ -2729,9 +2796,11 @@
     // Motoboys Team State (Inicia limpo para cada nova loja)
     let motoboysList = [];
 
-    // Delivery Fees List State (Taxas Configuráveis)
+    // Delivery Fees List State (Taxas Configuráveis com Faixas de KM)
     let deliveryFeesList = [
-      { id: 'fee-1', name: 'Taxa Padrão', value: 5.00 }
+      { id: 'fee-1', name: 'Até 1 km', value: 6.00, minKm: 0, maxKm: 1 },
+      { id: 'fee-2', name: 'De 1 km a 5 km', value: 12.00, minKm: 1, maxKm: 5 },
+      { id: 'fee-3', name: 'Acima de 5 km', value: 17.00, minKm: 5, maxKm: 50 }
     ];
 
     // Expose setters for Firebase Module to update local let variables
@@ -2739,7 +2808,9 @@
     window.setMotoboyOrders = (data) => { motoboyOrders = data; };
     window.setMotoboysList = (data) => { motoboysList = data; };
     window.setStoresList = (data) => { storesList = data; };
-    window.setDeliveryFeesList = (data) => { deliveryFeesList = data; };
+    window.setDeliveryFeesList = (data) => {
+      deliveryFeesList = typeof ensureDefaultFeeKmRanges === 'function' ? ensureDefaultFeeKmRanges(data) : data;
+    };
 
     // Pending Quick Order Data (during 2-step launch modal)
     let pendingOrderData = null;
@@ -3068,19 +3139,19 @@
       _syncKdsOrdersTimer = setTimeout(() => {
         try {
           const activeOrders = (orders || []).filter(o => !o.archived);
-          const payload = {
-            orders: activeOrders,
-            updatedAt: Date.now(),
-            source: 'kds'
-          };
-          const payloadStr = JSON.stringify(payload);
-          if (window._firebaseLastStateSynced_kds !== payloadStr) {
+          const compareStr = JSON.stringify(activeOrders);
+          if (window._firebaseLastStateSynced_kds !== compareStr) {
+            const payload = {
+              orders: activeOrders,
+              updatedAt: Date.now(),
+              source: 'kds'
+            };
             window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "state", "kds_orders"), payload, { merge: true }).then(() => {
-              window._firebaseLastStateSynced_kds = payloadStr;
+              window._firebaseLastStateSynced_kds = compareStr;
             }).catch(() => {});
           }
         } catch(e) {}
-      }, 300);
+      }, 900);
     }
 
     function saveOrders(skipFirebase = false) {
@@ -3092,21 +3163,6 @@
       }
       if (!skipFirebase && tenantId && window.firebaseDb && window.firebaseSetDoc) {
         syncKdsOrdersStateToFirebase(tenantId);
-        try {
-          orders.forEach(ord => {
-            const cleanId = String(ord.id || ord.displayId || Date.now()).replace(/[^a-zA-Z0-9_\-]/g, '_');
-            const cleanPayload = JSON.parse(JSON.stringify(ord));
-            const payloadStr = JSON.stringify(cleanPayload);
-            // Só envia para a nuvem se o conteúdo REALMENTE mudou
-            if (window._firebaseLastSynced && window._firebaseLastSynced[cleanId] !== payloadStr) {
-               window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "orders", cleanId), cleanPayload, { merge: true }).then(() => {
-                  window._firebaseLastSynced[cleanId] = payloadStr;
-               }).catch(() => {});
-            }
-          });
-        } catch(e) {
-          console.warn("Erro ao sincronizar pedidos com Firebase:", e);
-        }
       }
     }
 
@@ -3156,28 +3212,57 @@
       }
     }
 
+    let _syncSettingsTimer = null;
     function syncSettingsToFirebase() {
       const tenantId = getCurrentTenantId();
       if (!tenantId || !window.firebaseDb || !window.firebaseSetDoc) return;
-      try {
-        const payload = {
-          ...apiCredentials,
-          deliveryFeesList: deliveryFeesList,
-          storesList: storesList,
-          updatedAt: Date.now()
-        };
-        window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "config", "settings"), payload, { merge: true })
-          .then(() => console.log("🔥 [Firebase]: Configurações sincronizadas na nuvem."))
-          .catch(e => console.warn("Falha ao salvar na nuvem:", e));
+      clearTimeout(_syncSettingsTimer);
+      _syncSettingsTimer = setTimeout(() => {
+        try {
+          const normalizedStores = (storesList || []).map(s => ({
+            id: s.id,
+            name: s.name,
+            merchantId: s.merchantId || '',
+            isHidden: Boolean(s.isHidden)
+          }));
+          const compareData = {
+            clientId: apiCredentials.clientId || '',
+            clientSecret: apiCredentials.clientSecret || '',
+            merchantId: apiCredentials.merchantId || '',
+            customApiUrl: apiCredentials.customApiUrl || '',
+            storeName: apiCredentials.storeName || '',
+            deliveryFeesList: deliveryFeesList || [],
+            storesList: normalizedStores
+          };
+          const compareStr = JSON.stringify(compareData);
+          if (window._firebaseLastStateSynced_settings === compareStr) return;
 
-        const activeStore = (storesList && storesList.find(s => s.active)) || (storesList && storesList[0]);
-        const storeName = (activeStore && activeStore.name) || apiCredentials.storeName || tenantId;
-        window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores_directory", tenantId), {
-          id: tenantId,
-          name: storeName,
-          updatedAt: Date.now()
-        }, { merge: true }).catch(() => {});
-      } catch(e) {}
+          const payload = {
+            ...apiCredentials,
+            deliveryFeesList: deliveryFeesList,
+            storesList: storesList,
+            updatedAt: Date.now()
+          };
+          window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "config", "settings"), payload, { merge: true })
+            .then(() => {
+              window._firebaseLastStateSynced_settings = compareStr;
+              console.log("🔥 [Firebase]: Configurações sincronizadas na nuvem.");
+            })
+            .catch(e => console.warn("Falha ao salvar na nuvem:", e));
+
+          const activeStore = (storesList && storesList.find(s => s.active)) || (storesList && storesList[0]);
+          const storeName = (activeStore && activeStore.name) || apiCredentials.storeName || tenantId;
+          if (window._firebaseLastStateSynced_dirName !== storeName) {
+            window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores_directory", tenantId), {
+              id: tenantId,
+              name: storeName,
+              updatedAt: Date.now()
+            }, { merge: true }).then(() => {
+              window._firebaseLastStateSynced_dirName = storeName;
+            }).catch(() => {});
+          }
+        } catch(e) {}
+      }, 1000);
     }
 
     function saveCredentials(cid, csec, mid, customUrl = '', storeName = '') {
@@ -3537,6 +3622,14 @@
                 existing.phoneLocalizer = newOrd.phoneLocalizer;
                 updatedAny = true;
               }
+              if (newOrd.distanceKm && !existing.distanceKm) {
+                existing.distanceKm = newOrd.distanceKm;
+                existing.customerLat = newOrd.customerLat;
+                existing.customerLng = newOrd.customerLng;
+                existing.storeLat = newOrd.storeLat;
+                existing.storeLng = newOrd.storeLng;
+                updatedAny = true;
+              }
               if (existing.status !== 'concluido' && existing.status !== 'cancelado') {
                 if (newOrd.status && newOrd.status !== existing.status) {
                   existing.status = newOrd.status;
@@ -3889,23 +3982,10 @@
     }
 
     function removeOrder(orderId) {
-      const ordToRemove = orders.find(o => o.id === orderId);
+      if (!window._locallyRemovedOrderIds) window._locallyRemovedOrderIds = new Set();
+      window._locallyRemovedOrderIds.add(String(orderId));
       orders = orders.filter(o => o.id !== orderId);
-      saveOrders(true); // skip normal sync, handle archive explicitly
-      const tenantId = getCurrentTenantId();
-      if (tenantId && window.firebaseDb && window.firebaseSetDoc) {
-        try {
-          const cleanId = String(orderId).replace(/[^a-zA-Z0-9_\-]/g, '_');
-          // Soft Delete (gravação com archived: true) para economizar 100% da cota de exclusões
-          window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "orders", cleanId), {
-            ...(ordToRemove || { id: orderId }),
-            archived: true,
-            archivedAt: Date.now()
-          }, { merge: true }).catch(() => {});
-        } catch(e) {
-          console.warn("Erro ao arquivar pedido Kanban no Firebase:", e);
-        }
-      }
+      saveOrders(false);
       renderKanban();
       showToast('Pedido Arquivado', `Pedido ${orderId} foi arquivado e removido da tela.`, 'info');
     }
@@ -3915,23 +3995,10 @@
         'Limpar Painel Kanban?',
         'Deseja realmente limpar todos os pedidos da tela?',
         () => {
-          const tenantId = getCurrentTenantId();
-          const previousOrders = [...orders];
+          if (!window._locallyRemovedOrderIds) window._locallyRemovedOrderIds = new Set();
+          orders.forEach(o => { if (o && o.id) window._locallyRemovedOrderIds.add(String(o.id)); });
           orders = [];
-          saveOrders(true);
-          if (tenantId && window.firebaseDb && window.firebaseSetDoc) {
-            previousOrders.forEach(order => {
-              try {
-                const cleanId = String(order.id || order.displayId || Date.now()).replace(/[^a-zA-Z0-9_\-]/g, '_');
-                // Soft Delete econômico
-                window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "orders", cleanId), {
-                  ...order,
-                  archived: true,
-                  archivedAt: Date.now()
-                }, { merge: true }).catch(() => {});
-              } catch(e) {}
-            });
-          }
+          saveOrders(false);
           renderKanban();
           showToast('Kanban Limpo', 'Todos os pedidos foram arquivados.', 'warning');
         }
@@ -4525,20 +4592,28 @@
       updateActiveStoreDisplay();
     }
 
-    function saveStores() {
+    function saveStores(syncToCloud = true) {
       const storageKey = getTenantStorageKey('stores');
       localStorage.setItem(storageKey, JSON.stringify(storesList));
       renderStoreChips();
       renderDrawerStores();
       updateActiveStoreDisplay();
-      syncSettingsToFirebase();
+      if (syncToCloud) {
+        syncSettingsToFirebase();
+      }
     }
 
-    function selectActiveStore(storeId) {
-      storesList.forEach(s => s.active = (s.id === storeId));
-      saveStores();
+    function selectActiveStore(storeId, silent = false) {
+      let changed = false;
+      storesList.forEach(s => {
+        const shouldBeActive = (s.id === storeId);
+        if (Boolean(s.active) !== shouldBeActive) changed = true;
+        s.active = shouldBeActive;
+      });
+      if (!changed) return;
+      saveStores(false); // Selecionar loja ativa na tela não precisa gravar no Firebase
       const active = storesList.find(s => s.active);
-      if (active) {
+      if (active && !silent) {
         showToast('Loja Ativa Selecionada', `Operando agora em: ${active.name}`, 'info');
       }
     }
@@ -4836,12 +4911,50 @@
     }
 
     // --- DELIVERY FEES MANAGEMENT (DRAWER TAB 3 & SELECT) ---
+    function ensureDefaultFeeKmRanges(list) {
+      if (!Array.isArray(list) || list.length === 0) {
+        return [
+          { id: 'fee-1', name: 'Até 1 km', value: 6.00, minKm: 0, maxKm: 1 },
+          { id: 'fee-2', name: 'De 1 km a 5 km', value: 12.00, minKm: 1, maxKm: 5 },
+          { id: 'fee-3', name: 'Acima de 5 km', value: 17.00, minKm: 5, maxKm: 50 }
+        ];
+      }
+      // Se só tiver a taxa padrão antiga de R$ 5,00, substitui pelas 3 faixas de KM padrão
+      if (list.length === 1 && Number(list[0].value) === 5 && list[0].name === 'Taxa Padrão') {
+        return [
+          { id: 'fee-1', name: 'Até 1 km', value: 6.00, minKm: 0, maxKm: 1 },
+          { id: 'fee-2', name: 'De 1 km a 5 km', value: 12.00, minKm: 1, maxKm: 5 },
+          { id: 'fee-3', name: 'Acima de 5 km', value: 17.00, minKm: 5, maxKm: 50 }
+        ];
+      }
+      // Se nenhuma taxa tiver minKm/maxKm ainda, preenche automaticamente conforme o valor (6 -> 0 a 1km, 12 -> 1 a 5km, 17 -> 5 a 50km)
+      const hasAnyKmConfigured = list.some(f => f && f.maxKm !== undefined && f.maxKm !== null && Number(f.maxKm) > 0);
+      if (!hasAnyKmConfigured) {
+        list.forEach(f => {
+          const v = Number(f.value || 0);
+          if (v > 0 && v <= 8) {
+            f.minKm = 0;
+            f.maxKm = 1;
+          } else if (v > 8 && v <= 14) {
+            f.minKm = 1;
+            f.maxKm = 5;
+          } else if (v > 14) {
+            f.minKm = 5;
+            f.maxKm = 50;
+          }
+        });
+      }
+      return list;
+    }
+    window.ensureDefaultFeeKmRanges = ensureDefaultFeeKmRanges;
+
     function loadDeliveryFees() {
       const storageKey = getTenantStorageKey('delivery_fees');
       const saved = localStorage.getItem(storageKey);
       if (saved) {
         try { deliveryFeesList = JSON.parse(saved); } catch(e) {}
       }
+      deliveryFeesList = ensureDefaultFeeKmRanges(deliveryFeesList);
       renderDrawerFees();
       populateDeliveryFeeSelect();
     }
@@ -4890,7 +5003,12 @@
         const eyeIcon = fee.isHidden 
           ? '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path></svg>'
           : '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>';
-          
+        
+        const hasKmRange = fee.maxKm !== undefined && fee.maxKm !== null && !isNaN(Number(fee.maxKm)) && Number(fee.maxKm) > 0;
+        const kmBadge = hasKmRange
+          ? `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-800 border border-indigo-200 text-[10px] font-extrabold mt-0.5">📍 ${Number(fee.minKm || 0)} a ${Number(fee.maxKm)} km</span>`
+          : '';
+
         return `
         <div class="p-2.5 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-2 shadow-2xs hover:border-slate-300 transition ${opacityClass}">
           <div class="flex items-center gap-2.5 min-w-0">
@@ -4915,14 +5033,17 @@
             </div>
             <div class="min-w-0">
               <span class="text-xs font-bold text-slate-800 truncate block">${escapeHtml(fee.name)}</span>
-              <div class="text-xs font-black text-emerald-700 font-mono">${formatCurrency(fee.value)}</div>
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="text-xs font-black text-emerald-700 font-mono">${formatCurrency(fee.value)}</span>
+                ${kmBadge}
+              </div>
             </div>
           </div>
           <div class="flex items-center gap-1 shrink-0">
             <button onclick="toggleFeeVisibility('${fee.id}')" class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition cursor-pointer" title="${fee.isHidden ? 'Mostrar Taxa' : 'Ocultar Taxa'}">
               ${eyeIcon}
             </button>
-            <button onclick="openEditFeeModal('${fee.id}')" class="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition cursor-pointer" title="Editar Taxa">
+            <button onclick="openEditFeeModal('${fee.id}')" class="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition cursor-pointer" title="Editar Taxa & Faixa KM">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
             </button>
             <button onclick="removeDeliveryFee('${fee.id}')" class="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer" title="Remover Taxa">
@@ -4953,9 +5074,13 @@
       const modal = document.getElementById('modal-create-fee');
       const nameInput = document.getElementById('create-fee-name');
       const valInput = document.getElementById('create-fee-val');
+      const minKmInput = document.getElementById('create-fee-min-km');
+      const maxKmInput = document.getElementById('create-fee-max-km');
       if (!modal) return;
       if (nameInput) nameInput.value = '';
       if (valInput) valInput.value = '';
+      if (minKmInput) minKmInput.value = '';
+      if (maxKmInput) maxKmInput.value = '';
       modal.classList.remove('hidden');
       setTimeout(() => { if (nameInput) nameInput.focus(); }, 80);
     }
@@ -4969,6 +5094,8 @@
       if (e) e.preventDefault();
       const nameInput = document.getElementById('create-fee-name');
       const valInput = document.getElementById('create-fee-val');
+      const minKmInput = document.getElementById('create-fee-min-km');
+      const maxKmInput = document.getElementById('create-fee-max-km');
       const name = nameInput ? nameInput.value.trim() : '';
       const rawVal = valInput ? valInput.value.trim().replace(',', '.') : '';
       const val = parseFloat(rawVal);
@@ -4982,10 +5109,17 @@
         return;
       }
 
+      const rawMinKm = minKmInput ? minKmInput.value.trim().replace(',', '.') : '';
+      const rawMaxKm = maxKmInput ? maxKmInput.value.trim().replace(',', '.') : '';
+      const minKm = rawMinKm !== '' && !isNaN(parseFloat(rawMinKm)) ? parseFloat(rawMinKm) : null;
+      const maxKm = rawMaxKm !== '' && !isNaN(parseFloat(rawMaxKm)) ? parseFloat(rawMaxKm) : null;
+
       const newFee = {
         id: 'fee-' + Date.now(),
         name: name,
         value: val,
+        minKm: minKm,
+        maxKm: maxKm,
         order: deliveryFeesList.length
       };
 
@@ -5005,11 +5139,15 @@
       const idInput = document.getElementById('edit-fee-id');
       const nameInput = document.getElementById('edit-fee-name');
       const valInput = document.getElementById('edit-fee-val');
+      const minKmInput = document.getElementById('edit-fee-min-km');
+      const maxKmInput = document.getElementById('edit-fee-max-km');
 
       if (!modal) return;
       if (idInput) idInput.value = fee.id;
       if (nameInput) nameInput.value = fee.name || '';
       if (valInput) valInput.value = Number(fee.value || 0).toFixed(2).replace('.', ',');
+      if (minKmInput) minKmInput.value = (fee.minKm !== undefined && fee.minKm !== null) ? fee.minKm : '';
+      if (maxKmInput) maxKmInput.value = (fee.maxKm !== undefined && fee.maxKm !== null) ? fee.maxKm : '';
 
       modal.classList.remove('hidden');
       setTimeout(() => { if (nameInput) nameInput.focus(); }, 80);
@@ -5025,6 +5163,8 @@
       const idInput = document.getElementById('edit-fee-id');
       const nameInput = document.getElementById('edit-fee-name');
       const valInput = document.getElementById('edit-fee-val');
+      const minKmInput = document.getElementById('edit-fee-min-km');
+      const maxKmInput = document.getElementById('edit-fee-max-km');
 
       const id = idInput ? idInput.value : '';
       const fee = deliveryFeesList.find(f => f.id === id);
@@ -5043,8 +5183,15 @@
         return;
       }
 
+      const rawMinKm = minKmInput ? minKmInput.value.trim().replace(',', '.') : '';
+      const rawMaxKm = maxKmInput ? maxKmInput.value.trim().replace(',', '.') : '';
+      const minKm = rawMinKm !== '' && !isNaN(parseFloat(rawMinKm)) ? parseFloat(rawMinKm) : null;
+      const maxKm = rawMaxKm !== '' && !isNaN(parseFloat(rawMaxKm)) ? parseFloat(rawMaxKm) : null;
+
       fee.name = name;
       fee.value = val;
+      fee.minKm = minKm;
+      fee.maxKm = maxKm;
 
       saveDeliveryFees();
       closeEditFeeModal();
@@ -5154,18 +5301,18 @@
       _syncMotoboysTimer = setTimeout(() => {
         try {
           const activeMb = (motoboysList || []).filter(m => !m.archived && m.active !== false);
-          const payload = {
-            motoboys: activeMb,
-            updatedAt: Date.now()
-          };
-          const payloadStr = JSON.stringify(payload);
-          if (window._firebaseLastStateSynced_motoboys !== payloadStr) {
+          const compareStr = JSON.stringify(activeMb);
+          if (window._firebaseLastStateSynced_motoboys !== compareStr) {
+            const payload = {
+              motoboys: activeMb,
+              updatedAt: Date.now()
+            };
             window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "state", "motoboys"), payload, { merge: true }).then(() => {
-              window._firebaseLastStateSynced_motoboys = payloadStr;
+              window._firebaseLastStateSynced_motoboys = compareStr;
             }).catch(() => {});
           }
         } catch(e) {}
-      }, 300);
+      }, 600);
     }
 
     function saveMotoboys(deletedId = null) {
@@ -5187,29 +5334,6 @@
       }
       if (tenantId && window.firebaseDb && window.firebaseSetDoc) {
         syncMotoboysStateToFirebase(tenantId);
-        try {
-          motoboysList.forEach(mb => {
-            if (mb && mb.id) {
-              const cleanMb = JSON.parse(JSON.stringify(mb));
-              const payloadStr = JSON.stringify(cleanMb);
-              if (window._firebaseLastSynced && window._firebaseLastSynced[String(mb.id)] !== payloadStr) {
-                 window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "motoboys", String(mb.id)), cleanMb, { merge: true }).then(() => {
-                    window._firebaseLastSynced[String(mb.id)] = payloadStr;
-                 }).catch(() => {});
-              }
-            }
-          });
-          if (deletedId && window.firebaseSetDoc) {
-            window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "motoboys", String(deletedId)), {
-              id: deletedId,
-              archived: true,
-              active: false,
-              archivedAt: Date.now()
-            }, { merge: true }).catch(() => {});
-          }
-        } catch(e) {
-          console.warn("Erro ao salvar motoboys no Firebase:", e);
-        }
       }
     }
 
@@ -6697,19 +6821,10 @@
           const existingHistory = JSON.parse(localStorage.getItem(historyKey) || '[]');
           localStorage.setItem(historyKey, JSON.stringify([...existingHistory, ...motoboyOrders]));
 
-          // 2. Arquivar no Firebase com Soft Delete (gravação com archived: true) economizando 100% da cota de exclusões
+          // 2. Reseta o estado em tempo real para 0 pedidos nos portais conectados (1 única gravação consolidada)
           if (tenantId && window.firebaseDb && window.firebaseSetDoc) {
-            motoboyOrders.forEach(ord => {
-               try {
-                 window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "motoboyOrders", String(ord.id)), {
-                   ...ord,
-                   archived: true,
-                   archivedAt: Date.now()
-                 }, { merge: true }).catch(() => {});
-               } catch(e) {}
-            });
-            // Reseta o estado em tempo real para 0 pedidos nos portais conectados (1 única gravação)
             try {
+              window._firebaseLastStateSynced_motoboyOrders = JSON.stringify([]);
               window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "state", "motoboy_orders"), {
                 orders: [],
                 updatedAt: Date.now(),
@@ -6718,7 +6833,9 @@
             } catch(e) {}
           }
 
-          // 3. Limpar a tela localmente
+          // 3. Limpar a tela localmente e proteger contra sobrescrita reversa
+          if (!window._locallyRemovedMotoboyOrderIds) window._locallyRemovedMotoboyOrderIds = new Set();
+          motoboyOrders.forEach(o => { if (o && o.id) window._locallyRemovedMotoboyOrderIds.add(String(o.id)); });
           motoboyOrders = [];
           lastLaunchedMotoboyId = null;
           motoboyFilterMode = 'auto';
@@ -6810,19 +6927,19 @@
       _syncMotoboyOrdersTimer = setTimeout(() => {
         try {
           const activeOrders = (motoboyOrders || []).filter(o => !o.archived);
-          const payload = {
-            orders: activeOrders,
-            updatedAt: Date.now(),
-            source: 'dashboard'
-          };
-          const payloadStr = JSON.stringify(payload);
-          if (window._firebaseLastStateSynced_motoboyOrders !== payloadStr) {
+          const compareStr = JSON.stringify(activeOrders);
+          if (window._firebaseLastStateSynced_motoboyOrders !== compareStr) {
+            const payload = {
+              orders: activeOrders,
+              updatedAt: Date.now(),
+              source: 'dashboard'
+            };
             window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "state", "motoboy_orders"), payload, { merge: true }).then(() => {
-              window._firebaseLastStateSynced_motoboyOrders = payloadStr;
+              window._firebaseLastStateSynced_motoboyOrders = compareStr;
             }).catch(err => console.warn("Erro ao salvar state motoboy_orders:", err));
           }
         } catch(e) {}
-      }, 250);
+      }, 600);
     }
 
     function saveMotoboyOrders(skipFirebase = false) {
@@ -6832,24 +6949,6 @@
       renderMotoboyMosaic();
       if (!skipFirebase && tenantId && window.firebaseDb && window.firebaseSetDoc) {
         syncMotoboyOrdersStateToFirebase(tenantId);
-        try {
-          if (!window._firebaseLastSynced) window._firebaseLastSynced = {};
-          motoboyOrders.forEach(ord => {
-            if (ord.id) {
-              const cleanPayload = JSON.parse(JSON.stringify(ord));
-              const payloadStr = JSON.stringify(cleanPayload);
-              // Só envia para a nuvem se o conteúdo REALMENTE mudou
-              if (window._firebaseLastSynced[String(ord.id)] !== payloadStr) {
-                window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "motoboyOrders", String(ord.id)), cleanPayload, { merge: true }).then(() => {
-                   if (!window._firebaseLastSynced) window._firebaseLastSynced = {};
-                   window._firebaseLastSynced[String(ord.id)] = payloadStr;
-                }).catch((err) => console.warn("Erro ao salvar pedido no Firebase:", err));
-              }
-            }
-          });
-        } catch(e) {
-          console.warn("Erro ao sincronizar pedidos de motoboys com Firebase:", e);
-        }
       }
     }
 
@@ -6996,15 +7095,204 @@
     }
     window.getStoreForIFoodOrder = getStoreForIFoodOrder;
 
+    // --- CÁLCULO AUTOMÁTICO DE DISTÂNCIA (KM) E TAXA POR FAIXA DE KM ---
+    function haversineRoadDistanceKmClient(lat1, lng1, lat2, lng2) {
+      const toRad = (deg) => (deg * Math.PI) / 180;
+      const R = 6371;
+      const dLat = toRad(lat2 - lat1);
+      const dLng = toRad(lng2 - lng1);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return Math.round(R * c * 1.28 * 10) / 10;
+    }
+
+    function findFeeByDistanceKm(distanceKm) {
+      if (distanceKm === null || distanceKm === undefined || isNaN(Number(distanceKm))) return null;
+      const km = Number(distanceKm);
+      if (km < 0) return null;
+
+      deliveryFeesList = ensureDefaultFeeKmRanges(deliveryFeesList);
+      const visibleFees = (deliveryFeesList || []).filter(f => !f.isHidden);
+      const kmFees = visibleFees
+        .filter(f => f.maxKm !== undefined && f.maxKm !== null && !isNaN(Number(f.maxKm)) && Number(f.maxKm) > 0)
+        .sort((a, b) => Number(a.maxKm) - Number(b.maxKm));
+
+      if (kmFees.length === 0) return null;
+
+      // 1. Procura a primeira faixa cujo limite máximo comporta o KM (ex: 0 a 1km -> <= 1.0; 1 a 5km -> <= 5.0)
+      for (const fee of kmFees) {
+        const min = Number(fee.minKm || 0);
+        const max = Number(fee.maxKm);
+        if (km >= min && km <= max) {
+          return fee;
+        }
+      }
+
+      // 2. Caso haja pequena fração entre faixas (ex: 1.05 km entre faixa 0-1 e 1.1-5), usa a menor faixa com max >= km
+      for (const fee of kmFees) {
+        if (km <= Number(fee.maxKm)) {
+          return fee;
+        }
+      }
+
+      // 3. Se ultrapassar o maior KM cadastrado (ex: acima de 5km), aplica a maior faixa configurada
+      return kmFees[kmFees.length - 1];
+    }
+    window.findFeeByDistanceKm = findFeeByDistanceKm;
+
+    const _pendingDistanceResolvers = new Set();
+
+    async function resolveIFoodOrderDistanceKm(order) {
+      if (!order) return null;
+      if (order.distanceKm !== undefined && order.distanceKm !== null && !isNaN(Number(order.distanceKm)) && Number(order.distanceKm) > 0) {
+        return Number(order.distanceKm);
+      }
+
+      // Se já tiver coordenadas da loja e do cliente no pedido, calcula imediatamente
+      if (order.storeLat && order.storeLng && order.customerLat && order.customerLng) {
+        order.distanceKm = haversineRoadDistanceKmClient(
+          Number(order.storeLat),
+          Number(order.storeLng),
+          Number(order.customerLat),
+          Number(order.customerLng)
+        );
+        // Refina via OSRM em background sem bloquear
+        try {
+          const osrmRes = await fetch(`https://router.project-osrm.org/route/v1/driving/${order.storeLng},${order.storeLat};${order.customerLng},${order.customerLat}?overview=false`);
+          if (osrmRes.ok) {
+            const osrmData = await osrmRes.json();
+            if (osrmData?.routes?.[0]?.distance !== undefined) {
+              order.distanceKm = Math.round((Number(osrmData.routes[0].distance) / 1000) * 10) / 10;
+              saveOrders(true); // Salva localmente sem gastar gravação extra no Firebase
+            }
+          }
+        } catch (e) {}
+        return order.distanceKm;
+      }
+
+      // Consulta o backend (/api/ifood/order-distance) caso o pedido tenha vindo sem coordenadas
+      const orderKey = order.ifoodOrderId || order.id;
+      if (orderKey && !_pendingDistanceResolvers.has(orderKey) && apiCredentials.clientId && apiCredentials.clientSecret) {
+        _pendingDistanceResolvers.add(orderKey);
+        try {
+          const res = await fetch(`${getApiBaseUrl()}/api/ifood/order-distance`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ifoodOrderId: order.ifoodOrderId || order.id,
+              merchantId: order.merchantId || apiCredentials.merchantId,
+              clientId: apiCredentials.clientId,
+              clientSecret: apiCredentials.clientSecret,
+              customerLat: order.customerLat,
+              customerLng: order.customerLng,
+              storeLat: order.storeLat,
+              storeLng: order.storeLng
+            })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.success && data.distanceKm) {
+              order.distanceKm = Number(data.distanceKm);
+              if (data.storeLat) order.storeLat = data.storeLat;
+              if (data.storeLng) order.storeLng = data.storeLng;
+              if (data.customerLat) order.customerLat = data.customerLat;
+              if (data.customerLng) order.customerLng = data.customerLng;
+              saveOrders(true); // Salva localmente sem gastar gravação extra no Firebase
+              return order.distanceKm;
+            }
+          }
+        } catch (e) {
+        } finally {
+          _pendingDistanceResolvers.delete(orderKey);
+        }
+      }
+
+      return order.distanceKm || null;
+    }
+    window.resolveIFoodOrderDistanceKm = resolveIFoodOrderDistanceKm;
+
+    // Enriquecimento silencioso dos pedidos iFood já existentes na tela
+    async function enrichAllExistingIFoodOrdersDistance() {
+      if (!Array.isArray(orders) || orders.length === 0) return;
+      if (!apiCredentials.clientId || !apiCredentials.clientSecret) return;
+      let changedAny = false;
+      for (const ord of orders) {
+        if (ord && ord.isRealIFood && (!ord.distanceKm || isNaN(Number(ord.distanceKm)))) {
+          const km = await resolveIFoodOrderDistanceKm(ord);
+          if (km) changedAny = true;
+        }
+      }
+      if (changedAny) {
+        saveOrders(true); // Mantém o KM salvo localmente sem consumir cota do Firebase
+      }
+    }
+    window.enrichAllExistingIFoodOrdersDistance = enrichAllExistingIFoodOrdersDistance;
+
+    function updateQuickOrderDistanceBadgeUI(match) {
+      const distFeeEl = document.getElementById('quick-order-ifood-distance-fee');
+      if (!distFeeEl) return;
+      if (!match) {
+        distFeeEl.classList.add('hidden');
+        return;
+      }
+
+      const km = (match.distanceKm !== undefined && match.distanceKm !== null && !isNaN(Number(match.distanceKm)))
+        ? Number(match.distanceKm)
+        : null;
+
+      if (km !== null && km > 0) {
+        const matchedFee = findFeeByDistanceKm(km);
+        const kmFormatted = km.toFixed(1).replace('.', ',');
+        if (matchedFee) {
+          distFeeEl.innerHTML = `📍 ${kmFormatted} km &bull; 💰 Taxa Auto: ${formatCurrency(matchedFee.value)}`;
+        } else {
+          distFeeEl.innerHTML = `📍 Distância: ${kmFormatted} km`;
+        }
+        distFeeEl.classList.remove('hidden');
+      } else {
+        distFeeEl.innerHTML = `📍 Calculando KM...`;
+        distFeeEl.classList.remove('hidden');
+        resolveIFoodOrderDistanceKm(match).then((resolvedKm) => {
+          if (resolvedKm && resolvedKm > 0) {
+            const matchedFee = findFeeByDistanceKm(resolvedKm);
+            const kmFormatted = Number(resolvedKm).toFixed(1).replace('.', ',');
+            if (matchedFee) {
+              distFeeEl.innerHTML = `📍 ${kmFormatted} km &bull; 💰 Taxa Auto: ${formatCurrency(matchedFee.value)}`;
+            } else {
+              distFeeEl.innerHTML = `📍 Distância: ${kmFormatted} km`;
+            }
+            // Se o modal de seleção de motoboy já estiver aberto para este pedido, atualiza-o também
+            if (pendingOrderData && pendingOrderData.matchedIFoodId === match.id) {
+              pendingOrderData.detectedDistanceKm = Number(resolvedKm);
+              if (matchedFee) {
+                pendingOrderData.autoFeeValue = Number(matchedFee.value);
+                pendingOrderData.autoFeeName = `${matchedFee.name} (${kmFormatted} km)`;
+              }
+              const modal = document.getElementById('modal-select-motoboy');
+              if (modal && !modal.classList.contains('hidden')) {
+                openMotoboyModal();
+              }
+            }
+          } else {
+            distFeeEl.classList.add('hidden');
+          }
+        });
+      }
+    }
+
     function handleQuickOrderInput(val) {
       const banner = document.getElementById('quick-order-ifood-match-banner');
       const custNameInput = document.getElementById('quick-customer-name');
       const custAddrInput = document.getElementById('quick-customer-address');
       const storeEl = document.getElementById('quick-order-ifood-store');
+      const distFeeEl = document.getElementById('quick-order-ifood-distance-fee');
 
       if (!val) {
         if (banner) banner.classList.add('hidden');
         if (storeEl) storeEl.classList.add('hidden');
+        if (distFeeEl) distFeeEl.classList.add('hidden');
         if (custNameInput) custNameInput.value = '';
         if (custAddrInput) custAddrInput.value = '';
         return;
@@ -7035,11 +7323,11 @@
           statusEl.textContent = stMap[match.status] || match.status;
         }
 
-        // Identificação Automática da Loja do iFood
+        // Identificação Automática da Loja do iFood (apenas local/visual, zero gravações no banco)
         const detectedStore = getStoreForIFoodOrder(match);
         if (detectedStore) {
           if (detectedStore.id && !detectedStore.active && typeof selectActiveStore === 'function') {
-            selectActiveStore(detectedStore.id);
+            selectActiveStore(detectedStore.id, true);
           }
           if (storeEl) {
             storeEl.textContent = `🏪 Loja: ${detectedStore.name}`;
@@ -7048,6 +7336,9 @@
         } else if (storeEl) {
           storeEl.classList.add('hidden');
         }
+
+        // Exibe e calcula a Distância (KM) + Taxa Automática
+        updateQuickOrderDistanceBadgeUI(match);
 
         if (custNameInput && match.customerName) {
           custNameInput.value = match.customerName;
@@ -7058,6 +7349,7 @@
       } else {
         if (banner) banner.classList.add('hidden');
         if (storeEl) storeEl.classList.add('hidden');
+        if (distFeeEl) distFeeEl.classList.add('hidden');
         // Se NÃO for pedido do iFood, limpa campos para não puxar dados de clientes errados
         if (custNameInput && !custNameInput.dataset.manual) {
           custNameInput.value = '';
@@ -7069,7 +7361,7 @@
     }
 
     // Lançamento do Pedido diretamente para o Motoboy
-    // FLUXO EM 2 ETAPAS (MOTOBOY -> TAXA) COM DESPACHO AUTOMÁTICO SE FOR IFOOD
+    // FLUXO AUTOMÁTICO POR KM PARA IFOOD (OU 2 ETAPAS SE AVULSO)
     function handleQuickOrderSubmit(e) {
       if (e && e.preventDefault) e.preventDefault();
 
@@ -7102,15 +7394,28 @@
       const primaryNum = rawNumbers[0];
       const matchedIFood = findMatchingIFoodOrder(primaryNum) || findMatchingIFoodOrder(orderNumberRaw);
       let detectedStore = null;
+      let detectedDistanceKm = null;
+      let autoFeeValue = null;
+      let autoFeeName = null;
+
       if (matchedIFood) {
         // Se for um pedido do iFood, forçamos o uso dos dados oficiais
         customerName = matchedIFood.customerName || customerName;
         customerAddress = matchedIFood.customerAddress || customerAddress;
 
-        // Auto-seleciona a loja identificada do iFood
+        // Auto-seleciona a loja identificada do iFood (apenas local/visual, zero gravações no banco)
         detectedStore = getStoreForIFoodOrder(matchedIFood);
         if (detectedStore && detectedStore.id && !detectedStore.active && typeof selectActiveStore === 'function') {
-          selectActiveStore(detectedStore.id);
+          selectActiveStore(detectedStore.id, true);
+        }
+
+        if (matchedIFood.distanceKm !== undefined && matchedIFood.distanceKm !== null && !isNaN(Number(matchedIFood.distanceKm)) && Number(matchedIFood.distanceKm) > 0) {
+          detectedDistanceKm = Number(matchedIFood.distanceKm);
+          const matchedFee = findFeeByDistanceKm(detectedDistanceKm);
+          if (matchedFee) {
+            autoFeeValue = Number(matchedFee.value);
+            autoFeeName = `${matchedFee.name} (${detectedDistanceKm.toFixed(1).replace('.', ',')} km)`;
+          }
         }
       }
 
@@ -7121,12 +7426,24 @@
         customerName: customerName,
         customerAddress: customerAddress,
         matchedIFoodId: matchedIFood ? matchedIFood.id : null,
-        detectedStoreName: detectedStore ? detectedStore.name : (matchedIFood ? (matchedIFood.storeName || matchedIFood.merchantName) : null)
+        detectedStoreName: detectedStore ? detectedStore.name : (matchedIFood ? (matchedIFood.storeName || matchedIFood.merchantName) : null),
+        detectedDistanceKm: detectedDistanceKm,
+        autoFeeValue: autoFeeValue,
+        autoFeeName: autoFeeName,
+        forceManualFee: false
       };
 
       // Abre a Etapa 1: Seleção de Motoboy
       openMotoboyModal();
     }
+
+    function enableManualFeeForPendingOrder() {
+      if (!pendingOrderData) return;
+      pendingOrderData.forceManualFee = true;
+      openMotoboyModal();
+      showToast('Modo Manual Ativado', 'Após selecionar o motoboy, você poderá escolher a taxa manualmente.', 'info');
+    }
+    window.enableManualFeeForPendingOrder = enableManualFeeForPendingOrder;
 
     // MODAL 1: Seleção de Motoboy
     function openMotoboyModal() {
@@ -7135,20 +7452,41 @@
       const infoEl = document.getElementById('modal-motoboy-order-info');
       if (!modal || !list) return;
 
+      const hasAutoFee = Boolean(
+        pendingOrderData &&
+        pendingOrderData.matchedIFoodId &&
+        pendingOrderData.autoFeeValue > 0 &&
+        !pendingOrderData.forceManualFee
+      );
+
       // Exibe detalhes do pedido e aviso de despacho no topo do modal
       if (infoEl) {
         if (pendingOrderData && pendingOrderData.matchedIFoodId) {
           const storeBadge = pendingOrderData.detectedStoreName 
-            ? `<span class="inline-flex items-center gap-1 font-black text-emerald-800 bg-emerald-100 border border-emerald-300 px-1.5 py-0.5 rounded text-[10px] mt-0.5">🏪 ${escapeHtml(pendingOrderData.detectedStoreName)}</span>`
+            ? `<span class="inline-flex items-center gap-1 font-black text-emerald-800 bg-emerald-100 border border-emerald-300 px-1.5 py-0.5 rounded text-[10px]">🏪 ${escapeHtml(pendingOrderData.detectedStoreName)}</span>`
             : '';
+          const kmText = pendingOrderData.detectedDistanceKm
+            ? `${Number(pendingOrderData.detectedDistanceKm).toFixed(1).replace('.', ',')} km`
+            : '';
+          const autoFeeBadge = hasAutoFee
+            ? `<span class="inline-flex items-center gap-1 font-black text-indigo-900 bg-indigo-100 border border-indigo-300 px-2 py-0.5 rounded text-[10px]">📍 ${kmText} &rarr; 💰 Taxa Auto: ${formatCurrency(pendingOrderData.autoFeeValue)}</span>`
+            : '';
+          const manualOverrideBtn = hasAutoFee
+            ? `<button type="button" onclick="enableManualFeeForPendingOrder()" class="text-[10px] font-bold text-slate-600 hover:text-slate-900 underline mt-1 block cursor-pointer">Alterar taxa manualmente</button>`
+            : '';
+
           infoEl.innerHTML = `
             <div class="p-3 bg-red-50 border border-red-200 rounded-2xl flex items-center justify-between gap-2 text-xs">
-              <div>
+              <div class="space-y-1">
                 <span class="font-extrabold text-red-950 block">Pedido iFood #${pendingOrderData.orderNumber}</span>
                 <span class="text-[11px] text-red-800 font-medium block">${escapeHtml(pendingOrderData.customerName || 'Cliente iFood')}</span>
-                ${storeBadge}
+                <div class="flex items-center gap-1.5 flex-wrap pt-0.5">
+                  ${storeBadge}
+                  ${autoFeeBadge}
+                </div>
+                ${manualOverrideBtn}
               </div>
-              <span class="px-2 py-0.5 rounded-full bg-red-600 text-white font-black text-[10px] uppercase tracking-wider">Despachar no iFood</span>
+              <span class="px-2 py-0.5 rounded-full bg-red-600 text-white font-black text-[10px] uppercase tracking-wider shrink-0">Despachar no iFood</span>
             </div>
           `;
           infoEl.classList.remove('hidden');
@@ -7176,6 +7514,10 @@
           </div>
         `;
       } else {
+        const actionLabel = hasAutoFee
+          ? `Lançar (${formatCurrency(pendingOrderData.autoFeeValue)}) →`
+          : 'Selecionar →';
+
         list.innerHTML = visibleMotoboys.map(mb => `
           <button 
             type="button" 
@@ -7192,7 +7534,7 @@
                 </span>
               </div>
             </div>
-            <span class="text-xs font-bold text-amber-600 group-hover:translate-x-0.5 transition">Selecionar →</span>
+            <span class="text-xs font-bold ${hasAutoFee ? 'text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl' : 'text-amber-600'} group-hover:translate-x-0.5 transition">${actionLabel}</span>
           </button>
         `).join('') + `
           <button 
@@ -7212,10 +7554,33 @@
       if (modal) modal.classList.add('hidden');
     }
 
-    function selectMotoboyForPendingOrder(motoboyId) {
+    async function selectMotoboyForPendingOrder(motoboyId) {
       if (!pendingOrderData) return;
       pendingOrderData.motoboyId = motoboyId;
       closeMotoboyModal();
+
+      // Se for um pedido do iFood e ainda não tiver calculado a distância, tenta resolver rapidamente antes de decidir
+      if (pendingOrderData.matchedIFoodId && !pendingOrderData.forceManualFee && !pendingOrderData.autoFeeValue) {
+        const matchedOrd = orders.find(o => o.id === pendingOrderData.matchedIFoodId);
+        if (matchedOrd) {
+          const resolvedKm = await resolveIFoodOrderDistanceKm(matchedOrd);
+          if (resolvedKm && resolvedKm > 0) {
+            pendingOrderData.detectedDistanceKm = Number(resolvedKm);
+            const matchedFee = findFeeByDistanceKm(resolvedKm);
+            if (matchedFee) {
+              pendingOrderData.autoFeeValue = Number(matchedFee.value);
+              pendingOrderData.autoFeeName = `${matchedFee.name} (${Number(resolvedKm).toFixed(1).replace('.', ',')} km)`;
+            }
+          }
+        }
+      }
+
+      // Se identificou a taxa automática por KM para o pedido iFood, já lança direto sem precisar abrir o modal de taxas!
+      if (pendingOrderData.matchedIFoodId && pendingOrderData.autoFeeValue > 0 && !pendingOrderData.forceManualFee) {
+        confirmOrderWithFee(pendingOrderData.autoFeeValue, pendingOrderData.autoFeeName || 'Taxa por KM');
+        return;
+      }
+
       openFeeModal();
     }
 
@@ -7418,13 +7783,24 @@
           ? `${cleanLocDigits.slice(0, 4)} ${cleanLocDigits.slice(4)}`
           : String(detectedLocator || '').trim();
 
+        let finalFeeValue = Number(feeValue) || 0;
+        let finalFeeName = feeName || 'Taxa Fixa';
+        if (matched && !pendingOrderData.forceManualFee && matched.distanceKm && Number(matched.distanceKm) > 0) {
+          const perOrderKmFee = findFeeByDistanceKm(matched.distanceKm);
+          if (perOrderKmFee) {
+            finalFeeValue = Number(perOrderKmFee.value);
+            finalFeeName = `${perOrderKmFee.name} (${Number(matched.distanceKm).toFixed(1).replace('.', ',')} km)`;
+          }
+        }
+
         const newMbOrder = {
           id: 'ord-' + (Date.now() + idx),
           orderNumber: orderNum,
           motoboyId: pendingOrderData.motoboyId,
           storeName: finalStoreName,
-          deliveryFee: Number(feeValue) || 0,
-          feeName: feeName || 'Taxa Fixa',
+          deliveryFee: finalFeeValue,
+          feeName: finalFeeName,
+          distanceKm: (matched && matched.distanceKm) ? Number(matched.distanceKm) : null,
           customerName: finalCustomerName,
           customerAddress: finalCustomerAddress,
           customerPhone: (matched && matched.customerPhone) || '',
@@ -8159,23 +8535,10 @@
         'Excluir Pedido?',
         `Deseja realmente remover o pedido ${num} da planilha do motoboy?`,
         () => {
-          const ordToRemove = ord;
+          if (!window._locallyRemovedMotoboyOrderIds) window._locallyRemovedMotoboyOrderIds = new Set();
+          window._locallyRemovedMotoboyOrderIds.add(String(orderId));
           motoboyOrders = motoboyOrders.filter(o => o.id !== orderId);
-          saveMotoboyOrders(true);
-          const tenantId = getCurrentTenantId();
-          if (tenantId && window.firebaseDb && window.firebaseSetDoc) {
-            syncMotoboyOrdersStateToFirebase(tenantId);
-            try {
-              // Soft Delete: marca como arquivado em vez de gastar cota de exclusões
-              window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "motoboyOrders", String(orderId)), {
-                ...(ordToRemove || { id: orderId }),
-                archived: true,
-                archivedAt: Date.now()
-              }, { merge: true }).catch(() => {});
-            } catch(e) {
-              console.warn("Erro ao arquivar pedido no Firebase:", e);
-            }
-          }
+          saveMotoboyOrders(false);
           showToast('Pedido Removido', 'Pedido excluído da planilha.', 'info');
         }
       );
@@ -8955,24 +9318,14 @@
     function cleanupOldOrders() {
       const SIX_HOURS = 6 * 60 * 60 * 1000;
       const now = Date.now();
-      const tenantId = getCurrentTenantId();
       let hasDeleted = false;
       const validOrders = [];
+      if (!window._locallyRemovedOrderIds) window._locallyRemovedOrderIds = new Set();
 
       orders.forEach(ord => {
         if (now - (ord.timestamp || 0) > SIX_HOURS) {
           hasDeleted = true;
-          // Soft-delete no Firebase para economizar 100% da cota de exclusões
-          if (tenantId && window.firebaseDb && window.firebaseSetDoc) {
-            try {
-              const cleanId = String(ord.id || ord.displayId || Date.now()).replace(/[^a-zA-Z0-9_\-]/g, '_');
-              window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "orders", cleanId), {
-                ...ord,
-                archived: true,
-                archivedAt: Date.now()
-              }, { merge: true }).catch(()=>{});
-            } catch(e) {}
-          }
+          if (ord && ord.id) window._locallyRemovedOrderIds.add(String(ord.id));
         } else {
           validOrders.push(ord);
         }
@@ -8980,7 +9333,7 @@
 
       if (hasDeleted) {
         orders = validOrders;
-        saveOrders(true);
+        saveOrders(false);
         renderKanban();
       }
     }
@@ -9002,6 +9355,11 @@
       renderKanban();
       updateApiStatusUI();
       fetchAndRenderStoreStatus();
+      setTimeout(() => {
+        if (typeof enrichAllExistingIFoodOrdersDistance === 'function') {
+          enrichAllExistingIFoodOrdersDistance();
+        }
+      }, 1200);
 
       // Drawer Open/Close Controls
       const openDrawerBtn = document.getElementById('open-drawer-btn');
@@ -9384,15 +9742,6 @@
 
         console.log(`🔥 [Firebase]: Iniciando sincronização isolada para a loja [${tenantId}]...`);
 
-        try {
-          const storeName = (window.storesList && window.storesList.find(s=>s.active)?.name) || window.currentTenantEmail || tenantId;
-          setDoc(doc(db, "stores_directory", tenantId), {
-            id: tenantId,
-            name: storeName,
-            updatedAt: Date.now()
-          }, { merge: true }).catch(() => {});
-        } catch(e) {}
-
         // 1. Configurações da Loja: stores/${tenantId}/config/settings (1 Leitura)
         unsubSettings = onSnapshot(doc(db, "stores", tenantId, "config", "settings"), (docSnap) => {
           if (docSnap.exists()) {
@@ -9402,11 +9751,21 @@
                 window.receiveCredentialsFromFirebase(data);
               }
               if (Array.isArray(data.storesList) && data.storesList.length > 0) {
-                if (typeof window.setStoresList === 'function') window.setStoresList(data.storesList);
-                else window.storesList = data.storesList;
+                // Preserva qual loja estava ativa localmente na tela do operador
+                const currentActiveStore = (window.storesList || []).find(s => s.active);
+                const mergedStores = data.storesList.map(s => ({
+                  ...s,
+                  active: currentActiveStore ? (s.id === currentActiveStore.id) : Boolean(s.active)
+                }));
+                if (!mergedStores.some(s => s.active) && mergedStores.length > 0) {
+                  mergedStores[0].active = true;
+                }
+
+                if (typeof window.setStoresList === 'function') window.setStoresList(mergedStores);
+                else window.storesList = mergedStores;
 
                 if (typeof window.getTenantStorageKey === 'function') {
-                  localStorage.setItem(window.getTenantStorageKey('stores'), JSON.stringify(data.storesList));
+                  localStorage.setItem(window.getTenantStorageKey('stores'), JSON.stringify(mergedStores));
                 }
                 if (typeof renderStoreChips === 'function') renderStoreChips();
                 if (typeof renderDrawerStores === 'function') renderDrawerStores();
@@ -9451,6 +9810,7 @@
 
           if (remoteMb.length > 0 || docSnap.exists()) {
             remoteMb.sort((a, b) => (a.order ?? 999999) - (b.order ?? 999999));
+            window._firebaseLastStateSynced_motoboys = JSON.stringify(remoteMb);
             if (typeof window.setMotoboysList === 'function') window.setMotoboysList(remoteMb);
             else window.motoboysList = remoteMb;
 
@@ -9484,8 +9844,10 @@
         // 3. Pedidos dos Motoboys: stores/${tenantId}/state/motoboy_orders (Consolidado: 1 Leitura)
         unsubMotoboyOrders = onSnapshot(doc(db, "stores", tenantId, "state", "motoboy_orders"), async (docSnap) => {
           let remoteOrders = [];
+          let docDataSource = '';
           if (docSnap.exists()) {
             const data = docSnap.data();
+            docDataSource = (data && data.source) || '';
             if (data && Array.isArray(data.orders)) {
               remoteOrders = data.orders.filter(o => !o.archived);
             }
@@ -9505,7 +9867,34 @@
           }
 
           if (remoteOrders.length > 0 || docSnap.exists()) {
+            // BLINDAGEM ANTI-APAGAMENTO: Preserva pedidos lançados localmente que ainda não subiram ou sofreram atraso/cota na nuvem
+            if (docDataSource !== 'fechar_dia') {
+              const currentLocal = (typeof window.getMotoboyOrders === 'function' ? window.getMotoboyOrders() : window.motoboyOrders) || [];
+              const removedSet = window._locallyRemovedMotoboyOrderIds || new Set();
+              remoteOrders = remoteOrders.filter(o => o && o.id && !removedSet.has(String(o.id)));
+              const remoteIdMap = new Map(remoteOrders.map(o => [String(o.id), o]));
+
+              currentLocal.forEach(localOrd => {
+                if (!localOrd || !localOrd.id || localOrd.archived || removedSet.has(String(localOrd.id))) return;
+                const sId = String(localOrd.id);
+                if (!remoteIdMap.has(sId)) {
+                  // Mantém o pedido local para jamais sumir da tela sozinho
+                  remoteOrders.push(localOrd);
+                } else {
+                  const remOrd = remoteIdMap.get(sId);
+                  // Se o status mudou para 'entregue' no portal do motoboy ou localmente, preserva o status mais avançado
+                  if (localOrd.status === 'entregue' && remOrd.status !== 'entregue') {
+                    remOrd.status = 'entregue';
+                    remOrd.deliveredAt = localOrd.deliveredAt || remOrd.deliveredAt;
+                    remOrd.deliveryCode = localOrd.deliveryCode || remOrd.deliveryCode;
+                  }
+                }
+              });
+            }
+
             remoteOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            window._firebaseLastStateSynced_motoboyOrders = JSON.stringify(remoteOrders);
+
             if (typeof window.setMotoboyOrders === 'function') window.setMotoboyOrders(remoteOrders);
             else window.motoboyOrders = remoteOrders;
 
@@ -9587,7 +9976,33 @@
           }
 
           if (remoteOrders.length > 0 || docSnap.exists()) {
+            // BLINDAGEM ANTI-APAGAMENTO KDS: Preserva pedidos locais e coordenadas/KM já calculados localmente
+            const currentLocalKds = (typeof window.getOrders === 'function' ? window.getOrders() : window.orders) || [];
+            const removedKdsSet = window._locallyRemovedOrderIds || new Set();
+            remoteOrders = remoteOrders.filter(o => o && o.id && !removedKdsSet.has(String(o.id)));
+            const remoteKdsMap = new Map(remoteOrders.map(o => [String(o.id), o]));
+
+            currentLocalKds.forEach(localOrd => {
+              if (!localOrd || !localOrd.id || localOrd.archived || removedKdsSet.has(String(localOrd.id))) return;
+              const sId = String(localOrd.id);
+              if (!remoteKdsMap.has(sId)) {
+                remoteOrders.push(localOrd);
+              } else {
+                const remOrd = remoteKdsMap.get(sId);
+                // Preserva KM e coordenadas já calculadas localmente para não precisar recalcular
+                if (localOrd.distanceKm && !remOrd.distanceKm) {
+                  remOrd.distanceKm = localOrd.distanceKm;
+                  remOrd.storeLat = localOrd.storeLat;
+                  remOrd.storeLng = localOrd.storeLng;
+                  remOrd.customerLat = localOrd.customerLat;
+                  remOrd.customerLng = localOrd.customerLng;
+                }
+              }
+            });
+
             remoteOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            window._firebaseLastStateSynced_kds = JSON.stringify(remoteOrders);
+
             if (typeof window.setOrders === 'function') window.setOrders(remoteOrders);
             else window.orders = remoteOrders;
 

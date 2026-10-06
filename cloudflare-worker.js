@@ -94,6 +94,57 @@ function mapIFoodStatus(orderStatus, eventCode) {
   return 'confirmado';
 }
 
+const merchantCoordsCache = {};
+
+function haversineRoadDistanceKm(lat1, lng1, lat2, lng2) {
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c * 1.28 * 10) / 10;
+}
+
+async function calculateRouteDistanceKm(lat1, lng1, lat2, lng2) {
+  try {
+    const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${lng1},${lat1};${lng2},${lat2}?overview=false`;
+    const res = await fetch(osrmUrl);
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.routes?.[0]?.distance !== undefined) {
+        return Math.round((Number(data.routes[0].distance) / 1000) * 10) / 10;
+      }
+    }
+  } catch (e) {}
+  return haversineRoadDistanceKm(lat1, lng1, lat2, lng2);
+}
+
+async function getMerchantCoordinates(merchantId, token) {
+  if (!merchantId) return null;
+  const cleanId = String(merchantId).split(',')[0].trim();
+  if (!cleanId) return null;
+  if (merchantCoordsCache[cleanId]) return merchantCoordsCache[cleanId];
+  try {
+    const res = await fetch(`https://merchant-api.ifood.com.br/merchant/v1.0/merchants/${cleanId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const details = await res.json();
+      const addr = details?.address || {};
+      const lat = Number(addr.latitude ?? details?.latitude ?? addr.coordinates?.latitude);
+      const lng = Number(addr.longitude ?? details?.longitude ?? addr.coordinates?.longitude);
+      if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+        merchantCoordsCache[cleanId] = { lat, lng };
+        return merchantCoordsCache[cleanId];
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
 function formatIFoodOrder(raw, eventCode = '') {
   let displayId = raw.displayId || raw.shortOrderNumber || (raw.id ? raw.id.split('-').pop().slice(-4) : '0000');
   displayId = String(displayId).replace(/^#/, '');
@@ -102,8 +153,17 @@ function formatIFoodOrder(raw, eventCode = '') {
   const merchantId = raw.merchant?.id || '';
 
   let fullAddress = 'Retirada no Balcão';
+  let customerLat = null;
+  let customerLng = null;
   if (raw.delivery && raw.delivery.deliveryAddress) {
     const addr = raw.delivery.deliveryAddress;
+    const coords = addr.coordinates || raw.delivery.coordinates || {};
+    const cLat = Number(coords.latitude ?? addr.latitude);
+    const cLng = Number(coords.longitude ?? addr.longitude);
+    if (!isNaN(cLat) && !isNaN(cLng) && cLat !== 0 && cLng !== 0) {
+      customerLat = cLat;
+      customerLng = cLng;
+    }
     const parts = [];
     if (addr.streetName) {
       let s = addr.streetName;
@@ -115,6 +175,16 @@ function formatIFoodOrder(raw, eventCode = '') {
     if (addr.city) parts.push(addr.city);
     if (addr.reference) parts.push(`Ref: ${addr.reference}`);
     fullAddress = parts.join(' - ') || addr.formattedAddress || 'Endereço sem detalhes';
+  }
+
+  let storeLat = null;
+  let storeLng = null;
+  const mAddr = raw.merchant?.address || raw.merchant?.coordinates || {};
+  const sLat = Number(mAddr.latitude ?? mAddr.coordinates?.latitude);
+  const sLng = Number(mAddr.longitude ?? mAddr.coordinates?.longitude);
+  if (!isNaN(sLat) && !isNaN(sLng) && sLat !== 0 && sLng !== 0) {
+    storeLat = sLat;
+    storeLng = sLng;
   }
 
   const items = (raw.items || []).map(i => {
@@ -170,6 +240,11 @@ function formatIFoodOrder(raw, eventCode = '') {
     phoneLocalizer: formattedLocalizer,
     phoneNumberOnly: phoneNumber,
     customerAddress: fullAddress,
+    customerLat,
+    customerLng,
+    storeLat,
+    storeLng,
+    distanceKm: null,
     deliveryMode: raw.delivery?.deliveredBy || 'MERCHANT',
     items: items.length > 0 ? items : [{ name: 'Pedido iFood', price: total, quantity: 1, subtotal: total }],
     totalValue: total,
@@ -180,6 +255,28 @@ function formatIFoodOrder(raw, eventCode = '') {
     isRealIFood: true,
     ifoodDriverStatus: null
   };
+}
+
+async function enrichFormattedOrderDistance(formatted, token, fallbackMerchantId) {
+  try {
+    if (!formatted.storeLat || !formatted.storeLng) {
+      const targetMid = formatted.merchantId || fallbackMerchantId || '';
+      const mCoords = await getMerchantCoordinates(targetMid, token);
+      if (mCoords) {
+        formatted.storeLat = mCoords.lat;
+        formatted.storeLng = mCoords.lng;
+      }
+    }
+    if (formatted.storeLat && formatted.storeLng && formatted.customerLat && formatted.customerLng) {
+      formatted.distanceKm = await calculateRouteDistanceKm(
+        formatted.storeLat,
+        formatted.storeLng,
+        formatted.customerLat,
+        formatted.customerLng
+      );
+    }
+  } catch (e) {}
+  return formatted;
 }
 
 export default {
@@ -295,6 +392,7 @@ export default {
 
         const rawOrder = await orderRes.json();
         const formatted = formatIFoodOrder(rawOrder);
+        await enrichFormattedOrderDistance(formatted, token, body.merchantId);
 
         return new Response(JSON.stringify({
           success: true,
@@ -303,6 +401,59 @@ export default {
           status: 200,
           headers: getCorsHeaders()
         });
+      }
+
+      // 3B. CALCULAR DISTÂNCIA DE PEDIDO EXISTENTE
+      if (pathname === '/api/ifood/order-distance' && request.method === 'POST') {
+        const body = await request.json();
+        const { ifoodOrderId, merchantId, clientId, clientSecret, customerLat, customerLng, storeLat, storeLng } = body;
+        let sLat = Number(storeLat);
+        let sLng = Number(storeLng);
+        let cLat = Number(customerLat);
+        let cLng = Number(customerLng);
+
+        if ((isNaN(sLat) || !sLat || isNaN(cLat) || !cLat) && clientId && clientSecret) {
+          const token = await getIFoodToken(clientId, clientSecret);
+          let targetMid = merchantId || '';
+          if ((!cLat || isNaN(cLat)) && ifoodOrderId) {
+            const cleanId = String(ifoodOrderId).replace(/^#IF-/, '').trim();
+            const oRes = await fetch(`https://merchant-api.ifood.com.br/order/v1.0/orders/${cleanId}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            if (oRes.ok) {
+              const rawOrder = await oRes.json();
+              const formatted = formatIFoodOrder(rawOrder);
+              if (formatted.customerLat) {
+                cLat = formatted.customerLat;
+                cLng = formatted.customerLng;
+              }
+              if (!targetMid && formatted.merchantId) targetMid = formatted.merchantId;
+              if (formatted.storeLat && (!sLat || isNaN(sLat))) {
+                sLat = formatted.storeLat;
+                sLng = formatted.storeLng;
+              }
+            }
+          }
+          if ((!sLat || isNaN(sLat)) && targetMid) {
+            const mCoords = await getMerchantCoordinates(targetMid, token);
+            if (mCoords) {
+              sLat = mCoords.lat;
+              sLng = mCoords.lng;
+            }
+          }
+        }
+        if (!isNaN(sLat) && sLat !== 0 && !isNaN(cLat) && cLat !== 0) {
+          const distanceKm = await calculateRouteDistanceKm(sLat, sLng, cLat, cLng);
+          return new Response(JSON.stringify({
+            success: true,
+            distanceKm,
+            storeLat: sLat,
+            storeLng: sLng,
+            customerLat: cLat,
+            customerLng: cLng
+          }), { status: 200, headers: getCorsHeaders() });
+        }
+        return new Response(JSON.stringify({ success: false, distanceKm: null }), { status: 200, headers: getCorsHeaders() });
       }
 
       // 4. POLLING SINCRONIZADO MULTILOJAS
@@ -445,6 +596,7 @@ export default {
 
               if (orderFetched && raw) {
                 const formatted = formatIFoodOrder(raw, code);
+                await enrichFormattedOrderDistance(formatted, token, merchantIdsList[0] || '');
                 newOrders.push(formatted);
                 // CRÍTICO: SOMENTE confirma recebimento (acknowledgment) se o pedido foi capturado com sucesso!
                 ackEvents.push({ id: evt.id });

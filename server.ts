@@ -210,6 +210,86 @@ app.get('/api/ifood/merchants-status', async (req, res) => {
   }
 });
 
+// Cache de coordenadas das lojas iFood (evita consultas repetidas)
+const merchantCoordsCache: Record<string, { lat: number; lng: number; address?: string }> = {};
+
+function haversineRoadDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const R = 6371; // Raio da Terra em km
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const straightKm = R * c;
+  // Fator médio de tortuosidade viária urbana (1.28x da linha reta)
+  return Math.round(straightKm * 1.28 * 10) / 10;
+}
+
+async function calculateRouteDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number): Promise<number> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 1400);
+    const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${lng1},${lat1};${lng2},${lat2}?overview=false`;
+    const res = await fetch(osrmUrl, { signal: controller.signal });
+    clearTimeout(timer);
+    if (res.ok) {
+      const data: any = await res.json();
+      if (data?.routes?.[0]?.distance !== undefined) {
+        return Math.round((Number(data.routes[0].distance) / 1000) * 10) / 10;
+      }
+    }
+  } catch (e) {}
+  return haversineRoadDistanceKm(lat1, lng1, lat2, lng2);
+}
+
+async function getMerchantCoordinates(merchantId: string, token: string): Promise<{ lat: number; lng: number } | null> {
+  if (!merchantId) return null;
+  const cleanId = merchantId.split(',')[0].trim();
+  if (!cleanId) return null;
+  if (merchantCoordsCache[cleanId]) {
+    return merchantCoordsCache[cleanId];
+  }
+  try {
+    const res = await fetch(`https://merchant-api.ifood.com.br/merchant/v1.0/merchants/${cleanId}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const details: any = await res.json();
+      const addr = details?.address || {};
+      const lat = Number(addr.latitude ?? details?.latitude ?? addr.coordinates?.latitude);
+      const lng = Number(addr.longitude ?? details?.longitude ?? addr.coordinates?.longitude);
+      if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+        merchantCoordsCache[cleanId] = { lat, lng };
+        return merchantCoordsCache[cleanId];
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
+function extractCustomerCoordinates(rawOrder: any): { lat: number; lng: number } | null {
+  const addr = rawOrder?.delivery?.deliveryAddress || rawOrder?.deliveryAddress || {};
+  const coords = addr.coordinates || rawOrder?.delivery?.coordinates || {};
+  const lat = Number(coords.latitude ?? addr.latitude);
+  const lng = Number(coords.longitude ?? addr.longitude);
+  if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+    return { lat, lng };
+  }
+  return null;
+}
+
+function extractRawStoreCoordinates(rawOrder: any): { lat: number; lng: number } | null {
+  const mAddr = rawOrder?.merchant?.address || rawOrder?.merchant?.coordinates || {};
+  const lat = Number(mAddr.latitude ?? mAddr.coordinates?.latitude);
+  const lng = Number(mAddr.longitude ?? mAddr.coordinates?.longitude);
+  if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+    return { lat, lng };
+  }
+  return null;
+}
+
 // Helper to format iFood raw order to app order structure
 function formatIFoodOrder(rawOrder: any, defaultStatus = 'confirmado') {
   const customerName = rawOrder.customer?.name || rawOrder.customer?.firstName || 'Cliente iFood';
@@ -245,6 +325,9 @@ function formatIFoodOrder(rawOrder: any, defaultStatus = 'confirmado') {
     if (addr.reference) parts.push(`Ref: ${addr.reference}`);
     customerAddress = parts.join(' - ');
   }
+
+  const custCoords = extractCustomerCoordinates(rawOrder);
+  const rawStoreCoords = extractRawStoreCoordinates(rawOrder);
 
   const deliveryMode = deliveryData.deliveredBy || 'MERCHANT';
 
@@ -287,6 +370,11 @@ function formatIFoodOrder(rawOrder: any, defaultStatus = 'confirmado') {
     phoneLocalizer: formattedLocalizer,
     phoneNumberOnly: phoneNumber,
     customerAddress: customerAddress || 'Endereço não informado',
+    customerLat: custCoords ? custCoords.lat : null,
+    customerLng: custCoords ? custCoords.lng : null,
+    storeLat: rawStoreCoords ? rawStoreCoords.lat : null,
+    storeLng: rawStoreCoords ? rawStoreCoords.lng : null,
+    distanceKm: null as number | null,
     deliveryMode,
     items: items.length > 0 ? items : [{ name: 'Pedido iFood', price: totalValue || 25.0, quantity: 1, subtotal: totalValue || 25.0 }],
     totalValue: totalValue || 25.0,
@@ -297,6 +385,28 @@ function formatIFoodOrder(rawOrder: any, defaultStatus = 'confirmado') {
     isRealIFood: true,
     ifoodDriverStatus: null
   };
+}
+
+async function enrichFormattedOrderDistance(formatted: any, token: string, fallbackMerchantId?: string) {
+  try {
+    if (!formatted.storeLat || !formatted.storeLng) {
+      const targetMid = formatted.merchantId || fallbackMerchantId || '';
+      const mCoords = await getMerchantCoordinates(targetMid, token);
+      if (mCoords) {
+        formatted.storeLat = mCoords.lat;
+        formatted.storeLng = mCoords.lng;
+      }
+    }
+    if (formatted.storeLat && formatted.storeLng && formatted.customerLat && formatted.customerLng) {
+      formatted.distanceKm = await calculateRouteDistanceKm(
+        formatted.storeLat,
+        formatted.storeLng,
+        formatted.customerLat,
+        formatted.customerLng
+      );
+    }
+  } catch (e) {}
+  return formatted;
 }
 
 // API Route: Poll Events from iFood API
@@ -522,6 +632,7 @@ app.post('/api/ifood/poll', async (req, res) => {
             }
 
             const formatted = formatIFoodOrder(rawOrder, initialStatus);
+            await enrichFormattedOrderDistance(formatted, token, cleanMerchants);
             newOrders.push(formatted);
             ackEvents.push({ id: evt.id });
           } else {
@@ -593,9 +704,10 @@ app.post('/api/ifood/poll', async (req, res) => {
 // API Route: Direct Search / Fetch Order by ID
 app.post('/api/ifood/fetch-order-by-id', async (req, res) => {
   try {
-    const { orderId, clientId, clientSecret } = req.body;
+    const { orderId, clientId, clientSecret, merchantId } = req.body;
     const cid = clientId || process.env.IFOOD_CLIENT_ID;
     const csec = clientSecret || process.env.IFOOD_CLIENT_SECRET;
+    const mid = merchantId || process.env.IFOOD_MERCHANT_ID;
 
     if (!orderId) {
       return res.status(400).json({ success: false, message: 'ID ou número do pedido é obrigatório.' });
@@ -622,6 +734,7 @@ app.post('/api/ifood/fetch-order-by-id', async (req, res) => {
 
     const rawOrder = await orderRes.json();
     const formatted = formatIFoodOrder(rawOrder);
+    await enrichFormattedOrderDistance(formatted, token, mid);
 
     return res.json({
       success: true,
@@ -632,6 +745,73 @@ app.post('/api/ifood/fetch-order-by-id', async (req, res) => {
       success: false,
       message: error.message || 'Erro ao buscar pedido por ID.'
     });
+  }
+});
+
+// API Route: Calculate or Enrich Distance (KM) for an iFood Order
+app.post('/api/ifood/order-distance', async (req, res) => {
+  try {
+    const { ifoodOrderId, merchantId, clientId, clientSecret, customerLat, customerLng, storeLat, storeLng } = req.body;
+    const cid = clientId || process.env.IFOOD_CLIENT_ID;
+    const csec = clientSecret || process.env.IFOOD_CLIENT_SECRET;
+    const mid = merchantId || process.env.IFOOD_MERCHANT_ID;
+
+    let sLat = Number(storeLat);
+    let sLng = Number(storeLng);
+    let cLat = Number(customerLat);
+    let cLng = Number(customerLng);
+
+    if ((isNaN(sLat) || !sLat || isNaN(cLat) || !cLat) && cid && csec) {
+      const token = await getIFoodToken(cid, csec);
+      let targetMid = mid || '';
+
+      if ((!cLat || isNaN(cLat)) && ifoodOrderId) {
+        const cleanId = String(ifoodOrderId).replace(/^#IF-/, '').trim();
+        const oRes = await fetch(`https://merchant-api.ifood.com.br/order/v1.0/orders/${cleanId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (oRes.ok) {
+          const rawOrder = await oRes.json();
+          const cCoords = extractCustomerCoordinates(rawOrder);
+          if (cCoords) {
+            cLat = cCoords.lat;
+            cLng = cCoords.lng;
+          }
+          if (!targetMid && rawOrder?.merchant?.id) {
+            targetMid = rawOrder.merchant.id;
+          }
+          const rStore = extractRawStoreCoordinates(rawOrder);
+          if (rStore && (!sLat || isNaN(sLat))) {
+            sLat = rStore.lat;
+            sLng = rStore.lng;
+          }
+        }
+      }
+
+      if ((!sLat || isNaN(sLat)) && targetMid) {
+        const mCoords = await getMerchantCoordinates(targetMid, token);
+        if (mCoords) {
+          sLat = mCoords.lat;
+          sLng = mCoords.lng;
+        }
+      }
+    }
+
+    if (!isNaN(sLat) && sLat !== 0 && !isNaN(cLat) && cLat !== 0) {
+      const distanceKm = await calculateRouteDistanceKm(sLat, sLng, cLat, cLng);
+      return res.json({
+        success: true,
+        distanceKm,
+        storeLat: sLat,
+        storeLng: sLng,
+        customerLat: cLat,
+        customerLng: cLng
+      });
+    }
+
+    return res.json({ success: false, distanceKm: null });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
   }
 });
 
