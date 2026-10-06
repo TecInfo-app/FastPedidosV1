@@ -7146,23 +7146,46 @@
     const _geocodeAddressCache = {};
     const _storeAddressCoordsCache = {};
 
-    // Extrai a cidade/estado a partir do endereço de qualquer pedido iFood na memória
-    function detectDefaultCityStateFromOrders() {
+    // Extrai o Bairro e a Cidade/Estado a partir do endereço de um pedido específico ou dos pedidos iFood na memória
+    function extractCityAndNeighborhoodFromAddress(addrStr) {
+      if (!addrStr || typeof addrStr !== 'string') return { neighborhood: '', city: '' };
+      const cleanNoRef = addrStr.replace(/-\s*Ref:.*$/i, '').replace(/Ref:.*$/i, '').trim();
+      const parts = cleanNoRef.split(' - ').map(s => s.trim()).filter(Boolean);
+      // Formato padrão iFood: [0] Rua, N (Comp) | [1] Bairro | [2] Cidade (ou Cidade - UF)
+      if (parts.length >= 3) {
+        return {
+          street: parts[0],
+          neighborhood: parts[1],
+          city: parts.slice(2).join(', ')
+        };
+      } else if (parts.length === 2) {
+        return {
+          street: parts[0],
+          neighborhood: '',
+          city: parts[1]
+        };
+      }
+      return { street: cleanNoRef, neighborhood: '', city: '' };
+    }
+
+    function detectDefaultCityAndNeighborhoodFromOrders(targetOrder = null) {
+      if (targetOrder && targetOrder.customerAddress) {
+        const parsed = extractCityAndNeighborhoodFromAddress(targetOrder.customerAddress);
+        if (parsed.city) return parsed;
+      }
       for (const o of (orders || [])) {
         if (!o || !o.customerAddress) continue;
-        // Formato comum: "Rua X, 123 - Bairro - Cidade - UF" ou "Rua X, 123 - Bairro - Cidade"
-        const parts = String(o.customerAddress).replace(/Ref:.*$/i, '').split(' - ').map(s => s.trim()).filter(Boolean);
-        if (parts.length >= 3) {
-          return parts[parts.length - 1];
-        }
+        const parsed = extractCityAndNeighborhoodFromAddress(o.customerAddress);
+        if (parsed.city) return parsed;
       }
-      return '';
+      return { street: '', neighborhood: 'Boa Viagem', city: 'Recife' };
     }
 
     async function geocodeAddressFallbackClient(addressStr, cityHint = '') {
       if (!addressStr || typeof addressStr !== 'string') return null;
-      // Remove referências ("Ref: ...") e complementos entre parênteses ("(Apto 12)") que atrapalham o geocodificador
+      // Remove referências ("- Ref: ..." ou "Ref: ...") e complementos entre parênteses ("(Apt 102)") que atrapalham o geocodificador
       let clean = addressStr
+        .replace(/-\s*Ref:.*$/i, '')
         .replace(/Ref:.*$/i, '')
         .replace(/\([^)]*\)/g, '')
         .replace(/\s+/g, ' ')
@@ -7172,19 +7195,18 @@
       const cacheKey = `${clean}|${cityHint}`;
       if (_geocodeAddressCache[cacheKey]) return _geocodeAddressCache[cacheKey];
 
-      // Prepara variações de consulta da mais específica para a mais abrangente (Rua + Número + Cidade)
+      // Prepara variações de consulta da mais específica para a mais abrangente (Rua + Número + Bairro + Cidade)
       const queries = [];
       const parts = clean.split(' - ').map(p => p.trim()).filter(Boolean);
       if (parts.length >= 3) {
-        // Ex: "Rua A, 100 - Centro - Cidade" -> tenta "Rua A, 100, Centro, Cidade, Brasil" e "Rua A, 100, Cidade, Brasil"
         const streetAndNum = parts[0];
         const neighborhood = parts[1];
         const cityPart = parts.slice(2).join(', ');
         queries.push(`${streetAndNum}, ${neighborhood}, ${cityPart}, Brasil`);
         queries.push(`${streetAndNum}, ${cityPart}, Brasil`);
-        // Sem o número caso a numeração não conste no mapa
         const streetOnly = streetAndNum.replace(/,\s*\d+.*$/, '').trim();
         if (streetOnly !== streetAndNum) {
+          queries.push(`${streetOnly}, ${neighborhood}, ${cityPart}, Brasil`);
           queries.push(`${streetOnly}, ${cityPart}, Brasil`);
         }
         queries.push(`${neighborhood}, ${cityPart}, Brasil`);
@@ -7214,29 +7236,47 @@
 
     async function resolveIFoodOrderDistanceKm(order) {
       if (!order) return null;
-      if (order.distanceKm !== undefined && order.distanceKm !== null && !isNaN(Number(order.distanceKm)) && Number(order.distanceKm) > 0) {
+      // Trava de sanidade: se o pedido ficou salvo com distância absurda (> 60 km por erro de estado diferente), descarta e recalcula!
+      if (order.distanceKm !== undefined && order.distanceKm !== null && Number(order.distanceKm) > 60) {
+        order.distanceKm = null;
+        order.storeLat = null;
+        order.storeLng = null;
+      }
+
+      if (order.distanceKm !== undefined && order.distanceKm !== null && !isNaN(Number(order.distanceKm)) && Number(order.distanceKm) > 0 && Number(order.distanceKm) <= 60) {
         return Number(order.distanceKm);
       }
 
-      // 1. Se já tiver coordenadas da loja e do cliente no pedido, calcula imediatamente
+      // 1. Se já tiver coordenadas válidas da loja e do cliente no pedido, calcula imediatamente
       if (order.storeLat && order.storeLng && order.customerLat && order.customerLng) {
-        order.distanceKm = haversineRoadDistanceKmClient(
+        const prelimKm = haversineRoadDistanceKmClient(
           Number(order.storeLat),
           Number(order.storeLng),
           Number(order.customerLat),
           Number(order.customerLng)
         );
-        try {
-          const osrmRes = await fetch(`https://router.project-osrm.org/route/v1/driving/${order.storeLng},${order.storeLat};${order.customerLng},${order.customerLat}?overview=false`);
-          if (osrmRes.ok) {
-            const osrmData = await osrmRes.json();
-            if (osrmData?.routes?.[0]?.distance !== undefined) {
-              order.distanceKm = Math.round((Number(osrmData.routes[0].distance) / 1000) * 10) / 10;
-              saveOrders(true);
+        if (prelimKm > 0 && prelimKm <= 60) {
+          order.distanceKm = prelimKm;
+          try {
+            const osrmRes = await fetch(`https://router.project-osrm.org/route/v1/driving/${order.storeLng},${order.storeLat};${order.customerLng},${order.customerLat}?overview=false`);
+            if (osrmRes.ok) {
+              const osrmData = await osrmRes.json();
+              if (osrmData?.routes?.[0]?.distance !== undefined) {
+                const routeKm = Math.round((Number(osrmData.routes[0].distance) / 1000) * 10) / 10;
+                if (routeKm > 0 && routeKm <= 60) {
+                  order.distanceKm = routeKm;
+                  saveOrders(true);
+                }
+              }
             }
-          }
-        } catch (e) {}
-        return order.distanceKm;
+          } catch (e) {}
+          return order.distanceKm;
+        } else {
+          // Coordenada da loja estava em outra cidade/estado: limpa para recalcular na mesma cidade do pedido
+          order.storeLat = null;
+          order.storeLng = null;
+          order.distanceKm = null;
+        }
       }
 
       const orderKey = order.ifoodOrderId || order.id;
@@ -7285,7 +7325,7 @@
                   const ct = res.headers.get('content-type') || '';
                   if (ct.includes('application/json')) {
                     const data = await res.json();
-                    if (data && data.success && data.distanceKm) {
+                    if (data && data.success && data.distanceKm && Number(data.distanceKm) <= 60) {
                       order.distanceKm = Number(data.distanceKm);
                       if (data.storeLat) order.storeLat = data.storeLat;
                       if (data.storeLng) order.storeLng = data.storeLng;
@@ -7319,7 +7359,7 @@
                       const data = await res.json();
                       const fetchedOrd = data?.order;
                       if (fetchedOrd) {
-                        if (fetchedOrd.distanceKm && Number(fetchedOrd.distanceKm) > 0) {
+                        if (fetchedOrd.distanceKm && Number(fetchedOrd.distanceKm) > 0 && Number(fetchedOrd.distanceKm) <= 60) {
                           order.distanceKm = Number(fetchedOrd.distanceKm);
                           order.storeLat = fetchedOrd.storeLat || order.storeLat;
                           order.storeLng = fetchedOrd.storeLng || order.storeLng;
@@ -7343,7 +7383,7 @@
               }
             }
 
-            // 4. Se ainda não tiver coordenada da loja, consulta /api/ifood/test-credentials (que já existe no Worker antigo e retorna a lista de lojas com endereço!)
+            // 4. Se ainda não tiver coordenada da loja, consulta /api/ifood/test-credentials
             if ((!order.storeLat || !order.storeLng) && baseUrls.length > 0) {
               const cacheMidKey = targetMerchantId || 'default_store';
               if (_storeAddressCoordsCache[cacheMidKey]) {
@@ -7384,7 +7424,8 @@
             }
           }
 
-          const cityHint = detectDefaultCityStateFromOrders();
+          const locationCtx = detectDefaultCityAndNeighborhoodFromOrders(order);
+          const cityHint = locationCtx.city || 'Recife';
 
           // 5. Se ainda faltar coordenada do cliente mas tiver endereço em texto, geocodifica automaticamente no navegador
           if ((!order.customerLat || !order.customerLng) && order.customerAddress && order.customerAddress !== 'Retirada no Balcão') {
@@ -7395,9 +7436,9 @@
             }
           }
 
-          // 6. Se tiver coordenadas em outro pedido da mesma loja na memória, reaproveita a coordenada da loja
+          // 6. Se tiver coordenadas válidas em outro pedido da mesma loja na memória, reaproveita a coordenada da loja
           if (!order.storeLat || !order.storeLng) {
-            const donorOrder = (orders || []).find(o => o && o.storeLat && o.storeLng && (
+            const donorOrder = (orders || []).find(o => o && o.storeLat && o.storeLng && o.distanceKm && Number(o.distanceKm) <= 60 && (
               (order.merchantId && o.merchantId === order.merchantId) ||
               (order.storeName && o.storeName === order.storeName)
             ));
@@ -7407,26 +7448,35 @@
             }
           }
 
-          // 7. Se a loja cadastrada tiver endereço ou nome + cidade dos pedidos, geocodifica a loja como último recurso
-          if ((!order.storeLat || !order.storeLng) && cityHint) {
-            const storeQueryName = (detectedStore && detectedStore.address) || (detectedStore && detectedStore.name) || order.storeName || apiCredentials.storeName || '';
-            const cacheKey = `store_geo_${storeQueryName}_${cityHint}`;
-            if (_storeAddressCoordsCache[cacheKey]) {
-              order.storeLat = _storeAddressCoordsCache[cacheKey].lat;
-              order.storeLng = _storeAddressCoordsCache[cacheKey].lng;
-            } else if (storeQueryName) {
-              const geoStore = await geocodeAddressFallbackClient(`${storeQueryName}`, cityHint) || await geocodeAddressFallbackClient(`Centro, ${cityHint}`);
-              if (geoStore) {
-                order.storeLat = geoStore.lat;
-                order.storeLng = geoStore.lng;
-                _storeAddressCoordsCache[cacheKey] = geoStore;
+          // 7. Se a loja ainda não tiver coordenada do iFood, usa a localização da loja em Boa Viagem / Recife (ou endereço cadastrado na loja)
+          if (!order.storeLat || !order.storeLng) {
+            const customStoreAddr = (detectedStore && detectedStore.address) ? detectedStore.address : '';
+            if (customStoreAddr) {
+              const geoCustom = await geocodeAddressFallbackClient(customStoreAddr, cityHint);
+              if (geoCustom) {
+                order.storeLat = geoCustom.lat;
+                order.storeLng = geoCustom.lng;
+              }
+            }
+            // Se a cidade for Recife / Boa Viagem (operação Cia do Chopp / Pizzaria), usa a coordenada base real da loja em Boa Viagem (Av. Conselheiro Aguiar, 3595, Boa Viagem, Recife)
+            if ((!order.storeLat || !order.storeLng) && cityHint.toLowerCase().includes('recife')) {
+              order.storeLat = -8.1055606;
+              order.storeLng = -34.8890360;
+            }
+            // Para qualquer outra cidade, geocodifica pelo bairro/cidade do pedido (evitando buscar pelo nome comercial da loja que pode cair em outro estado!)
+            if (!order.storeLat || !order.storeLng) {
+              const fallbackQuery = locationCtx.neighborhood ? `${locationCtx.neighborhood}, ${cityHint}` : cityHint;
+              const geoFallback = await geocodeAddressFallbackClient(fallbackQuery, cityHint);
+              if (geoFallback) {
+                order.storeLat = geoFallback.lat;
+                order.storeLng = geoFallback.lng;
               }
             }
           }
 
-          // 8. Se agora temos ambas as coordenadas, calcula via OSRM / Haversine
+          // 8. Se agora temos ambas as coordenadas, calcula via OSRM / Haversine e valida que estão na mesma região (<= 60 km)
           if (order.storeLat && order.storeLng && order.customerLat && order.customerLng) {
-            order.distanceKm = haversineRoadDistanceKmClient(
+            let finalKm = haversineRoadDistanceKmClient(
               Number(order.storeLat),
               Number(order.storeLng),
               Number(order.customerLat),
@@ -7437,15 +7487,19 @@
               if (osrmRes.ok) {
                 const osrmData = await osrmRes.json();
                 if (osrmData?.routes?.[0]?.distance !== undefined) {
-                  order.distanceKm = Math.round((Number(osrmData.routes[0].distance) / 1000) * 10) / 10;
+                  finalKm = Math.round((Number(osrmData.routes[0].distance) / 1000) * 10) / 10;
                 }
               }
             } catch (e) {}
-            saveOrders(true);
-            return order.distanceKm;
+
+            if (finalKm > 0 && finalKm <= 60) {
+              order.distanceKm = finalKm;
+              saveOrders(true);
+              return order.distanceKm;
+            }
           }
         } catch (e) {}
-        return order.distanceKm || null;
+        return null;
       })();
 
       _pendingDistanceResolvers.set(orderKey, resolverPromise);
@@ -7482,7 +7536,7 @@
         return;
       }
 
-      const km = (match.distanceKm !== undefined && match.distanceKm !== null && !isNaN(Number(match.distanceKm)))
+      const km = (match.distanceKm !== undefined && match.distanceKm !== null && !isNaN(Number(match.distanceKm)) && Number(match.distanceKm) <= 60)
         ? Number(match.distanceKm)
         : null;
 
@@ -7653,7 +7707,7 @@
           selectActiveStore(detectedStore.id, true);
         }
 
-        if (matchedIFood.distanceKm !== undefined && matchedIFood.distanceKm !== null && !isNaN(Number(matchedIFood.distanceKm)) && Number(matchedIFood.distanceKm) > 0) {
+        if (matchedIFood.distanceKm !== undefined && matchedIFood.distanceKm !== null && !isNaN(Number(matchedIFood.distanceKm)) && Number(matchedIFood.distanceKm) > 0 && Number(matchedIFood.distanceKm) <= 60) {
           detectedDistanceKm = Number(matchedIFood.distanceKm);
           const matchedFee = findFeeByDistanceKm(detectedDistanceKm);
           if (matchedFee) {
@@ -8029,7 +8083,7 @@
 
         let finalFeeValue = Number(feeValue) || 0;
         let finalFeeName = feeName || 'Taxa Fixa';
-        if (matched && !pendingOrderData.forceManualFee && matched.distanceKm && Number(matched.distanceKm) > 0) {
+        if (matched && !pendingOrderData.forceManualFee && matched.distanceKm && Number(matched.distanceKm) > 0 && Number(matched.distanceKm) <= 60) {
           const perOrderKmFee = findFeeByDistanceKm(matched.distanceKm);
           if (perOrderKmFee) {
             finalFeeValue = Number(perOrderKmFee.value);
@@ -10236,13 +10290,17 @@
                 remoteOrders.push(localOrd);
               } else {
                 const remOrd = remoteKdsMap.get(sId);
-                // Preserva KM e coordenadas já calculadas localmente para não precisar recalcular
-                if (localOrd.distanceKm && !remOrd.distanceKm) {
+                // Preserva KM e coordenadas válidas já calculadas localmente para não precisar recalcular
+                if (localOrd.distanceKm && Number(localOrd.distanceKm) <= 60 && (!remOrd.distanceKm || Number(remOrd.distanceKm) > 60)) {
                   remOrd.distanceKm = localOrd.distanceKm;
                   remOrd.storeLat = localOrd.storeLat;
                   remOrd.storeLng = localOrd.storeLng;
                   remOrd.customerLat = localOrd.customerLat;
                   remOrd.customerLng = localOrd.customerLng;
+                } else if (remOrd.distanceKm && Number(remOrd.distanceKm) > 60) {
+                  remOrd.distanceKm = null;
+                  remOrd.storeLat = null;
+                  remOrd.storeLng = null;
                 }
               }
             });
