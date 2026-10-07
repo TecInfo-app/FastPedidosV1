@@ -311,7 +311,7 @@ async function getMerchantCoordinates(merchantId: string, token: string): Promis
       }
     }
   } catch (e) {}
-  return { lat: -8.1055606, lng: -34.8890360 };
+  return { lat: -8.1137404, lng: -34.8928426 };
 }
 
 function extractCustomerCoordinates(rawOrder: any): { lat: number; lng: number } | null {

@@ -387,6 +387,35 @@
             Cadastre suas lojas físicas ou unidades de entrega. A loja ativa será selecionada automaticamente no lançamento rápido para motoboy.
           </div>
 
+          <!-- ENDEREÇO BASE GLOBAL PARA CÁLCULO DE KM (VALE PARA TODAS AS LOJAS) -->
+          <div class="p-3.5 bg-indigo-50/70 border border-indigo-200 rounded-2xl space-y-2 shadow-2xs">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-[11px] font-black text-indigo-950 uppercase tracking-wide flex items-center gap-1.5">
+                <span>📍</span> Endereço Base do Restaurante (Saída KM)
+              </span>
+              <span id="base-address-coords-badge" class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 text-[9px] font-black uppercase">
+                GPS Ativo
+              </span>
+            </div>
+            <p class="text-[11px] text-indigo-900/80 leading-tight">
+              Este endereço único vale para <strong>todas as suas lojas do iFood</strong> calcular a distância (KM) e a taxa automática de entrega:
+            </p>
+            <div class="flex items-center gap-2 pt-0.5">
+              <input 
+                type="text" 
+                id="global-store-base-address-stores" 
+                placeholder="Ex: Av. Conselheiro Aguiar, 2775 - Boa Viagem, Recife - PE" 
+                class="flex-1 px-3 py-2 bg-white border border-indigo-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <button 
+                type="button" 
+                onclick="saveGlobalBaseStoreAddress('global-store-base-address-stores')" 
+                id="btn-save-base-address-stores"
+                class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-xs font-black rounded-xl transition cursor-pointer shrink-0 shadow-xs">
+                Salvar
+              </button>
+            </div>
+          </div>
+
           <!-- Ação Cadastrar Loja -->
           <div class="space-y-2">
             <span class="text-[10px] font-black text-slate-500 uppercase tracking-wider block">Cadastro de Lojas</span>
@@ -500,8 +529,28 @@
             </div>
           </div>
 
-          <!-- 4. TABELA DE TAXAS DE ENTREGA -->
+          <!-- 4. TABELA DE TAXAS DE ENTREGA & ENDEREÇO BASE -->
           <div id="taxes-section-container" class="space-y-3 pt-4 border-t border-slate-200">
+            <div class="p-3 bg-indigo-50/70 border border-indigo-200 rounded-2xl space-y-1.5">
+              <span class="text-[10px] font-black text-indigo-950 uppercase tracking-wide flex items-center gap-1">
+                <span>📍</span> Endereço Base das Lojas (Cálculo de KM)
+              </span>
+              <div class="flex items-center gap-1.5">
+                <input 
+                  type="text" 
+                  id="global-store-base-address-fees" 
+                  placeholder="Ex: Av. Conselheiro Aguiar, 2775 - Boa Viagem, Recife - PE" 
+                  class="flex-1 px-2.5 py-1.5 bg-white border border-indigo-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <button 
+                  type="button" 
+                  onclick="saveGlobalBaseStoreAddress('global-store-base-address-fees')" 
+                  id="btn-save-base-address-fees"
+                  class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-xs font-black rounded-xl transition cursor-pointer shrink-0">
+                  Salvar
+                </button>
+              </div>
+            </div>
+
             <div class="flex items-center justify-between">
               <div>
                 <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Taxas de Entrega</h3>
@@ -3176,12 +3225,92 @@
       return url.replace(/\/+$/, '');
     }
 
+    const DEFAULT_BASE_STORE_ADDRESS = 'Av. Conselheiro Aguiar, 2775 - Boa Viagem, Recife - PE';
+    const DEFAULT_BASE_STORE_LAT = -8.1137404;
+    const DEFAULT_BASE_STORE_LNG = -34.8928426;
+
+    function syncBaseStoreAddressInputs() {
+      const addr = (apiCredentials && apiCredentials.baseStoreAddress) || DEFAULT_BASE_STORE_ADDRESS;
+      const inpStores = document.getElementById('global-store-base-address-stores');
+      const inpFees = document.getElementById('global-store-base-address-fees');
+      if (inpStores && document.activeElement !== inpStores) inpStores.value = addr;
+      if (inpFees && document.activeElement !== inpFees) inpFees.value = addr;
+    }
+
+    async function saveGlobalBaseStoreAddress(inputId) {
+      const inp = document.getElementById(inputId);
+      const rawAddr = inp ? inp.value.trim() : '';
+      if (!rawAddr) {
+        showToast('Aviso', 'Informe o endereço completo da loja para o cálculo de KM.', 'warning');
+        if (inp) inp.focus();
+        return;
+      }
+
+      const btnStores = document.getElementById('btn-save-base-address-stores');
+      const btnFees = document.getElementById('btn-save-base-address-fees');
+      if (btnStores) { btnStores.disabled = true; btnStores.textContent = 'Buscando GPS...'; }
+      if (btnFees) { btnFees.disabled = true; btnFees.textContent = 'Buscando GPS...'; }
+
+      let newLat = DEFAULT_BASE_STORE_LAT;
+      let newLng = DEFAULT_BASE_STORE_LNG;
+
+      try {
+        if (typeof geocodeAddressFallbackClient === 'function') {
+          const geo = await geocodeAddressFallbackClient(rawAddr);
+          if (geo && geo.lat && geo.lng) {
+            newLat = Number(geo.lat);
+            newLng = Number(geo.lng);
+          }
+        }
+      } catch (e) {}
+
+      apiCredentials.baseStoreAddress = rawAddr;
+      apiCredentials.baseStoreLat = newLat;
+      apiCredentials.baseStoreLng = newLng;
+
+      const storageKey = getTenantStorageKey('config');
+      localStorage.setItem(storageKey, JSON.stringify(apiCredentials));
+      syncBaseStoreAddressInputs();
+      syncSettingsToFirebase();
+
+      // Limpa as coordenadas antigas dos pedidos na tela para que recalculem imediatamente a partir do novo endereço
+      if (Array.isArray(orders)) {
+        orders.forEach(o => {
+          if (o) {
+            o.storeLat = newLat;
+            o.storeLng = newLng;
+            o.distanceKm = null;
+          }
+        });
+        saveOrders(true);
+        if (typeof enrichAllExistingIFoodOrdersDistance === 'function') {
+          enrichAllExistingIFoodOrdersDistance();
+        }
+      }
+
+      const quickInput = document.getElementById('quick-order-input');
+      if (quickInput && quickInput.value.trim()) {
+        handleQuickOrderInput(quickInput.value);
+      }
+
+      if (btnStores) { btnStores.disabled = false; btnStores.textContent = 'Salvar'; }
+      if (btnFees) { btnFees.disabled = false; btnFees.textContent = 'Salvar'; }
+
+      showToast('Endereço Base Salvo!', `Todas as lojas agora medem a distância a partir de: ${rawAddr}`, 'success');
+    }
+    window.saveGlobalBaseStoreAddress = saveGlobalBaseStoreAddress;
+
     function loadCredentials() {
       const storageKey = getTenantStorageKey('config');
       const saved = localStorage.getItem(storageKey);
       if (saved) {
         try {
           apiCredentials = JSON.parse(saved);
+          if (!apiCredentials.baseStoreAddress) {
+            apiCredentials.baseStoreAddress = DEFAULT_BASE_STORE_ADDRESS;
+            apiCredentials.baseStoreLat = DEFAULT_BASE_STORE_LAT;
+            apiCredentials.baseStoreLng = DEFAULT_BASE_STORE_LNG;
+          }
           const cidInput = document.getElementById('cfg-client-id');
           const csecInput = document.getElementById('cfg-client-secret');
           const midInput = document.getElementById('cfg-merchant-id');
@@ -3210,6 +3339,12 @@
         const dUrl = document.getElementById('drawer-cfg-custom-url');
         if (dUrl) dUrl.value = 'https://ifood-integracao.iranildo-jobs.workers.dev';
       }
+      if (!apiCredentials.baseStoreAddress) {
+        apiCredentials.baseStoreAddress = DEFAULT_BASE_STORE_ADDRESS;
+        apiCredentials.baseStoreLat = DEFAULT_BASE_STORE_LAT;
+        apiCredentials.baseStoreLng = DEFAULT_BASE_STORE_LNG;
+      }
+      syncBaseStoreAddressInputs();
     }
 
     let _syncSettingsTimer = null;
@@ -3231,6 +3366,9 @@
             merchantId: apiCredentials.merchantId || '',
             customApiUrl: apiCredentials.customApiUrl || '',
             storeName: apiCredentials.storeName || '',
+            baseStoreAddress: apiCredentials.baseStoreAddress || DEFAULT_BASE_STORE_ADDRESS,
+            baseStoreLat: apiCredentials.baseStoreLat || DEFAULT_BASE_STORE_LAT,
+            baseStoreLng: apiCredentials.baseStoreLng || DEFAULT_BASE_STORE_LNG,
             deliveryFeesList: deliveryFeesList || [],
             storesList: normalizedStores
           };
@@ -3267,7 +3405,17 @@
 
     function saveCredentials(cid, csec, mid, customUrl = '', storeName = '') {
       const tenantId = getCurrentTenantId();
-      apiCredentials = { clientId: cid, clientSecret: csec, merchantId: mid, customApiUrl: customUrl, storeName: storeName };
+      apiCredentials = {
+        ...apiCredentials,
+        clientId: cid,
+        clientSecret: csec,
+        merchantId: mid,
+        customApiUrl: customUrl,
+        storeName: storeName,
+        baseStoreAddress: (apiCredentials && apiCredentials.baseStoreAddress) || DEFAULT_BASE_STORE_ADDRESS,
+        baseStoreLat: (apiCredentials && apiCredentials.baseStoreLat) || DEFAULT_BASE_STORE_LAT,
+        baseStoreLng: (apiCredentials && apiCredentials.baseStoreLng) || DEFAULT_BASE_STORE_LNG
+      };
       const storageKey = getTenantStorageKey('config');
       localStorage.setItem(storageKey, JSON.stringify(apiCredentials));
       loadCredentials();
@@ -7239,8 +7387,11 @@
 
     async function resolveIFoodOrderDistanceKm(order) {
       if (!order) return null;
-      // Trava de sanidade: se o pedido ficou salvo com distância absurda (> 60 km por erro de estado diferente), descarta e recalcula!
-      if (order.distanceKm !== undefined && order.distanceKm !== null && Number(order.distanceKm) > 60) {
+      // Trava de sanidade: se o pedido ficou salvo com distância absurda (> 60 km) ou com coordenada antiga (3595), recalcula do número 2775!
+      if (
+        (order.distanceKm !== undefined && order.distanceKm !== null && Number(order.distanceKm) > 60) ||
+        (order.storeLat && Math.abs(Number(order.storeLat) - (-8.1055606)) < 0.0005)
+      ) {
         order.distanceKm = null;
         order.storeLat = null;
         order.storeLng = null;
@@ -7306,7 +7457,13 @@
             baseUrls.push('');
           }
 
-          if (apiCredentials.clientId && apiCredentials.clientSecret && baseUrls.length > 0) {
+          // 1B. Se o usuário configurou/tem o Endereço Base Global do Restaurante salvo nas configurações, usa ele diretamente para TODAS as lojas!
+          if (apiCredentials && apiCredentials.baseStoreLat && apiCredentials.baseStoreLng) {
+            order.storeLat = Number(apiCredentials.baseStoreLat);
+            order.storeLng = Number(apiCredentials.baseStoreLng);
+          }
+
+          if (apiCredentials.clientId && apiCredentials.clientSecret && baseUrls.length > 0 && (!order.customerLat || !order.customerLng || !order.storeLat || !order.storeLng)) {
             for (const base of baseUrls) {
               try {
                 const res = await fetch(`${base}/api/ifood/order-distance`, {
@@ -7461,10 +7618,10 @@
                 order.storeLng = geoCustom.lng;
               }
             }
-            // Se a cidade for Recife / Boa Viagem (operação Cia do Chopp / Pizzaria), usa a coordenada base real da loja em Boa Viagem (Av. Conselheiro Aguiar, 3595, Boa Viagem, Recife)
+            // Se a cidade for Recife / Boa Viagem (operação Cia do Chopp / Pizzaria / Cia de Sanduíches), usa a coordenada exata da loja na Av. Conselheiro Aguiar, 2775 - Boa Viagem, Recife
             if ((!order.storeLat || !order.storeLng) && cityHint.toLowerCase().includes('recife')) {
-              order.storeLat = -8.1055606;
-              order.storeLng = -34.8890360;
+              order.storeLat = -8.1137404;
+              order.storeLng = -34.8928426;
             }
             // Para qualquer outra cidade, geocodifica pelo bairro/cidade do pedido (evitando buscar pelo nome comercial da loja que pode cair em outro estado!)
             if (!order.storeLat || !order.storeLng) {
@@ -7539,7 +7696,8 @@
         return;
       }
 
-      const km = (match.distanceKm !== undefined && match.distanceKm !== null && !isNaN(Number(match.distanceKm)) && Number(match.distanceKm) <= 60)
+      const hasOldStoreCoord = match.storeLat && Math.abs(Number(match.storeLat) - (-8.1055606)) < 0.0005;
+      const km = (!hasOldStoreCoord && match.distanceKm !== undefined && match.distanceKm !== null && !isNaN(Number(match.distanceKm)) && Number(match.distanceKm) <= 60)
         ? Number(match.distanceKm)
         : null;
 
