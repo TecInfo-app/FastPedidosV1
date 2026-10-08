@@ -81,16 +81,71 @@
     }
   </style>
 
-  <!-- INSTANT RUNTIME PORTAL-MODE & LAUNCH-MODE DETECTION (PREVENTS FLASH OF MAIN LOGIN SCREEN) -->
+  <!-- INSTANT RUNTIME PORTAL-MODE & LAUNCH-MODE DETECTION (PREVENTS FLASH OF MAIN LOGIN SCREEN & SUPPORTS PWA INSTALL) -->
   <script>
     (function() {
-      var search = window.location.search || '';
-      if (search.indexOf('portal=motoboy') !== -1) {
-        document.documentElement.classList.add('in-portal-mode');
-      }
-      if (search.indexOf('modo=lancamento') !== -1 || search.indexOf('mode=launch') !== -1) {
-        document.documentElement.classList.add('in-launch-mode');
-      }
+      try {
+        var search = window.location.search || '';
+        var urlParams = new URLSearchParams(search);
+        var isPortalFromUrl = search.indexOf('portal=motoboy') !== -1;
+        var isLaunchFromUrl = search.indexOf('modo=lancamento') !== -1 || search.indexOf('mode=launch') !== -1;
+        var isMainFromUrl = search.indexOf('modo=principal') !== -1 || search.indexOf('mode=main') !== -1;
+        var storeFromUrl = urlParams.get('store') || urlParams.get('loja') || urlParams.get('s') || urlParams.get('tenant') || '';
+
+        if (storeFromUrl) {
+          localStorage.setItem('last_tenant_id', storeFromUrl.trim());
+          localStorage.setItem('portal_last_store_id', storeFromUrl.trim());
+        }
+
+        if (isMainFromUrl) {
+          localStorage.removeItem('fast_pedidos_launch_mode');
+          document.documentElement.classList.remove('in-launch-mode');
+        } else if (isPortalFromUrl) {
+          document.documentElement.classList.add('in-portal-mode');
+        } else if (isLaunchFromUrl) {
+          document.documentElement.classList.add('in-launch-mode');
+          localStorage.setItem('fast_pedidos_launch_mode', '1');
+        } else if (localStorage.getItem('fast_pedidos_launch_mode') === '1') {
+          // Quando instalado na tela inicial (PWA standalone) ou reaberto no mesmo celular onde o Link de Lançamento foi acessado
+          document.documentElement.classList.add('in-launch-mode');
+        }
+
+        // Se estiver em Modo Lançamento, gera manifesto PWA dinâmico com start_url apontando para o Modo Lançamento e loja vinculada
+        if (document.documentElement.classList.contains('in-launch-mode')) {
+          var savedStore = storeFromUrl || localStorage.getItem('last_tenant_id') || localStorage.getItem('portal_last_store_id') || '';
+          var basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
+          var origin = window.location.origin;
+          var launchStartUrl = origin + basePath + '?modo=lancamento' + (savedStore ? '&store=' + encodeURIComponent(savedStore) : '');
+          var scopeUrl = origin + basePath;
+          var iconSvgUrl = origin + basePath + 'icon.svg';
+          var iconPng192Url = origin + basePath + 'pwa-192x192.png';
+          var iconPng512Url = origin + basePath + 'pwa-512x512.png';
+
+          var dynamicLaunchManifest = {
+            name: "Fast Pedidos - Modo Lançamento",
+            short_name: "Lançamento",
+            description: "Lançamento rápido de entregas e consulta de motoboys em tempo real",
+            start_url: launchStartUrl,
+            scope: scopeUrl,
+            display: "standalone",
+            orientation: "portrait",
+            background_color: "#090d16",
+            theme_color: "#10b981",
+            icons: [
+              { src: iconSvgUrl, sizes: "192x192 512x512 any", type: "image/svg+xml", purpose: "any" },
+              { src: iconSvgUrl, sizes: "512x512 any", type: "image/svg+xml", purpose: "maskable" },
+              { src: iconPng192Url, sizes: "192x192", type: "image/png" },
+              { src: iconPng512Url, sizes: "512x512", type: "image/png" }
+            ]
+          };
+          var blob = new Blob([JSON.stringify(dynamicLaunchManifest)], { type: 'application/json' });
+          var manifestURL = URL.createObjectURL(blob);
+          var manifestEl = document.querySelector('link[rel="manifest"]');
+          if (manifestEl) {
+            manifestEl.setAttribute('href', manifestURL);
+          }
+        }
+      } catch (e) {}
     })();
   </script>
   <style id="portal-motoboy-style">
@@ -3798,7 +3853,10 @@
     async function pollIFoodOrders() {
       // No Portal do Motoboy ou no Modo Lançamento (celulares/outros aparelhos), o motor de polling iFood NÃO roda (os pedidos vêm sincronizados via Firebase do PC Principal)
       const isPortalView = document.documentElement.classList.contains('in-portal-mode') || !document.getElementById('portal-motoboy-view')?.classList.contains('hidden');
-      const isLaunchModeView = document.documentElement.classList.contains('in-launch-mode') || window.location.search.includes('modo=lancamento') || window.location.search.includes('mode=launch');
+      const isLaunchModeView = document.documentElement.classList.contains('in-launch-mode') ||
+        window.location.search.includes('modo=lancamento') ||
+        window.location.search.includes('mode=launch') ||
+        localStorage.getItem('fast_pedidos_launch_mode') === '1';
       if (isPortalView || isLaunchModeView) return;
       if (!apiCredentials.clientId || !apiCredentials.clientSecret) return;
       if (isPollingIFood) return;
@@ -9777,15 +9835,34 @@
         };
         localStorage.setItem('fast_pedidos_session_v1', JSON.stringify(sessionData));
         localStorage.setItem('last_tenant_id', tenantUid);
+        localStorage.setItem('portal_last_store_id', tenantUid);
         localStorage.setItem('last_tenant_email', loggedUserName);
 
         const overlay = document.getElementById('login-screen-overlay');
         if (overlay) overlay.classList.add('hidden');
 
-        const logoutBtn = document.getElementById('header-logout-btn');
-        if (logoutBtn) logoutBtn.classList.remove('hidden');
+        // Verifica se está em Modo Lançamento (via URL ou via app instalado pelo Link de Lançamento)
+        const urlParamsNow = new URLSearchParams(window.location.search);
+        const isCurrentlyLaunchMode =
+          urlParamsNow.get('modo') === 'lancamento' ||
+          urlParamsNow.get('mode') === 'launch' ||
+          localStorage.getItem('fast_pedidos_launch_mode') === '1' ||
+          document.documentElement.classList.contains('in-launch-mode');
 
-        showToast('Acesso Concedido!', `Dados sincronizados em tempo real com a nuvem!`, 'success');
+        const logoutBtn = document.getElementById('header-logout-btn');
+        if (isCurrentlyLaunchMode) {
+          document.documentElement.classList.add('in-launch-mode');
+          document.body.classList.add('in-launch-mode');
+          if (logoutBtn) logoutBtn.classList.add('hidden');
+          if (pollingInterval) {
+            clearInterval(pollingInterval);
+            pollingInterval = null;
+          }
+          showToast('Modo Lançamento Ativo!', `Conectado à loja em tempo real (sem conflito iFood)!`, 'success');
+        } else {
+          if (logoutBtn) logoutBtn.classList.remove('hidden');
+          showToast('Acesso Concedido!', `Dados sincronizados em tempo real com a nuvem!`, 'success');
+        }
       } else {
         if (errBanner) errBanner.classList.remove('hidden');
         if (errText) errText.textContent = 'Email ou senha incorretos. Se ainda não possui conta, clique em "+ Criar Nova Loja".';
@@ -9905,8 +9982,22 @@
       try {
         const urlParams = new URLSearchParams(window.location.search);
         const isPortalMotoboy = urlParams.get('portal') === 'motoboy';
-        const isLaunchMode = urlParams.get('modo') === 'lancamento' || urlParams.get('mode') === 'launch';
+        const isMainModeExplicit = urlParams.get('modo') === 'principal' || urlParams.get('mode') === 'main';
+        if (isMainModeExplicit) {
+          localStorage.removeItem('fast_pedidos_launch_mode');
+        }
+        const isLaunchMode = !isMainModeExplicit && (
+          urlParams.get('modo') === 'lancamento' ||
+          urlParams.get('mode') === 'launch' ||
+          localStorage.getItem('fast_pedidos_launch_mode') === '1' ||
+          document.documentElement.classList.contains('in-launch-mode')
+        );
         const storeFromUrl = urlParams.get('store') || urlParams.get('loja') || urlParams.get('s') || urlParams.get('tenant');
+
+        if (storeFromUrl) {
+          localStorage.setItem('last_tenant_id', storeFromUrl.trim());
+          localStorage.setItem('portal_last_store_id', storeFromUrl.trim());
+        }
 
         const savedSession = localStorage.getItem('fast_pedidos_session_v1');
         const overlay = document.getElementById('login-screen-overlay');
@@ -9956,8 +10047,9 @@
         const portalView = document.getElementById('portal-motoboy-view');
         if (portalView) portalView.classList.add('hidden');
 
-        // Se estiver no LINK DE LANÇAMENTO (?modo=lancamento)
+        // Se estiver no LINK DE LANÇAMENTO (?modo=lancamento ou PWA instalado a partir dele)
         if (isLaunchMode) {
+          localStorage.setItem('fast_pedidos_launch_mode', '1');
           document.documentElement.classList.add('in-launch-mode');
           document.body.classList.add('in-launch-mode');
 
