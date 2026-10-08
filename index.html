@@ -81,11 +81,15 @@
     }
   </style>
 
-  <!-- INSTANT RUNTIME PORTAL-MODE DETECTION (PREVENTS FLASH OF MAIN LOGIN SCREEN) -->
+  <!-- INSTANT RUNTIME PORTAL-MODE & LAUNCH-MODE DETECTION (PREVENTS FLASH OF MAIN LOGIN SCREEN) -->
   <script>
     (function() {
-      if (window.location.search.indexOf('portal=motoboy') !== -1) {
+      var search = window.location.search || '';
+      if (search.indexOf('portal=motoboy') !== -1) {
         document.documentElement.classList.add('in-portal-mode');
+      }
+      if (search.indexOf('modo=lancamento') !== -1 || search.indexOf('mode=launch') !== -1) {
+        document.documentElement.classList.add('in-launch-mode');
       }
     })();
   </script>
@@ -125,6 +129,28 @@
     body.in-portal-mode #settings-drawer,
     body.in-portal-mode #drawer-backdrop { 
       display: none !important; 
+    }
+
+    /* MODO LANÇAMENTO (APENAS TELA DE LANÇAMENTO + ÍCONE MOTOBOY, SEM CONFIGURAÇÕES E SEM KDS/MOTOR IFOOD) */
+    html.in-launch-mode #open-drawer-btn,
+    body.in-launch-mode #open-drawer-btn,
+    html.in-launch-mode #side-drawer,
+    body.in-launch-mode #side-drawer,
+    html.in-launch-mode #drawer-backdrop,
+    body.in-launch-mode #drawer-backdrop,
+    html.in-launch-mode #floating-ifood-btn,
+    body.in-launch-mode #floating-ifood-btn,
+    html.in-launch-mode #modal-ifood-panel,
+    body.in-launch-mode #modal-ifood-panel,
+    html.in-launch-mode #header-share-launch-btn,
+    body.in-launch-mode #header-share-launch-btn,
+    html.in-launch-mode #header-logout-btn,
+    body.in-launch-mode #header-logout-btn {
+      display: none !important;
+    }
+    html.in-launch-mode #header-launch-mode-badge,
+    body.in-launch-mode #header-launch-mode-badge {
+      display: inline-flex !important;
     }
   </style>
 </head>
@@ -254,6 +280,23 @@
 
       <!-- Right: User Badge & Menu Painel Trigger -->
       <div class="flex items-center gap-2 shrink-0">
+        <!-- Badge exclusiva quando aberto no Modo Lançamento -->
+        <span id="header-launch-mode-badge" class="hidden items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10px] sm:text-xs font-black uppercase tracking-wider shadow-xs">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>MODO LANÇAMENTO</span>
+        </span>
+
+        <!-- Botão Compartilhar Link de Lançamento (Visível apenas no Link Principal) -->
+        <button 
+          id="header-share-launch-btn"
+          type="button"
+          onclick="openShareLaunchLinkModal()"
+          title="Compartilhar Link de Lançamento para Celulares e Outros Aparelhos"
+          class="px-2.5 sm:px-3.5 py-2 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-black border border-emerald-400/50 transition cursor-pointer flex items-center gap-1.5 shadow-md shadow-emerald-600/20">
+          <svg class="w-4 h-4 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
+          <span class="hidden md:inline">Link de Lançamento</span>
+        </button>
+
         <button 
           id="header-logout-btn"
           type="button"
@@ -324,6 +367,27 @@
           </div>
           <span id="drawer-ifood-badge" class="px-2 py-0.5 rounded-full bg-white text-ifood-red font-black text-xs shadow-2xs">
             0
+          </span>
+        </button>
+
+        <!-- Botão Compartilhar Link de Lançamento (Para Celulares / Outros Aparelhos) -->
+        <button 
+          type="button" 
+          onclick="closeDrawer(); openShareLaunchLinkModal();" 
+          class="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-xs sm:text-sm flex items-center justify-between shadow-md shadow-emerald-600/20 active:scale-98 transition cursor-pointer border border-emerald-400/30">
+          <div class="flex items-center gap-2.5 text-left">
+            <div class="w-7 h-7 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+              <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
+              </svg>
+            </div>
+            <div>
+              <span class="block leading-tight">Compartilhar Link de Lançamento</span>
+              <span class="text-[10px] font-semibold text-emerald-100 block leading-tight">Para celulares (sem conflito no motor iFood)</span>
+            </div>
+          </div>
+          <span class="px-2 py-0.5 rounded-full bg-white text-emerald-800 font-black text-[10px] uppercase shadow-2xs shrink-0">
+            QR / Link
           </span>
         </button>
 
@@ -1202,6 +1266,84 @@
           class="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer">
           Sim, Excluir
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 5: COMPARTILHAR LINK DE LANÇAMENTO (MODO LANÇAMENTO PARA CELULARES) -->
+  <div id="modal-share-launch-link" style="z-index: 99998;" class="fixed inset-0 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs hidden animate-fade-in" onclick="if(event.target === this) closeShareLaunchLinkModal()">
+    <div class="bg-white rounded-3xl max-w-md w-full shadow-2xl p-6 relative border border-slate-100">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-lg font-black shadow-2xs">
+            📱
+          </div>
+          <div>
+            <h3 class="text-sm sm:text-base font-black text-slate-900">Link de Lançamento Rápido</h3>
+            <p class="text-[11px] text-slate-500 font-medium">Para usar nos celulares e outros dispositivos da loja</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeShareLaunchLinkModal()" class="text-slate-400 hover:text-slate-700 text-xl font-bold cursor-pointer p-1">
+          ✕
+        </button>
+      </div>
+
+      <div class="space-y-4">
+        <!-- Explicação clara -->
+        <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-950 space-y-1">
+          <div class="font-black flex items-center gap-1.5 text-emerald-800">
+            <span>✅ Sem Conflito no Recebimento de Pedidos iFood</span>
+          </div>
+          <p class="text-[11px] text-emerald-900/90 leading-relaxed">
+            Este link abre <strong>apenas a tela inicial de Lançamento Rápido e o ícone de entregas do Motoboy (🛵)</strong>, já sincronizado em tempo real com sua loja. O motor do iFood permanece exclusivo no PC Principal!
+          </p>
+        </div>
+
+        <!-- QR Code para escanear com a câmera do celular -->
+        <div class="flex flex-col items-center justify-center p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+          <div class="bg-white p-2.5 rounded-2xl shadow-xs border border-slate-200/80 mb-2">
+            <img id="share-launch-qr-img" src="" alt="QR Code Link de Lançamento" class="w-40 h-40 object-contain mx-auto" />
+          </div>
+          <span class="text-[11px] font-bold text-slate-600">Aponte a câmera do celular para abrir na hora</span>
+        </div>
+
+        <!-- Campo com o Link -->
+        <div>
+          <label class="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">
+            Link Direto do Modo Lançamento:
+          </label>
+          <div class="flex items-center gap-2">
+            <input 
+              type="text" 
+              id="share-launch-link-input" 
+              readonly 
+              onclick="this.select()"
+              class="flex-1 px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs font-mono text-slate-700 focus:outline-none"
+            />
+            <button 
+              type="button" 
+              onclick="copyShareLaunchLink()" 
+              class="px-3.5 py-2.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white text-xs font-black rounded-xl transition cursor-pointer shrink-0 flex items-center gap-1.5 shadow-xs">
+              <span>📋 Copiar</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Botões de Ação (WhatsApp e Fechar) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+          <button 
+            type="button" 
+            onclick="shareLaunchLinkWhatsApp()" 
+            class="w-full py-3 px-4 bg-[#25D366] hover:bg-[#1ebe57] active:scale-98 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-2 shadow-md shadow-emerald-500/20 transition cursor-pointer">
+            <span>📲 Enviar no WhatsApp</span>
+          </button>
+          <button 
+            type="button" 
+            onclick="closeShareLaunchLinkModal()" 
+            class="w-full py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-2xl transition cursor-pointer">
+            Fechar
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -3654,9 +3796,10 @@
 
     // --- REAL IFOOD API POLLING ---
     async function pollIFoodOrders() {
-      // No Portal do Motoboy (celular do entregador), não faz polling direto no iFood (os pedidos vêm via Firebase)
+      // No Portal do Motoboy ou no Modo Lançamento (celulares/outros aparelhos), o motor de polling iFood NÃO roda (os pedidos vêm sincronizados via Firebase do PC Principal)
       const isPortalView = document.documentElement.classList.contains('in-portal-mode') || !document.getElementById('portal-motoboy-view')?.classList.contains('hidden');
-      if (isPortalView) return;
+      const isLaunchModeView = document.documentElement.classList.contains('in-launch-mode') || window.location.search.includes('modo=lancamento') || window.location.search.includes('mode=launch');
+      if (isPortalView || isLaunchModeView) return;
       if (!apiCredentials.clientId || !apiCredentials.clientSecret) return;
       if (isPollingIFood) return;
       isPollingIFood = true;
@@ -9694,11 +9837,76 @@
       );
     }
 
+    // --- LINK DE LANÇAMENTO RÁPIDO (MODO LANÇAMENTO PARA CELULARES SEM CONFLITO IFOOD) ---
+    function getLaunchModeUrl() {
+      const tenantId = getCurrentTenantId();
+      const currentPath = window.location.pathname;
+      const basePath = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+      const storeParam = tenantId ? `&store=${encodeURIComponent(tenantId)}` : '';
+      return `${window.location.origin}${basePath}?modo=lancamento${storeParam}`;
+    }
+    window.getLaunchModeUrl = getLaunchModeUrl;
+
+    function openShareLaunchLinkModal() {
+      const modal = document.getElementById('modal-share-launch-link');
+      const input = document.getElementById('share-launch-link-input');
+      const qrImg = document.getElementById('share-launch-qr-img');
+      if (!modal) return;
+
+      const url = getLaunchModeUrl();
+      if (input) input.value = url;
+      if (qrImg) {
+        qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(url)}`;
+      }
+      modal.classList.remove('hidden');
+    }
+    window.openShareLaunchLinkModal = openShareLaunchLinkModal;
+
+    function closeShareLaunchLinkModal() {
+      const modal = document.getElementById('modal-share-launch-link');
+      if (modal) modal.classList.add('hidden');
+    }
+    window.closeShareLaunchLinkModal = closeShareLaunchLinkModal;
+
+    function copyShareLaunchLink() {
+      const url = getLaunchModeUrl();
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(() => {
+          showToast('Link de Lançamento Copiado!', 'Envie este link para os celulares do restaurante.', 'success');
+        }).catch(() => {});
+      }
+      const input = document.getElementById('share-launch-link-input');
+      if (input) {
+        input.focus();
+        input.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        showToast('Link de Lançamento Copiado!', 'Envie este link para os celulares do restaurante.', 'success');
+      }
+    }
+    window.copyShareLaunchLink = copyShareLaunchLink;
+
+    function shareLaunchLinkWhatsApp() {
+      const url = getLaunchModeUrl();
+      const activeStore = (storesList && storesList.find(s => s.active)) || (storesList && storesList[0]);
+      const storeName = (activeStore && activeStore.name) || apiCredentials.storeName || 'Fast Pedidos';
+      const msg = `📱 *Link de Lançamento Rápido - ${storeName}*\n\nAcesse nos celulares e outros dispositivos da loja (sincronizado em tempo real e sem conflito no recebimento do iFood):\n\n🔗 ${url}`;
+      const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+      const a = document.createElement('a');
+      a.href = waUrl;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+    window.shareLaunchLinkWhatsApp = shareLaunchLinkWhatsApp;
+
     function checkAuthStateOnLoad() {
       try {
         const urlParams = new URLSearchParams(window.location.search);
         const isPortalMotoboy = urlParams.get('portal') === 'motoboy';
-        const storeFromUrl = urlParams.get('store');
+        const isLaunchMode = urlParams.get('modo') === 'lancamento' || urlParams.get('mode') === 'launch';
+        const storeFromUrl = urlParams.get('store') || urlParams.get('loja') || urlParams.get('s') || urlParams.get('tenant');
 
         const savedSession = localStorage.getItem('fast_pedidos_session_v1');
         const overlay = document.getElementById('login-screen-overlay');
@@ -9748,11 +9956,47 @@
         const portalView = document.getElementById('portal-motoboy-view');
         if (portalView) portalView.classList.add('hidden');
 
+        // Se estiver no LINK DE LANÇAMENTO (?modo=lancamento)
+        if (isLaunchMode) {
+          document.documentElement.classList.add('in-launch-mode');
+          document.body.classList.add('in-launch-mode');
+
+          let launchTargetStore = storeFromUrl;
+          if (!launchTargetStore && savedSession) {
+            try {
+              const sess = JSON.parse(savedSession);
+              if (sess && sess.tenantId) launchTargetStore = sess.tenantId;
+            } catch (e) {}
+          }
+          if (!launchTargetStore) {
+            launchTargetStore = localStorage.getItem('last_tenant_id') || localStorage.getItem('portal_last_store_id');
+          }
+
+          if (launchTargetStore) {
+            if (overlay) overlay.classList.add('hidden');
+            if (logoutBtn) logoutBtn.classList.add('hidden');
+            const sessionData = {
+              username: localStorage.getItem('last_tenant_email') || 'Modo Lançamento',
+              tenantId: launchTargetStore,
+              loggedAt: new Date().toISOString(),
+              active: true
+            };
+            localStorage.setItem('fast_pedidos_session_v1', JSON.stringify(sessionData));
+            localStorage.setItem('last_tenant_id', launchTargetStore);
+            localStorage.setItem('portal_last_store_id', launchTargetStore);
+            initTenantSession(launchTargetStore, sessionData.username);
+            return;
+          }
+        } else {
+          document.documentElement.classList.remove('in-launch-mode');
+          document.body.classList.remove('in-launch-mode');
+        }
+
         if (savedSession) {
           const sess = JSON.parse(savedSession);
           if (sess && sess.active && sess.tenantId) {
             if (overlay) overlay.classList.add('hidden');
-            if (logoutBtn) logoutBtn.classList.remove('hidden');
+            if (logoutBtn && !isLaunchMode) logoutBtn.classList.remove('hidden');
             initTenantSession(sess.tenantId, sess.username);
             return;
           }
@@ -9962,8 +10206,15 @@
         });
       });
 
-      // Start polling loop every 2.5 seconds (SLA iFood Homologation < 3s)
-      pollingInterval = setInterval(pollIFoodOrders, 2500);
+      // Start polling loop every 2.5 seconds ONLY on the Main Link (never in Launch Mode or Motoboy Portal)
+      const isLaunchOrPortal = document.documentElement.classList.contains('in-launch-mode') ||
+        document.documentElement.classList.contains('in-portal-mode') ||
+        window.location.search.includes('modo=lancamento') ||
+        window.location.search.includes('mode=launch') ||
+        window.location.search.includes('portal=motoboy');
+      if (!isLaunchOrPortal) {
+        pollingInterval = setInterval(pollIFoodOrders, 2500);
+      }
 
       // Modal Controls
       const modal = document.getElementById('config-modal');
@@ -10499,7 +10750,3 @@
   </script>
 </body>
 </html>
-
-          </div>
-        </div>
-        <!-- /Drawer Body -->undefined
