@@ -20,7 +20,14 @@
       "name": "Portal do Entregador",
       "short_name": "Entregadores",
       "description": "Acessar portal direto de entregas do motoboy",
-      "url": "./?portal=motoboy",
+      "url": "./motoboy.html",
+      "icons": [{ "src": "./icon.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Modo Lançamento",
+      "short_name": "Lançamento",
+      "description": "Lançamento rápido de pedidos nos celulares da loja",
+      "url": "./lancamento.html",
       "icons": [{ "src": "./icon.svg", "sizes": "192x192" }]
     }
   ],

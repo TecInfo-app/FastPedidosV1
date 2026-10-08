@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="in-launch-mode">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Lançamento Rápido de Pedidos - Fast Pedidos</title>
+  
+  <!-- PWA & Mobile Web App Meta (DEDICADO AO MODO LANÇAMENTO) -->
+  <link rel="manifest" href="./manifest-lancamento.json">
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+  <link rel="icon" type="image/svg+xml" href="./icon.svg">
+  <meta name="theme-color" content="#00875a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Lançamento">
+  
+  <!-- Dynamic PWA Manifest com Loja Vinculada para Instalação no Celular -->
+  <script>
+    (function() {
+      try {
+        var urlParams = new URLSearchParams(window.location.search);
+        var storeId = urlParams.get('store') || urlParams.get('loja') || localStorage.getItem('last_tenant_id') || localStorage.getItem('portal_last_store_id') || '';
+        if (storeId) {
+          localStorage.setItem('last_tenant_id', storeId);
+          localStorage.setItem('portal_last_store_id', storeId);
+        }
+        
+        var basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
+        var origin = window.location.origin;
+        var startUrl = storeId 
+          ? origin + basePath + 'lancamento.html?store=' + encodeURIComponent(storeId) 
+          : origin + basePath + 'lancamento.html';
+        var scopeUrl = origin + basePath;
+        var iconSvgUrl = origin + basePath + 'icon.svg';
+        var iconPng192Url = origin + basePath + 'pwa-192x192.png';
+        var iconPng512Url = origin + basePath + 'pwa-512x512.png';
+
+        var dynamicManifest = {
+          name: "Fast Pedidos - Modo Lançamento",
+          short_name: "Lançamento",
+          description: "Lançamento rápido de pedidos e acompanhamento de entregas em tempo real",
+          start_url: startUrl,
+          scope: scopeUrl,
+          display: "standalone",
+          orientation: "portrait",
+          background_color: "#090d16",
+          theme_color: "#00875a",
+          icons: [
+            { src: iconSvgUrl, sizes: "192x192 512x512 any", type: "image/svg+xml", purpose: "any" },
+            { src: iconSvgUrl, sizes: "512x512 any", type: "image/svg+xml", purpose: "maskable" },
+            { src: iconPng192Url, sizes: "192x192", type: "image/png" },
+            { src: iconPng512Url, sizes: "512x512", type: "image/png" }
+          ]
+        };
+        var blob = new Blob([JSON.stringify(dynamicManifest)], { type: 'application/json' });
+        var manifestURL = URL.createObjectURL(blob);
+        var manifestEl = document.querySelector('link[rel="manifest"]');
+        if (manifestEl) {
+          manifestEl.setAttribute('href', manifestURL);
+        }
+      } catch (e) {
+        console.warn('Dynamic manifest-lancamento error:', e);
+      }
+    })();
+  </script>
+
+  <!-- TAILWIND CSS CDN & ESTILOS GLOBAIS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'ifood-red': '#ea1d2c',
+            'ifood-red-dark': '#b80d19',
+          }
+        }
+      }
+    }
+  </script>
+  
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .kanban-scroll::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .kanban-scroll::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    .kanban-scroll::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 font-sans text-slate-800 min-h-screen flex flex-col antialiased selection:bg-emerald-600 selection:text-white">
+
+  <!-- TOAST CONTAINER -->
+  <div id="toast-container" class="fixed top-4 right-4 z-[999999] flex flex-col gap-2.5 max-w-sm w-full pointer-events-none px-4 sm:px-0"></div>
+
+  <!-- HEADER EXCLUSIVO DO MODO LANÇAMENTO (ENXUTO E SEM ENGENHARIA DE CONFIGURAÇÕES) -->
+  <header class="bg-slate-900 border-b border-slate-800 text-white sticky top-0 z-30 shadow-md">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+      
+      <!-- Brand & Badges -->
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-10 h-10 rounded-2xl bg-emerald-500 text-slate-950 flex items-center justify-center text-xl font-black shadow-md shadow-emerald-500/20 shrink-0">
+          📦
+        </div>
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h1 class="text-base sm:text-lg font-black tracking-tight text-white leading-tight">FAST PEDIDOS</h1>
+            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 uppercase tracking-wider">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              MODO LANÇAMENTO
+            </span>
+          </div>
+          <div class="flex items-center gap-2 text-xs text-slate-400 mt-0.5 truncate">
+            <span class="text-slate-500">Loja:</span>
+            <span id="header-store-name" class="font-bold text-amber-400 truncate">Conectando...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Header Actions: Instalar App & Status Nuvem -->
+      <div class="flex items-center gap-2 shrink-0">
+        <!-- Status Firebase Cloud -->
+        <span id="cloud-status-badge" class="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-800 text-emerald-400 border border-slate-700">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          🔥 Nuvem Online
+        </span>
+
+        <!-- Botão Instalar PWA no Celular -->
+        <button 
+          type="button" 
+          id="btn-install-pwa" 
+          onclick="promptPWAInstall()" 
+          title="Instalar na tela inicial do celular"
+          class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+          <span class="hidden sm:inline">Instalar no Celular</span>
+          <span class="sm:hidden">Instalar</span>
+        </button>
+
+        <!-- Trocar Loja -->
+        <button 
+          type="button" 
+          onclick="promptChangeStore()" 
+          title="Trocar Loja"
+          class="p-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 hover:text-white rounded-xl text-xs font-bold border border-slate-700 transition cursor-pointer">
+          🔄
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- CONTEÚDO PRINCIPAL (FOCO TOTAL EM LANÇAMENTO RÁPIDO) -->
+  <main class="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-4 flex flex-col gap-4">
+    
+    <!-- CARD 1: SELECIONE A LOJA ATIVA -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
+      <div class="flex items-center justify-between gap-2 mb-3">
+        <div class="flex items-center gap-2 text-xs font-black text-slate-800 tracking-wider uppercase">
+          <span class="text-sm">🏪</span>
+          <span>SELECIONE A LOJA ATIVA</span>
+        </div>
+        <span id="stores-count-badge" class="text-[11px] font-bold text-slate-400">0 lojas</span>
+      </div>
+      
+      <!-- Store Chips Container -->
+      <div id="store-selector-chips" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 w-full">
+        <div class="col-span-full py-2 text-center text-xs text-slate-400">Carregando lojas...</div>
+      </div>
+    </div>
+
+    <!-- CARD 2: LANÇAMENTO RÁPIDO DE PEDIDO -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 space-y-3">
+      <div class="flex items-center justify-between gap-2 mb-1">
+        <div class="flex items-center gap-2">
+          <span class="text-amber-500 text-lg">📦</span>
+          <h2 class="text-sm sm:text-base font-black text-slate-900">Lançamento Rápido de Pedido</h2>
+        </div>
+        <span class="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-200">
+          ⚡ Despacho Automático iFood
+        </span>
+      </div>
+
+      <form id="quick-order-form" onsubmit="handleQuickOrderSubmit(event)" class="space-y-3">
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+          <div class="relative flex-1 w-full">
+            <input 
+              type="text" 
+              id="quick-order-input" 
+              inputmode="numeric"
+              autocomplete="off"
+              autofocus
+              oninput="handleQuickOrderInput(this.value)"
+              placeholder="Digite o número do pedido (ex: 101 ou vários: 101, 102)..." 
+              class="w-full px-4 py-3.5 bg-white border-2 border-emerald-500 focus:border-emerald-600 rounded-2xl text-base font-black text-slate-900 placeholder:font-normal placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-emerald-500/20 transition shadow-xs"
+            />
+          </div>
+
+          <div class="flex items-center gap-2 w-full sm:w-auto">
+            <button 
+              type="submit" 
+              class="flex-1 sm:flex-initial px-6 py-3.5 bg-[#00875a] hover:bg-[#00704a] active:scale-98 text-white font-black text-sm rounded-2xl flex items-center justify-center gap-2 shadow-md shadow-emerald-700/20 transition cursor-pointer">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
+              <span>Confirmar Pedido →</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Banner Dinâmico: Pedido Localizado no iFood -->
+        <div id="quick-order-ifood-match-banner" class="hidden p-3.5 bg-red-50/95 border-2 border-red-200 rounded-2xl flex items-center justify-between gap-3 shadow-xs transition-all animate-fade-in">
+          <div class="flex items-center gap-3 min-w-0">
+            <span class="w-9 h-9 rounded-xl bg-ifood-red text-white flex items-center justify-center font-black text-xs shrink-0 shadow-xs">
+              iFood
+            </span>
+            <div class="min-w-0">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span id="quick-order-ifood-id" class="text-xs font-black text-slate-900"></span>
+                <span id="quick-order-ifood-customer" class="text-xs font-semibold text-slate-700"></span>
+                <span id="quick-order-ifood-status" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200"></span>
+                <span id="quick-order-ifood-store" class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 hidden"></span>
+                <span id="quick-order-ifood-distance-fee" class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-900 border border-indigo-300 hidden"></span>
+              </div>
+              <span id="quick-order-ifood-address" class="text-[11px] text-slate-600 font-medium block truncate mt-0.5"></span>
+              <span class="text-[11px] font-bold text-red-700 block mt-0.5">
+                ⚡ Ao selecionar o motoboy, a taxa por KM e o <strong>DESPACHO no iFood</strong> serão aplicados automaticamente.
+              </span>
+            </div>
+          </div>
+          <span class="hidden sm:inline-flex items-center px-2 py-1 rounded-lg bg-red-100 text-ifood-red border border-red-200 text-[10px] font-black uppercase tracking-wider whitespace-nowrap shrink-0">
+            Despacho Integrado
+          </span>
+        </div>
+
+        <!-- Toggle Adicionar Detalhes (Nome / Endereço para pedidos manuais) -->
+        <div class="flex items-center justify-between gap-2 pt-0.5">
+          <button 
+            type="button" 
+            onclick="toggleQuickDetails()" 
+            id="toggle-quick-details-btn" 
+            class="text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1 cursor-pointer">
+            <span id="toggle-quick-details-icon" class="text-sm">⌄</span>
+            <span>Adicionar Detalhes (Nome / Endereço para Pedido Avulso)</span>
+          </button>
+        </div>
+
+        <!-- Detalhes Opcionais Expandíveis -->
+        <div id="quick-order-details-fields" class="hidden p-3.5 bg-slate-50 border border-slate-200 rounded-2xl grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nome do Cliente</label>
+            <input type="text" id="quick-customer-name" placeholder="Ex: Carlos Eduardo da Silva" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Endereço de Entrega</label>
+            <input type="text" id="quick-customer-address" placeholder="Ex: Av. Boa Viagem, 1000 - Boa Viagem" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- HISTÓRICO TEMPORÁRIO DE TAXAS / LANÇAMENTOS RECENTES (15 SEGUNDOS) -->
+    <div id="recent-launches-temporary-card" class="hidden bg-white rounded-2xl border-2 border-emerald-400/80 shadow-md p-4 sm:p-5 space-y-3 animate-fade-in transition-all duration-300">
+      <div class="flex items-center justify-between gap-2 pb-2 border-b border-emerald-100">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center text-sm font-black shadow-xs shrink-0">
+            ✓
+          </div>
+          <div>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <h3 class="text-xs sm:text-sm font-black text-slate-900">Lançamento Recente de Pedido & Taxa</h3>
+              <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-wider">Confirmado</span>
+            </div>
+            <p class="text-[11px] text-slate-500 font-medium flex items-center gap-1 mt-0.5">
+              <span>Exibindo confirmação temporária (auto-oculta em</span>
+              <span id="recent-launches-countdown" class="font-black text-emerald-700 font-mono">15s</span><span>)</span>
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button 
+            type="button" 
+            onclick="openMotoboySpreadsheetModal()" 
+            class="px-2.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 active:scale-95 text-amber-900 border border-amber-300 font-bold text-xs flex items-center gap-1 transition cursor-pointer">
+            <span>🛵 Ver Planilha</span>
+          </button>
+          <button 
+            type="button" 
+            onclick="dismissRecentLaunchesCard()" 
+            title="Fechar aviso" 
+            class="w-7 h-7 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer">
+            ✕
+          </button>
+        </div>
+      </div>
+
+      <!-- Barra de Progresso do Tempo (15s) -->
+      <div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+        <div id="recent-launches-progress-bar" class="bg-emerald-500 h-full w-full transition-all duration-1000 ease-linear"></div>
+      </div>
+
+      <!-- Lista de Pedidos e Taxas Lançados Recentemente -->
+      <div id="recent-launches-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5"></div>
+    </div>
+
+  </main>
+
+  <!-- FLOATING BUTTON CIRCULAR: PLANILHA DOS MOTOBOYS (MOSAICO DE ENTREGAS) -->
+  <div class="fixed bottom-5 right-5 z-40">
+    <button 
+      id="floating-motoboy-btn"
+      type="button" 
+      onclick="openMotoboySpreadsheetModal()" 
+      title="Abrir Planilha de Entregas por Motoboy" 
+      class="group relative w-16 h-16 rounded-full bg-gradient-to-tr from-amber-600 via-amber-500 to-amber-400 hover:from-amber-700 hover:to-amber-500 text-slate-950 flex items-center justify-center shadow-2xl shadow-amber-500/50 hover:shadow-amber-500/80 active:scale-95 transition-all duration-200 cursor-pointer border-2 border-white/60">
+      
+      <span class="absolute inset-0 rounded-full bg-amber-400 opacity-20 animate-ping pointer-events-none"></span>
+      <span class="text-3xl transition-transform group-hover:scale-110 select-none">🛵</span>
+
+      <span id="floating-motoboy-badge" class="absolute -top-1.5 -right-1.5 min-w-[22px] h-[22px] px-1.5 rounded-full bg-slate-950 text-amber-400 font-black text-[11px] flex items-center justify-center shadow-md border-2 border-amber-400 font-mono">
+        0
+      </span>
+    </button>
+  </div>
+
+  <!-- MODAL 1: SELEÇÃO DO MOTOBOY -->
+  <div id="modal-select-motoboy" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs hidden animate-fade-in" onclick="if(event.target === this) closeMotoboyModal()">
+    <div class="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-100 shrink-0">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center text-lg font-black shrink-0 shadow-xs">
+            🛵
+          </div>
+          <div>
+            <h3 class="text-sm sm:text-base font-black text-slate-900">Selecione o Motoboy</h3>
+            <p class="text-[11px] text-slate-500">Etapa 1 de 2: Quem levará o pedido?</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeMotoboyModal()" class="w-8 h-8 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer">
+          ✕
+        </button>
+      </div>
+
+      <div id="modal-motoboy-order-info" class="hidden shrink-0"></div>
+
+      <div id="modal-motoboy-list" class="flex-1 overflow-y-auto space-y-2 kanban-scroll pr-1"></div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: SELEÇÃO OU DIGITAÇÃO DE TAXA DE ENTREGA -->
+  <div id="modal-select-fee" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs hidden animate-fade-in" onclick="if(event.target === this) closeFeeModal()">
+    <div class="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-100 shrink-0">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-2xl bg-emerald-500 text-white flex items-center justify-center text-lg font-black shrink-0 shadow-xs">
+            💰
+          </div>
+          <div>
+            <h3 class="text-sm sm:text-base font-black text-slate-900">Taxa de Entrega</h3>
+            <p class="text-[11px] text-slate-500">Etapa 2 de 2: Confirme o valor da taxa</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeFeeModal()" class="w-8 h-8 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer">
+          ✕
+        </button>
+      </div>
+
+      <div id="modal-fee-order-info" class="hidden shrink-0"></div>
+
+      <div class="flex-1 overflow-y-auto space-y-3 kanban-scroll pr-1">
+        <div>
+          <span class="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Taxas Cadastradas</span>
+          <div id="modal-fixed-fees-list" class="space-y-2"></div>
+        </div>
+
+        <div class="pt-2 border-t border-slate-100">
+          <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Ou Digite uma Taxa Avulsa (R$)</label>
+          <div class="flex gap-2">
+            <input 
+              type="text" 
+              id="modal-custom-fee-input" 
+              inputmode="decimal"
+              placeholder="Ex: 8,50" 
+              class="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+            <button 
+              type="button" 
+              onclick="submitCustomDeliveryFee()" 
+              class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-xs transition cursor-pointer">
+              Lançar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 3: PLANILHA / MOSAICO DE ENTREGAS DOS MOTOBOYS -->
+  <div id="modal-motoboy-spreadsheet" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-xs hidden animate-fade-in" onclick="if(event.target === this) closeMotoboySpreadsheetModal()">
+    <div class="bg-slate-100 rounded-3xl max-w-6xl w-full h-full max-h-[96vh] shadow-2xl flex flex-col overflow-hidden border border-slate-300">
+      <div class="p-4 sm:p-5 bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center text-xl shrink-0 font-black">
+            🛵
+          </div>
+          <div>
+            <h2 class="text-base sm:text-lg font-black text-white tracking-tight">Planilha de Pedidos dos Entregadores</h2>
+            <p id="modal-motoboy-header-stats" class="text-xs text-amber-400 font-medium">Carregando entregadores...</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button 
+            type="button" 
+            onclick="closeMotoboySpreadsheetModal()" 
+            class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition cursor-pointer">
+            Fechar
+          </button>
+        </div>
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-4 sm:p-5 kanban-scroll bg-slate-100">
+        <div id="modal-motoboys-spreadsheet-container"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CONEXÃO COM O ESTABELECIMENTO (CASO NÃO HAJA LOJA VINCULADA) -->
+  <div id="modal-connect-store" class="fixed inset-0 z-[9999] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 hidden animate-fade-in">
+    <div class="max-w-md w-full bg-slate-900 rounded-3xl p-6 sm:p-7 border border-slate-800 text-white shadow-2xl space-y-5">
+      <div class="text-center space-y-1">
+        <div class="w-14 h-14 mx-auto rounded-3xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-400 flex items-center justify-center text-2xl shadow-inner mb-2">
+          🏪
+        </div>
+        <h2 class="text-xl font-black text-white">Conectar ao Estabelecimento</h2>
+        <p class="text-xs text-slate-400">Selecione sua loja para sincronizar com o PC principal em tempo real:</p>
+      </div>
+
+      <div id="connect-store-list" class="space-y-2 max-h-60 overflow-y-auto kanban-scroll">
+        <div class="text-center py-4 text-xs text-slate-500">Buscando lojas cadastradas...</div>
+      </div>
+
+      <div class="pt-2 border-t border-slate-800">
+        <label class="block text-[11px] font-bold text-slate-400 uppercase mb-1.5">Ou digite o Código / ID da Loja:</label>
+        <div class="flex gap-2">
+          <input 
+            type="text" 
+            id="connect-store-manual-input" 
+            placeholder="Ex: store_ciadochopp..." 
+            class="flex-1 px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs font-mono text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+          <button 
+            type="button" 
+            onclick="handleManualStoreConnect()" 
+            class="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-xs rounded-xl transition cursor-pointer">
+            Conectar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- APPLICATION LOGIC -->
+  <script>
+    // --- ESTADO LOCAL EM TEMPO REAL ---
+    let currentTenantId = '';
+    let orders = [];
+    let motoboyOrders = [];
+    let motoboysList = [];
+    let storesList = [];
+    let deliveryFeesList = [];
+    let apiCredentials = {
+      clientId: '',
+      clientSecret: '',
+      merchantId: '',
+      customApiUrl: ''
+    };
+    let pendingOrderData = null;
+    let deferredPrompt = null;
+
+    // --- SONS E ALERTAS ---
+    let audioCtx = null;
+    function playDoubleBeepAlarm() {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const now = audioCtx.currentTime;
+
+        const osc1 = audioCtx.createOscillator();
+        const gain1 = audioCtx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(880, now);
+        gain1.gain.setValueAtTime(0.25, now);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+        osc1.connect(gain1);
+        gain1.connect(audioCtx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.12);
+
+        const osc2 = audioCtx.createOscillator();
+        const gain2 = audioCtx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(1174, now + 0.15);
+        gain2.gain.setValueAtTime(0.25, now + 0.15);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+        osc2.connect(gain2);
+        gain2.connect(audioCtx.destination);
+        osc2.start(now + 0.15);
+        osc2.stop(now + 0.32);
+      } catch (e) {}
+    }
+
+    function showToast(title, message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      if (!container) return;
+      const toast = document.createElement('div');
+      toast.className = `p-4 rounded-2xl shadow-xl border text-xs flex items-start gap-3 pointer-events-auto transition-all duration-300 transform translate-y-2 opacity-0 animate-fade-in ${
+        type === 'success' ? 'bg-emerald-950 border-emerald-500 text-emerald-100' :
+        type === 'ifood' ? 'bg-red-950 border-red-500 text-red-100' :
+        type === 'warning' ? 'bg-amber-950 border-amber-500 text-amber-100' :
+        'bg-slate-900 border-slate-700 text-slate-100'
+      }`;
+      const icon = type === 'success' ? '✓' : type === 'ifood' ? '⚡' : type === 'warning' ? '⚠️' : 'ℹ️';
+      toast.innerHTML = `
+        <span class="text-base font-black shrink-0">${icon}</span>
+        <div class="flex-1 min-w-0">
+          <strong class="font-black block text-xs tracking-tight">${escapeHtml(title)}</strong>
+          <span class="text-[11px] opacity-90 block mt-0.5 leading-relaxed">${escapeHtml(message)}</span>
+        </div>
+      `;
+      container.appendChild(toast);
+      requestAnimationFrame(() => {
+        toast.classList.remove('translate-y-2', 'opacity-0');
+      });
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-x-full');
+        setTimeout(() => toast.remove(), 300);
+      }, 4500);
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      return String(text).replace(/[&<>"']/g, m => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+      }[m]));
+    }
+
+    function formatCurrency(val) {
+      return Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    function getApiBaseUrl() {
+      if (apiCredentials && apiCredentials.customApiUrl && apiCredentials.customApiUrl.trim()) {
+        return apiCredentials.customApiUrl.trim().replace(/\/+$/, '');
+      }
+      if (window.location.hostname.includes('github.io')) {
+        return 'https://ifood-integracao.iranildo-jobs.workers.dev';
+      }
+      return '';
+    }
+
+    // --- INSTALAÇÃO PWA ---
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      const btn = document.getElementById('btn-install-pwa');
+      if (btn) btn.classList.remove('hidden');
+    });
+
+    function promptPWAInstall() {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(() => {
+          deferredPrompt = null;
+        });
+      } else {
+        showToast('Instalar no Celular', 'No menu do seu navegador (três pontinhos ou botão de compartilhar), toque em "Adicionar à tela de início" ou "Instalar aplicativo".', 'info');
+      }
+    }
+
+    // --- GERENCIAMENTO DE LOJAS ---
+    function renderStoreChips() {
+      const container = document.getElementById('store-selector-chips');
+      const badge = document.getElementById('stores-count-badge');
+      if (!container) return;
+
+      if (!storesList || storesList.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full py-2 text-center text-xs text-slate-500">
+            Nenhuma loja cadastrada.
+          </div>
+        `;
+        if (badge) badge.innerText = '0 lojas';
+        return;
+      }
+
+      if (badge) badge.innerText = `${storesList.length} ${storesList.length === 1 ? 'loja' : 'lojas'}`;
+
+      container.innerHTML = storesList.map(store => {
+        const isActive = Boolean(store.active);
+        return `
+          <button 
+            type="button" 
+            onclick="selectStore('${escapeHtml(store.id)}')" 
+            class="p-2.5 rounded-xl border text-left transition flex items-center gap-2 cursor-pointer ${
+              isActive 
+                ? 'bg-emerald-50 border-emerald-500 text-emerald-950 font-black shadow-xs ring-2 ring-emerald-500/20' 
+                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 font-bold'
+            }">
+            <span class="w-2.5 h-2.5 rounded-full shrink-0 ${isActive ? 'bg-emerald-500' : 'bg-slate-300'}"></span>
+            <span class="text-xs truncate">${escapeHtml(store.name || store.id)}</span>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function selectStore(storeId) {
+      storesList = storesList.map(s => ({ ...s, active: s.id === storeId }));
+      renderStoreChips();
+      updateHeaderStoreDisplay();
+    }
+
+    function updateHeaderStoreDisplay() {
+      const activeStore = storesList.find(s => s.active) || storesList[0];
+      const headerName = document.getElementById('header-store-name');
+      if (headerName) {
+        headerName.innerText = activeStore ? activeStore.name : (apiCredentials.storeName || currentTenantId || 'Loja');
+      }
+    }
+
+    // --- IFOOD ORDER MATCHING (ROBUSTO COM SUPORTE A ZEROS À ESQUERDA E FORMATOS VARIADOS) ---
+    function findMatchingIFoodOrder(orderNum) {
+      if (!orderNum) return null;
+      const rawClean = String(orderNum).trim().toLowerCase();
+      const digitsOnly = rawClean.replace(/\D/g, '');
+      const prefixStripped = rawClean.replace(/^#/, '').replace(/^if-/, '').replace(/^if/, '').trim();
+      const parsedNum = digitsOnly ? parseInt(digitsOnly, 10) : null;
+
+      return orders.find(o => {
+        const oId = String(o.id || '').toLowerCase();
+        const oDisplay = String(o.displayId || '').toLowerCase();
+        const oIfoodId = String(o.ifoodOrderId || '').toLowerCase();
+
+        // 1. Igualdade direta
+        if (oId === rawClean || oDisplay === rawClean || oIfoodId === rawClean) return true;
+
+        // 2. Sem prefixo (# ou IF-)
+        const oIdStripped = oId.replace(/^#/, '').replace(/^if-/, '').replace(/^if/, '').trim();
+        if (oIdStripped && prefixStripped && oIdStripped === prefixStripped) return true;
+        if (oDisplay && prefixStripped && oDisplay === prefixStripped) return true;
+
+        // 3. Comparação numérica (ex: "49" bate com "0049" ou "#0049")
+        if (parsedNum !== null && !isNaN(parsedNum)) {
+          const oDigits = oId.replace(/\D/g, '');
+          const oDisplayDigits = oDisplay.replace(/\D/g, '');
+          if (oDigits && parseInt(oDigits, 10) === parsedNum) return true;
+          if (oDisplayDigits && parseInt(oDisplayDigits, 10) === parsedNum) return true;
+        }
+
+        return false;
+      });
+    }
+
+    function findFeeByDistanceKm(distanceKm) {
+      if (!distanceKm || isNaN(Number(distanceKm))) return null;
+      const dist = Number(distanceKm);
+      return deliveryFeesList.find(f => {
+        const min = Number(f.minKm ?? 0);
+        const max = Number(f.maxKm ?? 9999);
+        return dist >= min && dist < max;
+      }) || deliveryFeesList[0] || null;
+    }
+
+    // --- FORMULÁRIO DE LANÇAMENTO ---
+    function handleQuickOrderInput(val) {
+      const banner = document.getElementById('quick-order-ifood-match-banner');
+      if (!val || !val.trim()) {
+        if (banner) banner.classList.add('hidden');
+        return;
+      }
+
+      const firstToken = val.split(',')[0].trim();
+      const match = findMatchingIFoodOrder(firstToken) || findMatchingIFoodOrder(val.trim());
+
+      const idEl = document.getElementById('quick-order-ifood-id');
+      const custEl = document.getElementById('quick-order-ifood-customer');
+      const statusEl = document.getElementById('quick-order-ifood-status');
+      const addrEl = document.getElementById('quick-order-ifood-address');
+      const distFeeEl = document.getElementById('quick-order-ifood-distance-fee');
+      const storeEl = document.getElementById('quick-order-ifood-store');
+
+      if (match) {
+        if (banner) banner.classList.remove('hidden');
+        if (idEl) idEl.textContent = match.id || `#${match.displayId}`;
+        if (custEl) custEl.textContent = `• ${match.customerName || 'Cliente iFood'}`;
+        if (statusEl) statusEl.textContent = match.status ? match.status.toUpperCase() : 'NOVO';
+        if (addrEl) addrEl.textContent = match.customerAddress || 'Endereço iFood sincronizado';
+
+        if (match.distanceKm && Number(match.distanceKm) > 0) {
+          const fee = findFeeByDistanceKm(match.distanceKm);
+          if (distFeeEl) {
+            distFeeEl.textContent = `📍 ${Number(match.distanceKm).toFixed(1)} km &rarr; Taxa: ${fee ? formatCurrency(fee.value) : 'Consultar'}`;
+            distFeeEl.classList.remove('hidden');
+          }
+        } else if (distFeeEl) {
+          distFeeEl.classList.add('hidden');
+        }
+
+        if (match.storeName && storeEl) {
+          storeEl.textContent = match.storeName;
+          storeEl.classList.remove('hidden');
+        } else if (storeEl) {
+          storeEl.classList.add('hidden');
+        }
+      } else {
+        if (banner) banner.classList.add('hidden');
+      }
+    }
+
+    function toggleQuickDetails() {
+      const fields = document.getElementById('quick-order-details-fields');
+      const icon = document.getElementById('toggle-quick-details-icon');
+      if (fields) {
+        fields.classList.toggle('hidden');
+        if (icon) icon.textContent = fields.classList.contains('hidden') ? '⌄' : '⌃';
+      }
+    }
+
+    function handleQuickOrderSubmit(e) {
+      if (e && e.preventDefault) e.preventDefault();
+      const input = document.getElementById('quick-order-input');
+      const val = input ? input.value.trim() : '';
+      if (!val) {
+        showToast('Aviso', 'Digite o número do pedido.', 'warning');
+        if (input) input.focus();
+        return;
+      }
+
+      const rawNumbers = val.split(',').map(s => s.replace('#', '').trim()).filter(Boolean);
+      const primaryNum = rawNumbers[0];
+      const matchedIFood = findMatchingIFoodOrder(primaryNum) || findMatchingIFoodOrder(val);
+
+      const custNameInput = document.getElementById('quick-customer-name');
+      const custAddrInput = document.getElementById('quick-customer-address');
+
+      let customerName = (custNameInput && custNameInput.value.trim()) || '';
+      let customerAddress = (custAddrInput && custAddrInput.value.trim()) || '';
+      let detectedDistanceKm = null;
+      let autoFeeValue = null;
+      let autoFeeName = null;
+
+      if (matchedIFood) {
+        customerName = matchedIFood.customerName || customerName || 'Cliente iFood';
+        customerAddress = matchedIFood.customerAddress || customerAddress;
+        if (matchedIFood.distanceKm && Number(matchedIFood.distanceKm) > 0) {
+          detectedDistanceKm = Number(matchedIFood.distanceKm);
+          const fee = findFeeByDistanceKm(detectedDistanceKm);
+          if (fee) {
+            autoFeeValue = Number(fee.value);
+            autoFeeName = `${fee.name} (${detectedDistanceKm.toFixed(1).replace('.', ',')} km)`;
+          }
+        }
+      }
+
+      pendingOrderData = {
+        orderNumbers: rawNumbers,
+        orderNumber: rawNumbers.join(', '),
+        customerName,
+        customerAddress,
+        matchedIFoodId: matchedIFood ? matchedIFood.id : null,
+        detectedStoreName: matchedIFood ? matchedIFood.storeName : null,
+        detectedDistanceKm,
+        autoFeeValue,
+        autoFeeName
+      };
+
+      openMotoboyModal();
+    }
+
+    // --- MODAL DE MOTOBOY ---
+    function openMotoboyModal() {
+      const modal = document.getElementById('modal-select-motoboy');
+      const list = document.getElementById('modal-motoboy-list');
+      const infoEl = document.getElementById('modal-motoboy-order-info');
+      if (!modal || !list) return;
+
+      if (infoEl && pendingOrderData) {
+        if (pendingOrderData.matchedIFoodId) {
+          infoEl.innerHTML = `
+            <div class="p-3 bg-red-50 border border-red-200 rounded-2xl flex items-center justify-between gap-2 text-xs">
+              <div class="space-y-0.5">
+                <span class="font-black text-red-950 block">Pedido iFood #${pendingOrderData.orderNumber}</span>
+                <span class="text-[11px] text-red-800 font-medium block">${escapeHtml(pendingOrderData.customerName)}</span>
+              </div>
+              <span class="px-2 py-0.5 rounded-full bg-red-600 text-white font-black text-[10px] uppercase">Despacho Automático</span>
+            </div>
+          `;
+          infoEl.classList.remove('hidden');
+        } else {
+          infoEl.innerHTML = `
+            <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800">
+              Pedido #${pendingOrderData.orderNumber}
+            </div>
+          `;
+          infoEl.classList.remove('hidden');
+        }
+      }
+
+      const visibleMb = (motoboysList || []).filter(m => !m.isHidden);
+      if (visibleMb.length === 0) {
+        list.innerHTML = `
+          <div class="py-6 text-center text-slate-500 text-xs font-semibold">
+            Nenhum motoboy disponível no momento.
+          </div>
+        `;
+      } else {
+        list.innerHTML = visibleMb.map(mb => `
+          <button 
+            type="button" 
+            onclick="selectMotoboyForPendingOrder('${escapeHtml(mb.id)}')" 
+            class="w-full p-3.5 bg-slate-50 hover:bg-amber-50 active:scale-98 border border-slate-200 hover:border-amber-400 rounded-2xl flex items-center justify-between transition cursor-pointer text-left">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-full bg-slate-950 text-white flex items-center justify-center font-black text-sm shrink-0">
+                ${mb.name ? mb.name.charAt(0).toUpperCase() : 'M'}
+              </div>
+              <div>
+                <span class="block text-xs font-black text-slate-900 uppercase">${escapeHtml(mb.name)}</span>
+                <span class="block text-[11px] text-slate-500 font-medium">${escapeHtml(mb.phone || 'Entregador')}</span>
+              </div>
+            </div>
+            <span class="text-xs font-bold text-amber-600">Selecionar →</span>
+          </button>
+        `).join('');
+      }
+
+      modal.classList.remove('hidden');
+    }
+
+    function closeMotoboyModal() {
+      const modal = document.getElementById('modal-select-motoboy');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function selectMotoboyForPendingOrder(mbId) {
+      if (!pendingOrderData) return;
+      pendingOrderData.motoboyId = mbId;
+      closeMotoboyModal();
+
+      // Se temos taxa automática de KM para iFood, já lança direto!
+      if (pendingOrderData.matchedIFoodId && pendingOrderData.autoFeeValue > 0) {
+        confirmOrderWithFee(pendingOrderData.autoFeeValue, pendingOrderData.autoFeeName || 'Taxa por KM');
+        return;
+      }
+
+      openFeeModal();
+    }
+
+    // --- MODAL DE TAXAS ---
+    function openFeeModal() {
+      const modal = document.getElementById('modal-select-fee');
+      const list = document.getElementById('modal-fixed-fees-list');
+      const infoEl = document.getElementById('modal-fee-order-info');
+      if (!modal || !list) return;
+
+      const mb = motoboysList.find(m => m.id === (pendingOrderData && pendingOrderData.motoboyId));
+      if (infoEl && pendingOrderData) {
+        infoEl.innerHTML = `
+          <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800">
+            Pedido #${pendingOrderData.orderNumber} &rarr; ${escapeHtml(mb ? mb.name : 'Motoboy')}
+          </div>
+        `;
+        infoEl.classList.remove('hidden');
+      }
+
+      list.innerHTML = (deliveryFeesList || []).map(fee => `
+        <button 
+          type="button" 
+          onclick="confirmOrderWithFee(${fee.value}, '${escapeHtml(fee.name || 'Taxa Fixa')}')" 
+          class="w-full p-3.5 bg-slate-50 hover:bg-emerald-50 active:scale-98 border border-slate-200 hover:border-emerald-400 rounded-2xl flex items-center justify-between transition cursor-pointer text-left">
+          <span class="text-base font-black text-emerald-700 font-mono">${formatCurrency(fee.value)}</span>
+          <span class="text-[11px] font-bold text-slate-500 uppercase">[ ${escapeHtml(fee.name || 'TAXA')} ]</span>
+        </button>
+      `).join('');
+
+      modal.classList.remove('hidden');
+    }
+
+    function closeFeeModal() {
+      const modal = document.getElementById('modal-select-fee');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function submitCustomDeliveryFee() {
+      const input = document.getElementById('modal-custom-fee-input');
+      const val = input ? parseFloat(input.value.replace(',', '.')) : 0;
+      if (!val || isNaN(val) || val <= 0) {
+        showToast('Aviso', 'Informe um valor válido para a taxa.', 'warning');
+        return;
+      }
+      confirmOrderWithFee(val, 'Taxa Avulsa');
+    }
+
+    // --- CONFIRMAÇÃO FINAL E DESPACHO AUTOMÁTICO NO IFOOD ---
+    async function confirmOrderWithFee(feeValue, feeName) {
+      if (!pendingOrderData) return;
+
+      const activeStore = storesList.find(s => s.active) || storesList[0];
+      const motoboy = motoboysList.find(m => m.id === pendingOrderData.motoboyId);
+      const rawNumbers = pendingOrderData.orderNumbers && pendingOrderData.orderNumbers.length > 0 
+        ? pendingOrderData.orderNumbers 
+        : [pendingOrderData.orderNumber];
+
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('pt-BR');
+      const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const createdOrders = [];
+
+      rawNumbers.forEach((orderNum, idx) => {
+        const matched = findMatchingIFoodOrder(orderNum);
+        let finalCustomerName = (matched && matched.customerName) || (idx === 0 ? pendingOrderData.customerName : '') || (activeStore ? `Pedido Avulso (${activeStore.name})` : 'Pedido Avulso');
+        let finalCustomerAddress = (matched && matched.customerAddress) || (idx === 0 ? pendingOrderData.customerAddress : '') || '';
+        let finalStoreName = (matched && matched.storeName) || (activeStore ? activeStore.name : 'Minha Loja');
+
+        let detectedLocator = '';
+        if (matched) {
+          detectedLocator = matched.phoneLocalizer || matched.locator || '';
+        }
+
+        const newMbOrder = {
+          id: 'ord-' + (Date.now() + idx),
+          orderNumber: orderNum,
+          motoboyId: pendingOrderData.motoboyId,
+          storeName: finalStoreName,
+          deliveryFee: Number(feeValue) || 0,
+          feeName: feeName || 'Taxa Fixa',
+          distanceKm: (matched && matched.distanceKm) ? Number(matched.distanceKm) : null,
+          customerName: finalCustomerName,
+          customerAddress: finalCustomerAddress,
+          locator: detectedLocator,
+          isIFood: Boolean(matched),
+          date: dateStr,
+          createdAt: timeStr,
+          timestamp: Date.now() + idx,
+          status: 'em_loja'
+        };
+
+        motoboyOrders.unshift(newMbOrder);
+        createdOrders.push({ order: newMbOrder, matchedIFood: matched });
+      });
+
+      // Salva no estado dos motoboys
+      saveMotoboyOrdersToFirebase();
+
+      // FECHA MODAIS E LIMPA ENTRADA
+      closeFeeModal();
+      pendingOrderData = null;
+
+      const input = document.getElementById('quick-order-input');
+      const custNameInput = document.getElementById('quick-customer-name');
+      const custAddrInput = document.getElementById('quick-customer-address');
+      const banner = document.getElementById('quick-order-ifood-match-banner');
+      if (input) { input.value = ''; input.focus(); }
+      if (custNameInput) custNameInput.value = '';
+      if (custAddrInput) custAddrInput.value = '';
+      if (banner) banner.classList.add('hidden');
+
+      // --- DISPARO IMEDIATO DO DESPACHO NO IFOOD PARA CADA PEDIDO RECONHECIDO ---
+      let hasDispatchedAny = false;
+      for (const item of createdOrders) {
+        if (item.matchedIFood) {
+          hasDispatchedAny = true;
+          await dispatchIFoodOrder(item.matchedIFood, motoboy, item.order);
+        }
+      }
+
+      if (!hasDispatchedAny) {
+        playDoubleBeepAlarm();
+        showToast('Pedido Lançado!', `Enviado para ${motoboy ? motoboy.name : 'Motoboy'} (Taxa: ${formatCurrency(Number(feeValue) || 0)}).`, 'success');
+      }
+
+      displayRecentFeeLaunch(createdOrders, motoboy, feeValue, feeName);
+    }
+
+    // --- COMUNICAR DESPACHO À API DO IFOOD VIA DIRECT API + FIREBASE FALLBACK ---
+    async function dispatchIFoodOrder(order, motoboy, mbOrder) {
+      const mbName = motoboy ? motoboy.name : 'Motoboy';
+      
+      // 1. Atualiza status local do pedido no KDS
+      if (motoboy) order.assignedMotoboyId = motoboy.id;
+      order.status = 'despachado';
+      order.needsIFoodDispatch = true;
+      order.dispatchedAt = Date.now();
+
+      // Salva no Firebase imediatamente para que o PC Principal também veja
+      saveKdsOrdersToFirebase();
+
+      playDoubleBeepAlarm();
+
+      const targetIfoodId = order.ifoodOrderId || order.id;
+      const cid = apiCredentials.clientId || (order.clientId);
+      const csec = apiCredentials.clientSecret || (order.clientSecret);
+
+      if (targetIfoodId && (order.isRealIFood || order.isIFood || String(targetIfoodId).length > 10)) {
+        showToast('Despachando no iFood...', `Enviando comando de despacho do pedido #${mbOrder.orderNumber} para a API iFood...`, 'ifood');
+
+        try {
+          const res = await fetch(`${getApiBaseUrl()}/api/ifood/order-action`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ifoodOrderId: targetIfoodId,
+              action: 'dispatch',
+              clientId: cid || undefined,
+              clientSecret: csec || undefined
+            })
+          });
+
+          const resData = await res.json();
+          if (resData.success) {
+            order.ifoodDispatched = true;
+            order.needsIFoodDispatch = false;
+            saveKdsOrdersToFirebase();
+            showToast('🚀 Despachado no iFood!', `Pedido #${mbOrder.orderNumber} despachado com sucesso no iFood para ${mbName}!`, 'success');
+          } else {
+            console.warn('Resposta da API iFood:', resData);
+            showToast('Lançado para Motoboy!', `Pedido #${mbOrder.orderNumber} vinculado a ${mbName}. Sincronizado via nuvem com o PC.`, 'success');
+          }
+        } catch (err) {
+          console.warn('Erro ao chamar dispatch direto:', err);
+          showToast('Lançado com Sucesso!', `Pedido #${mbOrder.orderNumber} vinculado a ${mbName}. O PC principal confirmará o despacho no iFood.`, 'success');
+        }
+      } else {
+        showToast('🚀 Despachado!', `Pedido #${mbOrder.orderNumber} despachado para ${mbName}!`, 'success');
+      }
+    }
+
+    // --- HISTÓRICO TEMPORÁRIO (15 SEGUNDOS) ---
+    let recentInterval = null;
+    function displayRecentFeeLaunch(createdOrders, motoboy, feeValue, feeName) {
+      const card = document.getElementById('recent-launches-temporary-card');
+      const list = document.getElementById('recent-launches-list');
+      const countEl = document.getElementById('recent-launches-countdown');
+      const progress = document.getElementById('recent-launches-progress-bar');
+      if (!card || !list) return;
+
+      if (recentInterval) clearInterval(recentInterval);
+
+      list.innerHTML = createdOrders.map(item => `
+        <div class="p-3 bg-emerald-50/90 border border-emerald-200 rounded-xl flex items-center justify-between text-xs">
+          <div>
+            <span class="font-black text-emerald-950 block">#${escapeHtml(item.order.orderNumber)} &bull; ${escapeHtml(motoboy ? motoboy.name : 'Motoboy')}</span>
+            <span class="text-[11px] text-emerald-800">${escapeHtml(item.order.customerName)}</span>
+          </div>
+          <span class="font-black text-emerald-700 font-mono text-sm">${formatCurrency(feeValue)}</span>
+        </div>
+      `).join('');
+
+      card.classList.remove('hidden');
+
+      let remaining = 15;
+      if (countEl) countEl.innerText = '15s';
+      if (progress) progress.style.width = '100%';
+
+      recentInterval = setInterval(() => {
+        remaining--;
+        if (countEl) countEl.innerText = `${remaining}s`;
+        if (progress) progress.style.width = `${(remaining / 15) * 100}%`;
+        if (remaining <= 0) {
+          dismissRecentLaunchesCard();
+        }
+      }, 1000);
+    }
+
+    function dismissRecentLaunchesCard() {
+      if (recentInterval) {
+        clearInterval(recentInterval);
+        recentInterval = null;
+      }
+      const card = document.getElementById('recent-launches-temporary-card');
+      if (card) card.classList.add('hidden');
+    }
+
+    // --- MODAL DE PLANILHA / MOSAICO DOS MOTOBOYS ---
+    function openMotoboySpreadsheetModal() {
+      const modal = document.getElementById('modal-motoboy-spreadsheet');
+      const container = document.getElementById('modal-motoboys-spreadsheet-container');
+      const stats = document.getElementById('modal-motoboy-header-stats');
+      if (!modal || !container) return;
+
+      const activeMb = (motoboysList || []).filter(m => !m.isHidden);
+      const totalOrders = motoboyOrders.length;
+      const totalFees = motoboyOrders.reduce((acc, o) => acc + (Number(o.deliveryFee) || 0), 0);
+
+      if (stats) {
+        stats.innerText = `${totalOrders} entregas registradas &bull; Total em Taxas: ${formatCurrency(totalFees)}`;
+      }
+
+      if (activeMb.length === 0) {
+        container.innerHTML = `
+          <div class="py-12 text-center text-slate-500 font-medium">Nenhum motoboy cadastrado.</div>
+        `;
+      } else {
+        container.innerHTML = `
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            ${activeMb.map(mb => {
+              const mbOrders = motoboyOrders.filter(o => String(o.motoboyId) === String(mb.id));
+              const mbTotal = mbOrders.reduce((acc, o) => acc + (Number(o.deliveryFee) || 0), 0);
+              return `
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+                  <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <div class="flex items-center gap-2.5">
+                      <div class="w-9 h-9 rounded-full bg-slate-950 text-white font-black flex items-center justify-center text-sm">
+                        ${mb.name ? mb.name.charAt(0).toUpperCase() : 'M'}
+                      </div>
+                      <div>
+                        <h4 class="font-black text-slate-900 text-xs sm:text-sm uppercase">${escapeHtml(mb.name)}</h4>
+                        <span class="text-[11px] text-slate-500">${mbOrders.length} entregas</span>
+                      </div>
+                    </div>
+                    <span class="font-black text-emerald-700 font-mono text-sm">${formatCurrency(mbTotal)}</span>
+                  </div>
+                  <div class="space-y-1.5 max-h-48 overflow-y-auto kanban-scroll pr-1">
+                    ${mbOrders.length === 0 
+                      ? '<p class="text-[11px] text-slate-400 italic py-2 text-center">Nenhum pedido no momento</p>'
+                      : mbOrders.map(o => `
+                        <div class="p-2 bg-slate-50 rounded-xl flex items-center justify-between text-xs">
+                          <div>
+                            <span class="font-bold text-slate-900">#${escapeHtml(o.orderNumber)}</span>
+                            <span class="text-[10px] text-slate-500 block truncate max-w-[150px]">${escapeHtml(o.customerName)}</span>
+                          </div>
+                          <span class="font-bold text-emerald-700 font-mono">${formatCurrency(o.deliveryFee)}</span>
+                        </div>
+                      `).join('')
+                    }
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `;
+      }
+
+      modal.classList.remove('hidden');
+    }
+
+    function closeMotoboySpreadsheetModal() {
+      const modal = document.getElementById('modal-motoboy-spreadsheet');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function updateFloatingMotoboyBadge() {
+      const badge = document.getElementById('floating-motoboy-badge');
+      if (badge) badge.innerText = String(motoboyOrders.length || 0);
+    }
+  </script>
+
+  <!-- FIREBASE REAL-TIME CLOUD SYNC MODULE (ISOLADO E SEM ENGINE DE POLLING IFOOD) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, doc, collection, onSnapshot, setDoc, getDocs, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBow5AERyHHi3_zpmPwiV9SKhHfW-ltCHY",
+      authDomain: "fastpedidos-abde5.firebaseapp.com",
+      projectId: "fastpedidos-abde5",
+      storageBucket: "fastpedidos-abde5.firebasestorage.app",
+      messagingSenderId: "780977340389",
+      appId: "1:780977340389:web:e5aa31d6a4aea8b98b390c"
+    };
+
+    let unsubSettings = null;
+    let unsubMotoboys = null;
+    let unsubMotoboyOrders = null;
+    let unsubOrders = null;
+
+    try {
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+
+      window.firebaseDb = db;
+      window.firebaseDoc = doc;
+      window.firebaseSetDoc = setDoc;
+
+      window.saveKdsOrdersToFirebase = function() {
+        if (!currentTenantId || !window.firebaseDb) return;
+        const activeOrders = (orders || []).filter(o => !o.archived);
+        setDoc(doc(db, "stores", currentTenantId, "state", "kds_orders"), {
+          orders: activeOrders,
+          updatedAt: Date.now(),
+          source: 'launch_mode'
+        }, { merge: true }).catch(() => {});
+      };
+
+      window.saveMotoboyOrdersToFirebase = function() {
+        if (!currentTenantId || !window.firebaseDb) return;
+        setDoc(doc(db, "stores", currentTenantId, "state", "motoboy_orders"), {
+          orders: motoboyOrders,
+          updatedAt: Date.now(),
+          source: 'launch_mode'
+        }, { merge: true }).catch(() => {});
+      };
+
+      function startLaunchModeSync(tenantId) {
+        if (!tenantId) {
+          promptStoreSelection();
+          return;
+        }
+
+        currentTenantId = tenantId;
+        localStorage.setItem('last_tenant_id', tenantId);
+        localStorage.setItem('portal_last_store_id', tenantId);
+
+        console.log(`🚀 [Modo Lançamento]: Conectando em tempo real à loja [${tenantId}]...`);
+
+        // Desconecta listeners anteriores se houver
+        if (unsubSettings) unsubSettings();
+        if (unsubMotoboys) unsubMotoboys();
+        if (unsubMotoboyOrders) unsubMotoboyOrders();
+        if (unsubOrders) unsubOrders();
+
+        // 1. Escuta Configurações, Credenciais iFood e Taxas da Loja
+        unsubSettings = onSnapshot(doc(db, "stores", tenantId, "config", "settings"), (snap) => {
+          if (snap.exists()) {
+            const data = snap.data();
+            if (data) {
+              if (data.clientId) apiCredentials.clientId = data.clientId;
+              if (data.clientSecret) apiCredentials.clientSecret = data.clientSecret;
+              if (data.merchantId) apiCredentials.merchantId = data.merchantId;
+              if (data.customApiUrl) apiCredentials.customApiUrl = data.customApiUrl;
+              if (data.storeName) apiCredentials.storeName = data.storeName;
+
+              if (Array.isArray(data.storesList) && data.storesList.length > 0) {
+                const curActive = (storesList || []).find(s => s.active);
+                storesList = data.storesList.map(s => ({
+                  ...s,
+                  active: curActive ? (s.id === curActive.id) : Boolean(s.active)
+                }));
+                if (!storesList.some(s => s.active)) storesList[0].active = true;
+                renderStoreChips();
+                updateHeaderStoreDisplay();
+              }
+
+              if (Array.isArray(data.deliveryFeesList) && data.deliveryFeesList.length > 0) {
+                deliveryFeesList = data.deliveryFeesList;
+              }
+            }
+          }
+        }, (err) => console.warn('Erro sync settings:', err));
+
+        // 2. Escuta Motoboys Cadastrados
+        unsubMotoboys = onSnapshot(doc(db, "stores", tenantId, "state", "motoboys"), (snap) => {
+          if (snap.exists()) {
+            const data = snap.data();
+            if (data && Array.isArray(data.motoboys)) {
+              motoboysList = data.motoboys.filter(m => !m.archived && m.active !== false);
+            }
+          }
+        }, (err) => console.warn('Erro sync motoboys:', err));
+
+        // 3. Escuta Pedidos dos Motoboys (Entregas em Rota)
+        unsubMotoboyOrders = onSnapshot(doc(db, "stores", tenantId, "state", "motoboy_orders"), (snap) => {
+          if (snap.exists()) {
+            const data = snap.data();
+            if (data && Array.isArray(data.orders)) {
+              motoboyOrders = data.orders.filter(o => !o.archived);
+              updateFloatingMotoboyBadge();
+            }
+          }
+        }, (err) => console.warn('Erro sync motoboy orders:', err));
+
+        // 4. Escuta Pedidos do iFood (KDS) em Tempo Real (vindos do PC Principal)
+        unsubOrders = onSnapshot(doc(db, "stores", tenantId, "state", "kds_orders"), (snap) => {
+          if (snap.exists()) {
+            const data = snap.data();
+            if (data && Array.isArray(data.orders)) {
+              orders = data.orders.filter(o => !o.archived);
+              console.log(`📦 [Modo Lançamento]: ${orders.length} pedidos iFood sincronizados da nuvem.`);
+            }
+          }
+        }, (err) => console.warn('Erro sync KDS orders:', err));
+
+        // Esconde modal de seleção de loja se estiver visível
+        const modalConnect = document.getElementById('modal-connect-store');
+        if (modalConnect) modalConnect.classList.add('hidden');
+      }
+
+      window.startLaunchModeSync = startLaunchModeSync;
+
+      // Auto-inicia conexão usando URL ou LocalStorage
+      const urlParams = new URLSearchParams(window.location.search);
+      const storeParam = urlParams.get('store') || urlParams.get('loja') || localStorage.getItem('last_tenant_id') || localStorage.getItem('portal_last_store_id');
+      if (storeParam) {
+        startLaunchModeSync(storeParam);
+      } else {
+        promptStoreSelection();
+      }
+
+      async function promptStoreSelection() {
+        const modal = document.getElementById('modal-connect-store');
+        const listEl = document.getElementById('connect-store-list');
+        if (!modal) return;
+
+        modal.classList.remove('hidden');
+
+        try {
+          const snap = await getDocs(collection(db, "stores_directory"));
+          if (snap && !snap.empty) {
+            const stores = [];
+            snap.forEach(d => {
+              const data = d.data();
+              if (data && (data.id || d.id)) {
+                stores.push({ id: data.id || d.id, name: data.name || (data.id || d.id) });
+              }
+            });
+
+            if (listEl && stores.length > 0) {
+              listEl.innerHTML = stores.map(s => `
+                <button 
+                  type="button" 
+                  onclick="selectAndConnectStore('${escapeHtml(s.id)}')" 
+                  class="w-full p-3.5 bg-slate-800 hover:bg-slate-750 active:scale-98 border border-slate-700 hover:border-emerald-500 rounded-2xl flex items-center justify-between text-left transition cursor-pointer">
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-xl bg-emerald-500 text-slate-950 font-black flex items-center justify-center text-sm">
+                      🏪
+                    </div>
+                    <div>
+                      <h4 class="text-xs font-black text-white">${escapeHtml(s.name)}</h4>
+                      <p class="text-[10px] text-slate-400 font-mono">${escapeHtml(s.id)}</p>
+                    </div>
+                  </div>
+                  <span class="text-xs font-bold text-emerald-400">Entrar →</span>
+                </button>
+              `).join('');
+              return;
+            }
+          }
+        } catch (e) {}
+
+        if (listEl) {
+          listEl.innerHTML = `
+            <div class="py-3 text-center text-xs text-slate-400">
+              Digite o código da loja abaixo ou abra o Link de Lançamento gerado no computador principal.
+            </div>
+          `;
+        }
+      }
+
+      window.selectAndConnectStore = function(storeId) {
+        startLaunchModeSync(storeId);
+      };
+
+      window.handleManualStoreConnect = function() {
+        const input = document.getElementById('connect-store-manual-input');
+        const val = input ? input.value.trim() : '';
+        if (val) {
+          startLaunchModeSync(val);
+        }
+      };
+
+      window.promptChangeStore = function() {
+        promptStoreSelection();
+      };
+
+    } catch (e) {
+      console.error('Erro ao inicializar Firebase em lancamento.html:', e);
+    }
+  </script>
+</body>
+</html>

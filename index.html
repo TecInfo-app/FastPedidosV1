@@ -102,12 +102,12 @@
           document.documentElement.classList.remove('in-launch-mode');
         } else if (isPortalFromUrl) {
           document.documentElement.classList.add('in-portal-mode');
-        } else if (isLaunchFromUrl) {
-          document.documentElement.classList.add('in-launch-mode');
-          localStorage.setItem('fast_pedidos_launch_mode', '1');
-        } else if (localStorage.getItem('fast_pedidos_launch_mode') === '1') {
-          // Quando instalado na tela inicial (PWA standalone) ou reaberto no mesmo celular onde o Link de Lançamento foi acessado
-          document.documentElement.classList.add('in-launch-mode');
+        } else if (isLaunchFromUrl || localStorage.getItem('fast_pedidos_launch_mode') === '1') {
+          var basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
+          var origin = window.location.origin;
+          var targetStore = storeFromUrl || localStorage.getItem('last_tenant_id') || localStorage.getItem('portal_last_store_id') || '';
+          window.location.replace(origin + basePath + 'lancamento.html' + (targetStore ? '?store=' + encodeURIComponent(targetStore) : ''));
+          return;
         }
 
         // Se estiver em Modo Lançamento, gera manifesto PWA dinâmico com start_url apontando para o Modo Lançamento e loja vinculada
@@ -7331,6 +7331,7 @@
       const rawClean = String(orderNum).trim().toLowerCase();
       const digitsOnly = rawClean.replace(/\D/g, '');
       const prefixStripped = rawClean.replace(/^#/, '').replace(/^if-/, '').replace(/^if/, '').trim();
+      const parsedNum = digitsOnly ? parseInt(digitsOnly, 10) : null;
 
       return orders.find(o => {
         const oId = String(o.id || '').toLowerCase();
@@ -7345,11 +7346,12 @@
         if (oIdStripped && prefixStripped && oIdStripped === prefixStripped) return true;
         if (oDisplay && prefixStripped && oDisplay === prefixStripped) return true;
 
-        // 3. Comparação exata de dígitos (somente se ambos os números forem idênticos)
-        if (digitsOnly && digitsOnly.length >= 3) {
+        // 3. Comparação numérica (ex: operador digita "49" e bate com "#0049" ou displayId "49")
+        if (parsedNum !== null && !isNaN(parsedNum)) {
           const oDigits = oId.replace(/\D/g, '');
           const oDisplayDigits = oDisplay.replace(/\D/g, '');
-          if (oDigits === digitsOnly || oDisplayDigits === digitsOnly) return true;
+          if (oDigits && parseInt(oDigits, 10) === parsedNum) return true;
+          if (oDisplayDigits && parseInt(oDisplayDigits, 10) === parsedNum) return true;
         }
 
         return false;
@@ -8343,45 +8345,56 @@
         order.assignedMotoboyId = motoboy.id;
       }
       order.status = 'despachado';
+      order.needsIFoodDispatch = true;
+      order.dispatchedAt = Date.now();
       saveOrders();
       renderKanban();
 
       playDoubleBeepAlarm();
 
-      // Se for pedido real da API iFood e tiver credenciais configuradas
-      if (order.isRealIFood && order.ifoodOrderId && apiCredentials.clientId) {
+      const targetIfoodId = order.ifoodOrderId || order.id;
+      const isIFoodCandidate = Boolean(order.isRealIFood || order.isIFood || (targetIfoodId && String(targetIfoodId).length > 10));
+      const cid = apiCredentials.clientId || order.clientId;
+      const csec = apiCredentials.clientSecret || order.clientSecret;
+
+      // Se for pedido do iFood e tiver credenciais configuradas
+      if (isIFoodCandidate && targetIfoodId && cid && csec) {
         try {
           showToast('Despachando no iFood...', `Comunicando despacho do pedido ${order.id} via API iFood...`, 'ifood');
           const res = await fetch(`${getApiBaseUrl()}/api/ifood/order-action`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              ifoodOrderId: order.ifoodOrderId,
+              ifoodOrderId: targetIfoodId,
               action: 'dispatch',
-              clientId: apiCredentials.clientId,
-              clientSecret: apiCredentials.clientSecret
+              clientId: cid,
+              clientSecret: csec
             })
           });
           const resData = await res.json();
           if (resData.success) {
+            order.ifoodDispatched = true;
+            order.needsIFoodDispatch = false;
+            saveOrders(true);
             showToast(
               '🚀 Despachado no iFood!', 
               `Pedido #${mbOrder.orderNumber} despachado no iFood com sucesso para ${mbName} (Taxa: ${formatCurrency(mbOrder.deliveryFee)})!`, 
               'success'
             );
           } else {
-            showToast('Aviso API iFood', resData.message || 'Erro ao despachar no iFood.', 'warning');
+            console.warn('Aviso API iFood no despacho:', resData);
+            showToast('Lançado com Sucesso', `Pedido #${mbOrder.orderNumber} lançado para ${mbName}. Sincronizado para confirmação no iFood.`, 'info');
           }
         } catch (err) {
           console.error('Erro ao despachar pedido no iFood:', err);
-          showToast('Aviso de Conexão', 'Não foi possível contatar a API do iFood.', 'warning');
+          showToast('Lançado para Motoboy', `Pedido #${mbOrder.orderNumber} registrado para ${mbName}. O PC principal confirmará o despacho no iFood.`, 'info');
         }
       } else {
-        // Pedido simulado ou em teste local
+        // Pedido avulso ou sem credenciais locais
         showToast(
-          '🚀 Despachado no iFood!', 
-          `Pedido #${mbOrder.orderNumber} (${order.id}) marcado como DESPACHADO no iFood e lançado para ${mbName} (Taxa: ${formatCurrency(mbOrder.deliveryFee)})!`, 
-          'ifood'
+          '🚀 Despachado!', 
+          `Pedido #${mbOrder.orderNumber} (${order.id}) marcado como DESPACHADO e lançado para ${mbName} (Taxa: ${formatCurrency(mbOrder.deliveryFee)})!`, 
+          'success'
         );
       }
     }
@@ -9675,6 +9688,11 @@
       updateApiStatusUI();
       fetchAndRenderStoreStatus();
 
+      // Garante que as credenciais do iFood e configurações estão sincronizadas no Firestore para os celulares
+      if (apiCredentials && apiCredentials.clientId && typeof syncSettingsToFirebase === 'function') {
+        syncSettingsToFirebase();
+      }
+
       // Conecta listeners em tempo real do Firestore para esta loja
       if (window.initTenantSync) {
         window.initTenantSync(tenantId);
@@ -9919,8 +9937,8 @@
       const tenantId = getCurrentTenantId();
       const currentPath = window.location.pathname;
       const basePath = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
-      const storeParam = tenantId ? `&store=${encodeURIComponent(tenantId)}` : '';
-      return `${window.location.origin}${basePath}?modo=lancamento${storeParam}`;
+      const storeParam = tenantId ? `?store=${encodeURIComponent(tenantId)}` : '';
+      return `${window.location.origin}${basePath}lancamento.html${storeParam}`;
     }
     window.getLaunchModeUrl = getLaunchModeUrl;
 
@@ -10820,6 +10838,39 @@
             }
             
             if (typeof renderKanban === 'function') renderKanban();
+
+            // GARANTIA DE DESPACHO NO IFOOD (PC MASTER):
+            // Se qualquer pedido for despachado via celular (Modo Lançamento), o PC Master onde o motor do iFood roda
+            // detecta em tempo real e garante que o comando de despacho seja transmitido para a API do iFood!
+            if (!window._pcDispatchedToApiSet) window._pcDispatchedToApiSet = new Set();
+            if (apiCredentials && apiCredentials.clientId && apiCredentials.clientSecret) {
+              remoteOrders.forEach(remOrd => {
+                const targetIfoodId = remOrd.ifoodOrderId || remOrd.id;
+                const isDispatched = remOrd.status === 'despachado';
+                const hasValidIfoodId = targetIfoodId && (remOrd.isRealIFood || remOrd.isIFood || String(targetIfoodId).length > 10);
+                if (isDispatched && hasValidIfoodId && !remOrd.ifoodDispatched && !window._pcDispatchedToApiSet.has(String(targetIfoodId))) {
+                  window._pcDispatchedToApiSet.add(String(targetIfoodId));
+                  console.log(`🚀 [PC Master Auto-Dispatch]: Despachando pedido #${remOrd.orderNumber || remOrd.id} (${targetIfoodId}) no iFood...`);
+                  fetch(`${getApiBaseUrl()}/api/ifood/order-action`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      ifoodOrderId: targetIfoodId,
+                      action: 'dispatch',
+                      clientId: apiCredentials.clientId,
+                      clientSecret: apiCredentials.clientSecret
+                    })
+                  }).then(r => r.json()).then(res => {
+                    if (res && res.success) {
+                      remOrd.ifoodDispatched = true;
+                      remOrd.needsIFoodDispatch = false;
+                      showToast('🚀 Despachado no iFood!', `Pedido #${remOrd.orderNumber || remOrd.id} despachado com sucesso via API iFood (via celular)!`, 'success');
+                      if (typeof saveOrders === 'function') saveOrders(true);
+                    }
+                  }).catch(e => console.warn('Erro PC Master auto-dispatch:', e));
+                }
+              });
+            }
           }
         }, (err) => {
           console.warn("Firebase Orders error:", err);
