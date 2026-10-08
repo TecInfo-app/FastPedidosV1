@@ -595,19 +595,28 @@
       const badge = document.getElementById('stores-count-badge');
       if (!container) return;
 
-      if (!storesList || storesList.length === 0) {
+      const visibleStores = (storesList || []).filter(store => !store.isHidden);
+
+      if (!visibleStores || visibleStores.length === 0) {
         container.innerHTML = `
           <div class="col-span-full py-2 text-center text-xs text-slate-500">
-            Nenhuma loja cadastrada.
+            Nenhuma loja visível no momento.
           </div>
         `;
         if (badge) badge.innerText = '0 lojas';
         return;
       }
 
-      if (badge) badge.innerText = `${storesList.length} ${storesList.length === 1 ? 'loja' : 'lojas'}`;
+      // Se a loja atualmente ativa estiver oculta, migra a seleção ativa para a primeira loja visível
+      const curActive = storesList.find(s => s.active);
+      if (curActive && curActive.isHidden && visibleStores.length > 0) {
+        storesList.forEach(s => { s.active = (s.id === visibleStores[0].id); });
+        updateHeaderStoreDisplay();
+      }
 
-      container.innerHTML = storesList.map(store => {
+      if (badge) badge.innerText = `${visibleStores.length} ${visibleStores.length === 1 ? 'loja' : 'lojas'}`;
+
+      container.innerHTML = visibleStores.map(store => {
         const isActive = Boolean(store.active);
         return `
           <button 
@@ -632,7 +641,8 @@
     }
 
     function updateHeaderStoreDisplay() {
-      const activeStore = storesList.find(s => s.active) || storesList[0];
+      const visibleStores = (storesList || []).filter(s => !s.isHidden);
+      const activeStore = visibleStores.find(s => s.active) || visibleStores[0] || storesList[0];
       const headerName = document.getElementById('header-store-name');
       if (headerName) {
         headerName.innerText = activeStore ? activeStore.name : (apiCredentials.storeName || currentTenantId || 'Loja');
@@ -927,7 +937,11 @@
       const createdOrders = [];
 
       rawNumbers.forEach((orderNum, idx) => {
-        const matched = findMatchingIFoodOrder(orderNum);
+        let matched = findMatchingIFoodOrder(orderNum);
+        if (!matched && idx === 0 && pendingOrderData.matchedIFoodId) {
+          matched = orders.find(o => o.id === pendingOrderData.matchedIFoodId) || null;
+        }
+
         let finalCustomerName = (matched && matched.customerName) || (idx === 0 ? pendingOrderData.customerName : '') || (activeStore ? `Pedido Avulso (${activeStore.name})` : 'Pedido Avulso');
         let finalCustomerAddress = (matched && matched.customerAddress) || (idx === 0 ? pendingOrderData.customerAddress : '') || '';
         let finalStoreName = (matched && matched.storeName) || (activeStore ? activeStore.name : 'Minha Loja');
@@ -949,6 +963,8 @@
           customerAddress: finalCustomerAddress,
           locator: detectedLocator,
           isIFood: Boolean(matched),
+          ifoodOrderId: matched ? (matched.ifoodOrderId || matched.id) : null,
+          isRealIFood: Boolean(matched && (matched.isRealIFood || matched.ifoodOrderId)),
           date: dateStr,
           createdAt: timeStr,
           timestamp: Date.now() + idx,
@@ -959,8 +975,19 @@
         createdOrders.push({ order: newMbOrder, matchedIFood: matched });
       });
 
-      // Salva no estado dos motoboys
+      // Atualiza pedidos no KDS local para 'despachado'
+      createdOrders.forEach(item => {
+        if (item.matchedIFood) {
+          if (motoboy) item.matchedIFood.assignedMotoboyId = motoboy.id;
+          item.matchedIFood.status = 'despachado';
+          item.matchedIFood.dispatchedAt = Date.now();
+          item.matchedIFood.needsIFoodDispatch = true;
+        }
+      });
+
+      // Salva no estado dos motoboys e no KDS no Firebase
       saveMotoboyOrdersToFirebase();
+      saveKdsOrdersToFirebase();
 
       // FECHA MODAIS E LIMPA ENTRADA
       closeFeeModal();
@@ -1242,11 +1269,15 @@
 
               if (Array.isArray(data.storesList) && data.storesList.length > 0) {
                 const curActive = (storesList || []).find(s => s.active);
+                const visibleStores = data.storesList.filter(s => !s.isHidden);
+                const targetActiveId = (curActive && !data.storesList.find(s => s.id === curActive.id)?.isHidden)
+                  ? curActive.id
+                  : (visibleStores[0]?.id || data.storesList[0]?.id);
+
                 storesList = data.storesList.map(s => ({
                   ...s,
-                  active: curActive ? (s.id === curActive.id) : Boolean(s.active)
+                  active: s.id === targetActiveId
                 }));
-                if (!storesList.some(s => s.active)) storesList[0].active = true;
                 renderStoreChips();
                 updateHeaderStoreDisplay();
               }
@@ -1264,6 +1295,17 @@
             const data = snap.data();
             if (data && Array.isArray(data.motoboys)) {
               motoboysList = data.motoboys.filter(m => !m.archived && m.active !== false);
+              
+              // Atualiza o modal de seleção de motoboy se estiver aberto
+              const modalMb = document.getElementById('modal-select-motoboy');
+              if (modalMb && !modalMb.classList.contains('hidden') && typeof openMotoboyModal === 'function') {
+                openMotoboyModal();
+              }
+              // Atualiza a planilha de entregas se estiver aberta
+              const modalSheet = document.getElementById('modal-motoboy-spreadsheet');
+              if (modalSheet && !modalSheet.classList.contains('hidden') && typeof openMotoboySpreadsheetModal === 'function') {
+                openMotoboySpreadsheetModal();
+              }
             }
           }
         }, (err) => console.warn('Erro sync motoboys:', err));
