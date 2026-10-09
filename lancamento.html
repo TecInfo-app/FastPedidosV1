@@ -479,15 +479,98 @@
     let motoboyOrders = [];
     let motoboysList = [];
     let storesList = [];
-    let deliveryFeesList = [];
+    let deliveryFeesList = [
+      { id: 'fee-1', name: 'Até 1 km', value: 6.00, minKm: 0, maxKm: 1 },
+      { id: 'fee-2', name: 'De 1 km a 5 km', value: 12.00, minKm: 1, maxKm: 5 },
+      { id: 'fee-3', name: 'Acima de 5 km', value: 17.00, minKm: 5, maxKm: 50 }
+    ];
     let apiCredentials = {
       clientId: '',
       clientSecret: '',
       merchantId: '',
-      customApiUrl: ''
+      customApiUrl: '',
+      storeName: '',
+      baseStoreAddress: '',
+      baseStoreLat: null,
+      baseStoreLng: null
     };
     let pendingOrderData = null;
     let deferredPrompt = null;
+
+    function ensureDefaultFeeKmRanges(list) {
+      if (!Array.isArray(list) || list.length === 0) {
+        return [
+          { id: 'fee-1', name: 'Até 1 km', value: 6.00, minKm: 0, maxKm: 1 },
+          { id: 'fee-2', name: 'De 1 km a 5 km', value: 12.00, minKm: 1, maxKm: 5 },
+          { id: 'fee-3', name: 'Acima de 5 km', value: 17.00, minKm: 5, maxKm: 50 }
+        ];
+      }
+      if (list.length === 1 && Number(list[0].value) === 5 && list[0].name === 'Taxa Padrão') {
+        return [
+          { id: 'fee-1', name: 'Até 1 km', value: 6.00, minKm: 0, maxKm: 1 },
+          { id: 'fee-2', name: 'De 1 km a 5 km', value: 12.00, minKm: 1, maxKm: 5 },
+          { id: 'fee-3', name: 'Acima de 5 km', value: 17.00, minKm: 5, maxKm: 50 }
+        ];
+      }
+      const hasKm = list.some(f => f.maxKm !== undefined && f.maxKm !== null && !isNaN(Number(f.maxKm)));
+      if (!hasKm) {
+        list.forEach(f => {
+          const v = Number(f.value || 0);
+          if (v > 0 && v <= 8) {
+            f.minKm = 0;
+            f.maxKm = 1;
+          } else if (v > 8 && v <= 14) {
+            f.minKm = 1;
+            f.maxKm = 5;
+          } else if (v > 14) {
+            f.minKm = 5;
+            f.maxKm = 50;
+          }
+        });
+      }
+      return list;
+    }
+
+    function getResolvedTenantId() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const fromUrl = urlParams.get('store') || urlParams.get('loja') || urlParams.get('s') || urlParams.get('tenant');
+      if (fromUrl) return fromUrl.trim();
+      try {
+        const sess = JSON.parse(localStorage.getItem('fast_pedidos_session_v1') || '{}');
+        if (sess.tenantId) return sess.tenantId;
+        if (sess.username) return sess.username.replace(/[^a-zA-Z0-9_-]/g, '_');
+      } catch(e) {}
+      const lastT = localStorage.getItem('last_tenant_id') || localStorage.getItem('portal_last_store_id');
+      if (lastT) return lastT;
+      return '';
+    }
+
+    function initLocalStorageCache() {
+      try {
+        const tid = getResolvedTenantId();
+        if (tid) {
+          const cachedStores = localStorage.getItem('launch_stores_' + tid);
+          if (cachedStores) {
+            storesList = JSON.parse(cachedStores);
+            renderStoreChips();
+            updateHeaderStoreDisplay();
+          }
+          const cachedMb = localStorage.getItem('launch_motoboys_' + tid);
+          if (cachedMb) {
+            motoboysList = JSON.parse(cachedMb);
+          }
+          const cachedFees = localStorage.getItem('launch_fees_' + tid);
+          if (cachedFees) {
+            deliveryFeesList = ensureDefaultFeeKmRanges(JSON.parse(cachedFees));
+          } else {
+            deliveryFeesList = ensureDefaultFeeKmRanges([]);
+          }
+        } else {
+          deliveryFeesList = ensureDefaultFeeKmRanges([]);
+        }
+      } catch(e) {}
+    }
+    initLocalStorageCache();
 
     // --- SONS E ALERTAS ---
     let audioCtx = null;
@@ -682,14 +765,136 @@
       });
     }
 
+    // --- CÁLCULO DE DISTÂNCIA E TAXAS POR KM ---
+    function haversineRoadDistanceKmClient(lat1, lng1, lat2, lng2) {
+      const toRad = (deg) => (deg * Math.PI) / 180;
+      const R = 6371;
+      const dLat = toRad(lat2 - lat1);
+      const dLng = toRad(lng2 - lng1);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return Math.round(R * c * 1.28 * 10) / 10;
+    }
+
+    const _pendingDistanceResolvers = new Map();
+
+    async function resolveOrderDistance(order) {
+      if (!order) return null;
+      if (order.distanceKm !== undefined && order.distanceKm !== null && !isNaN(Number(order.distanceKm)) && Number(order.distanceKm) > 0 && Number(order.distanceKm) <= 60) {
+        return Number(order.distanceKm);
+      }
+
+      // Se temos coordenadas da loja e do cliente
+      let sLat = order.storeLat ? Number(order.storeLat) : (apiCredentials.baseStoreLat ? Number(apiCredentials.baseStoreLat) : null);
+      let sLng = order.storeLng ? Number(order.storeLng) : (apiCredentials.baseStoreLng ? Number(apiCredentials.baseStoreLng) : null);
+      let cLat = order.customerLat ? Number(order.customerLat) : null;
+      let cLng = order.customerLng ? Number(order.customerLng) : null;
+
+      if (sLat && sLng && cLat && cLng) {
+        let dist = haversineRoadDistanceKmClient(sLat, sLng, cLat, cLng);
+        try {
+          const osrmRes = await fetch(`https://router.project-osrm.org/route/v1/driving/${sLng},${sLat};${cLng},${cLat}?overview=false`);
+          if (osrmRes.ok) {
+            const osrmData = await osrmRes.json();
+            if (osrmData?.routes?.[0]?.distance !== undefined) {
+              dist = Math.round((Number(osrmData.routes[0].distance) / 1000) * 10) / 10;
+            }
+          }
+        } catch (e) {}
+        if (dist > 0 && dist <= 60) {
+          order.distanceKm = dist;
+          if (typeof window.saveKdsOrdersToFirebase === 'function') window.saveKdsOrdersToFirebase();
+          return dist;
+        }
+      }
+
+      const orderKey = order.ifoodOrderId || order.id;
+      if (!orderKey) return null;
+      if (_pendingDistanceResolvers.has(orderKey)) {
+        return await _pendingDistanceResolvers.get(orderKey);
+      }
+
+      const resolverPromise = (async () => {
+        try {
+          const apiBase = getApiBaseUrl();
+          if (apiCredentials.clientId && apiCredentials.clientSecret) {
+            const targetMerchantId = order.merchantId || apiCredentials.merchantId || '';
+            const res = await fetch(`${apiBase}/api/ifood/order-distance`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ifoodOrderId: order.ifoodOrderId || order.id,
+                merchantId: targetMerchantId,
+                clientId: apiCredentials.clientId,
+                clientSecret: apiCredentials.clientSecret,
+                customerAddress: order.customerAddress || '',
+                customerLat: order.customerLat,
+                customerLng: order.customerLng,
+                storeLat: order.storeLat || apiCredentials.baseStoreLat,
+                storeLng: order.storeLng || apiCredentials.baseStoreLng
+              })
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data && data.success && data.distanceKm && Number(data.distanceKm) <= 60) {
+                const km = Number(data.distanceKm);
+                order.distanceKm = km;
+                if (data.storeLat) order.storeLat = data.storeLat;
+                if (data.storeLng) order.storeLng = data.storeLng;
+                if (data.customerLat) order.customerLat = data.customerLat;
+                if (data.customerLng) order.customerLng = data.customerLng;
+                if (typeof window.saveKdsOrdersToFirebase === 'function') window.saveKdsOrdersToFirebase();
+                return km;
+              }
+            }
+          }
+        } catch(e) {}
+        return null;
+      })();
+
+      _pendingDistanceResolvers.set(orderKey, resolverPromise);
+      try {
+        return await resolverPromise;
+      } finally {
+        _pendingDistanceResolvers.delete(orderKey);
+      }
+    }
+
     function findFeeByDistanceKm(distanceKm) {
-      if (!distanceKm || isNaN(Number(distanceKm))) return null;
-      const dist = Number(distanceKm);
-      return deliveryFeesList.find(f => {
-        const min = Number(f.minKm ?? 0);
-        const max = Number(f.maxKm ?? 9999);
-        return dist >= min && dist < max;
-      }) || deliveryFeesList[0] || null;
+      if (distanceKm === null || distanceKm === undefined || isNaN(Number(distanceKm))) return null;
+      const km = Number(distanceKm);
+      if (km < 0) return null;
+
+      deliveryFeesList = ensureDefaultFeeKmRanges(deliveryFeesList);
+      const visibleFees = (deliveryFeesList || []).filter(f => !f.isHidden);
+      const kmFees = visibleFees
+        .filter(f => f.maxKm !== undefined && f.maxKm !== null && !isNaN(Number(f.maxKm)) && Number(f.maxKm) > 0)
+        .sort((a, b) => Number(a.maxKm) - Number(b.maxKm));
+
+      if (kmFees.length === 0) {
+        return visibleFees[0] || deliveryFeesList[0] || null;
+      }
+
+      // 1. Procura a faixa que comporta o KM (ex: min 0 max 1 comporta 0.8; min 1 max 5 comporta 3.2)
+      for (const fee of kmFees) {
+        const min = Number(fee.minKm || 0);
+        const max = Number(fee.maxKm);
+        if (km >= min && km <= max) {
+          return fee;
+        }
+      }
+
+      // 2. Fração entre faixas
+      for (const fee of kmFees) {
+        if (km <= Number(fee.maxKm)) {
+          return fee;
+        }
+      }
+
+      // 3. Se ultrapassar o maior KM cadastrado, aplica a maior faixa
+      return kmFees[kmFees.length - 1];
     }
 
     // --- FORMULÁRIO DE LANÇAMENTO ---
@@ -717,14 +922,45 @@
         if (statusEl) statusEl.textContent = match.status ? match.status.toUpperCase() : 'NOVO';
         if (addrEl) addrEl.textContent = match.customerAddress || 'Endereço iFood sincronizado';
 
-        if (match.distanceKm && Number(match.distanceKm) > 0) {
-          const fee = findFeeByDistanceKm(match.distanceKm);
+        const km = (match.distanceKm && Number(match.distanceKm) > 0 && Number(match.distanceKm) <= 60)
+          ? Number(match.distanceKm)
+          : null;
+
+        if (km !== null) {
+          const fee = findFeeByDistanceKm(km);
+          const kmFormatted = km.toFixed(1).replace('.', ',');
           if (distFeeEl) {
-            distFeeEl.textContent = `📍 ${Number(match.distanceKm).toFixed(1)} km &rarr; Taxa: ${fee ? formatCurrency(fee.value) : 'Consultar'}`;
+            distFeeEl.innerHTML = `📍 ${kmFormatted} km &bull; 💰 Taxa Auto: ${fee ? formatCurrency(fee.value) : 'Consultar'}`;
             distFeeEl.classList.remove('hidden');
           }
-        } else if (distFeeEl) {
-          distFeeEl.classList.add('hidden');
+        } else {
+          if (distFeeEl) {
+            distFeeEl.innerHTML = `📍 Calculando KM...`;
+            distFeeEl.classList.remove('hidden');
+          }
+          resolveOrderDistance(match).then(resolvedKm => {
+            if (resolvedKm && resolvedKm > 0) {
+              const fee = findFeeByDistanceKm(resolvedKm);
+              const kmFormatted = Number(resolvedKm).toFixed(1).replace('.', ',');
+              if (distFeeEl) {
+                distFeeEl.innerHTML = `📍 ${kmFormatted} km &bull; 💰 Taxa Auto: ${fee ? formatCurrency(fee.value) : 'Consultar'}`;
+                distFeeEl.classList.remove('hidden');
+              }
+              if (pendingOrderData && pendingOrderData.matchedIFoodId === match.id) {
+                pendingOrderData.detectedDistanceKm = Number(resolvedKm);
+                if (fee) {
+                  pendingOrderData.autoFeeValue = Number(fee.value);
+                  pendingOrderData.autoFeeName = `${fee.name} (${kmFormatted} km)`;
+                }
+                const modal = document.getElementById('modal-select-motoboy');
+                if (modal && !modal.classList.contains('hidden')) {
+                  openMotoboyModal();
+                }
+              }
+            } else if (distFeeEl) {
+              distFeeEl.classList.add('hidden');
+            }
+          });
         }
 
         if (match.storeName && storeEl) {
@@ -773,8 +1009,11 @@
       if (matchedIFood) {
         customerName = matchedIFood.customerName || customerName || 'Cliente iFood';
         customerAddress = matchedIFood.customerAddress || customerAddress;
-        if (matchedIFood.distanceKm && Number(matchedIFood.distanceKm) > 0) {
-          detectedDistanceKm = Number(matchedIFood.distanceKm);
+        const km = (matchedIFood.distanceKm && Number(matchedIFood.distanceKm) > 0 && Number(matchedIFood.distanceKm) <= 60)
+          ? Number(matchedIFood.distanceKm)
+          : null;
+        if (km !== null) {
+          detectedDistanceKm = km;
           const fee = findFeeByDistanceKm(detectedDistanceKm);
           if (fee) {
             autoFeeValue = Number(fee.value);
@@ -796,6 +1035,31 @@
       };
 
       openMotoboyModal();
+
+      // Se ainda não temos a taxa calculada para o pedido iFood, resolve agora e atualiza o modal na hora!
+      if (matchedIFood && (!detectedDistanceKm || !autoFeeValue)) {
+        resolveOrderDistance(matchedIFood).then(resolvedKm => {
+          if (resolvedKm && resolvedKm > 0) {
+            const fee = findFeeByDistanceKm(resolvedKm);
+            if (fee && pendingOrderData && pendingOrderData.matchedIFoodId === matchedIFood.id) {
+              pendingOrderData.detectedDistanceKm = Number(resolvedKm);
+              pendingOrderData.autoFeeValue = Number(fee.value);
+              pendingOrderData.autoFeeName = `${fee.name} (${Number(resolvedKm).toFixed(1).replace('.', ',')} km)`;
+              const modal = document.getElementById('modal-select-motoboy');
+              if (modal && !modal.classList.contains('hidden')) {
+                openMotoboyModal();
+              }
+            }
+          }
+        });
+      }
+    }
+
+    function enableManualFeeForPendingOrder() {
+      if (!pendingOrderData) return;
+      pendingOrderData.autoFeeValue = null;
+      pendingOrderData.autoFeeName = null;
+      openMotoboyModal();
     }
 
     // --- MODAL DE MOTOBOY ---
@@ -805,22 +1069,39 @@
       const infoEl = document.getElementById('modal-motoboy-order-info');
       if (!modal || !list) return;
 
+      const hasAutoFee = Boolean(pendingOrderData && pendingOrderData.autoFeeValue && pendingOrderData.autoFeeValue > 0);
+      const kmText = (pendingOrderData && pendingOrderData.detectedDistanceKm)
+        ? `${Number(pendingOrderData.detectedDistanceKm).toFixed(1).replace('.', ',')} km`
+        : '';
+      const autoFeeBadge = hasAutoFee
+        ? `<span class="inline-flex items-center gap-1 font-black text-indigo-900 bg-indigo-100 border border-indigo-300 px-2 py-0.5 rounded text-[10px]">📍 ${kmText} &rarr; 💰 Taxa Auto: ${formatCurrency(pendingOrderData.autoFeeValue)}</span>`
+        : '';
+      const manualOverrideBtn = hasAutoFee
+        ? `<button type="button" onclick="enableManualFeeForPendingOrder()" class="text-[10px] font-bold text-slate-600 hover:text-slate-900 underline mt-1 block cursor-pointer">Alterar taxa manualmente</button>`
+        : '';
+
       if (infoEl && pendingOrderData) {
         if (pendingOrderData.matchedIFoodId) {
           infoEl.innerHTML = `
             <div class="p-3 bg-red-50 border border-red-200 rounded-2xl flex items-center justify-between gap-2 text-xs">
-              <div class="space-y-0.5">
-                <span class="font-black text-red-950 block">Pedido iFood #${pendingOrderData.orderNumber}</span>
-                <span class="text-[11px] text-red-800 font-medium block">${escapeHtml(pendingOrderData.customerName)}</span>
+              <div class="space-y-1">
+                <span class="font-extrabold text-red-950 block">Pedido iFood #${pendingOrderData.orderNumber}</span>
+                <span class="text-[11px] text-red-800 font-medium block">${escapeHtml(pendingOrderData.customerName || 'Cliente iFood')}</span>
+                <div class="flex items-center gap-1.5 flex-wrap pt-0.5">
+                  ${pendingOrderData.detectedStoreName ? `<span class="px-2 py-0.5 rounded bg-slate-200 text-slate-800 font-bold text-[10px]">🏪 ${escapeHtml(pendingOrderData.detectedStoreName)}</span>` : ''}
+                  ${autoFeeBadge}
+                </div>
+                ${manualOverrideBtn}
               </div>
-              <span class="px-2 py-0.5 rounded-full bg-red-600 text-white font-black text-[10px] uppercase">Despacho Automático</span>
+              <span class="px-2 py-0.5 rounded-full bg-red-600 text-white font-black text-[10px] uppercase tracking-wider shrink-0">Despacho Automático</span>
             </div>
           `;
           infoEl.classList.remove('hidden');
         } else {
           infoEl.innerHTML = `
-            <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800">
-              Pedido #${pendingOrderData.orderNumber}
+            <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 space-y-1">
+              <div>Pedido #${pendingOrderData.orderNumber} ${pendingOrderData.customerName ? '&bull; ' + escapeHtml(pendingOrderData.customerName) : ''}</div>
+              ${autoFeeBadge ? `<div class="pt-0.5">${autoFeeBadge}</div>` : ''}
             </div>
           `;
           infoEl.classList.remove('hidden');
@@ -835,11 +1116,15 @@
           </div>
         `;
       } else {
+        const actionLabel = hasAutoFee
+          ? `Lançar (${formatCurrency(pendingOrderData.autoFeeValue)}) →`
+          : 'Selecionar →';
+
         list.innerHTML = visibleMb.map(mb => `
           <button 
             type="button" 
             onclick="selectMotoboyForPendingOrder('${escapeHtml(mb.id)}')" 
-            class="w-full p-3.5 bg-slate-50 hover:bg-amber-50 active:scale-98 border border-slate-200 hover:border-amber-400 rounded-2xl flex items-center justify-between transition cursor-pointer text-left">
+            class="w-full p-3.5 bg-slate-50 hover:bg-amber-50 active:scale-98 border border-slate-200 hover:border-amber-400 rounded-2xl flex items-center justify-between transition cursor-pointer text-left group">
             <div class="flex items-center gap-3">
               <div class="w-9 h-9 rounded-full bg-slate-950 text-white flex items-center justify-center font-black text-sm shrink-0">
                 ${mb.name ? mb.name.charAt(0).toUpperCase() : 'M'}
@@ -849,7 +1134,7 @@
                 <span class="block text-[11px] text-slate-500 font-medium">${escapeHtml(mb.phone || 'Entregador')}</span>
               </div>
             </div>
-            <span class="text-xs font-bold text-amber-600">Selecionar →</span>
+            <span class="text-xs font-bold ${hasAutoFee ? 'text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl' : 'text-amber-600'} group-hover:translate-x-0.5 transition">${actionLabel}</span>
           </button>
         `).join('');
       }
@@ -867,8 +1152,8 @@
       pendingOrderData.motoboyId = mbId;
       closeMotoboyModal();
 
-      // Se temos taxa automática de KM para iFood, já lança direto!
-      if (pendingOrderData.matchedIFoodId && pendingOrderData.autoFeeValue > 0) {
+      // Se temos taxa automática de KM calculada, já lança direto sem precisar escolher taxa!
+      if (pendingOrderData.autoFeeValue && pendingOrderData.autoFeeValue > 0) {
         confirmOrderWithFee(pendingOrderData.autoFeeValue, pendingOrderData.autoFeeName || 'Taxa por KM');
         return;
       }
@@ -893,12 +1178,17 @@
         infoEl.classList.remove('hidden');
       }
 
-      list.innerHTML = (deliveryFeesList || []).map(fee => `
+      deliveryFeesList = ensureDefaultFeeKmRanges(deliveryFeesList);
+      const visibleFees = (deliveryFeesList || []).filter(f => !f.isHidden);
+      list.innerHTML = visibleFees.map(fee => `
         <button 
           type="button" 
           onclick="confirmOrderWithFee(${fee.value}, '${escapeHtml(fee.name || 'Taxa Fixa')}')" 
           class="w-full p-3.5 bg-slate-50 hover:bg-emerald-50 active:scale-98 border border-slate-200 hover:border-emerald-400 rounded-2xl flex items-center justify-between transition cursor-pointer text-left">
-          <span class="text-base font-black text-emerald-700 font-mono">${formatCurrency(fee.value)}</span>
+          <div>
+            <span class="text-base font-black text-emerald-700 font-mono block">${formatCurrency(fee.value)}</span>
+            ${fee.minKm !== undefined && fee.maxKm !== undefined ? `<span class="text-[10px] text-slate-400 font-bold">${fee.minKm} a ${fee.maxKm} km</span>` : ''}
+          </div>
           <span class="text-[11px] font-bold text-slate-500 uppercase">[ ${escapeHtml(fee.name || 'TAXA')} ]</span>
         </button>
       `).join('');
@@ -1266,6 +1556,9 @@
               if (data.merchantId) apiCredentials.merchantId = data.merchantId;
               if (data.customApiUrl) apiCredentials.customApiUrl = data.customApiUrl;
               if (data.storeName) apiCredentials.storeName = data.storeName;
+              if (data.baseStoreAddress) apiCredentials.baseStoreAddress = data.baseStoreAddress;
+              if (data.baseStoreLat) apiCredentials.baseStoreLat = data.baseStoreLat;
+              if (data.baseStoreLng) apiCredentials.baseStoreLng = data.baseStoreLng;
 
               if (Array.isArray(data.storesList) && data.storesList.length > 0) {
                 const curActive = (storesList || []).find(s => s.active);
@@ -1278,12 +1571,23 @@
                   ...s,
                   active: s.id === targetActiveId
                 }));
+                try {
+                  localStorage.setItem('launch_stores_' + tenantId, JSON.stringify(storesList));
+                } catch(e) {}
                 renderStoreChips();
                 updateHeaderStoreDisplay();
               }
 
               if (Array.isArray(data.deliveryFeesList) && data.deliveryFeesList.length > 0) {
-                deliveryFeesList = data.deliveryFeesList;
+                deliveryFeesList = ensureDefaultFeeKmRanges(data.deliveryFeesList);
+                try {
+                  localStorage.setItem('launch_fees_' + tenantId, JSON.stringify(deliveryFeesList));
+                } catch(e) {}
+                // Atualiza banner ou modal se houver pedido sendo digitado
+                const qInput = document.getElementById('quick-order-input');
+                if (qInput && qInput.value && typeof handleQuickOrderInput === 'function') {
+                  handleQuickOrderInput(qInput.value);
+                }
               }
             }
           }
@@ -1294,7 +1598,12 @@
           if (snap.exists()) {
             const data = snap.data();
             if (data && Array.isArray(data.motoboys)) {
-              motoboysList = data.motoboys.filter(m => !m.archived && m.active !== false);
+              const filteredMb = data.motoboys.filter(m => !m.archived && m.active !== false);
+              filteredMb.sort((a, b) => (a.order ?? 999999) - (b.order ?? 999999));
+              motoboysList = filteredMb;
+              try {
+                localStorage.setItem('launch_motoboys_' + tenantId, JSON.stringify(motoboysList));
+              } catch(e) {}
               
               // Atualiza o modal de seleção de motoboy se estiver aberto
               const modalMb = document.getElementById('modal-select-motoboy');
@@ -1328,6 +1637,10 @@
             if (data && Array.isArray(data.orders)) {
               orders = data.orders.filter(o => !o.archived);
               console.log(`📦 [Modo Lançamento]: ${orders.length} pedidos iFood sincronizados da nuvem.`);
+              const qInput = document.getElementById('quick-order-input');
+              if (qInput && qInput.value && typeof handleQuickOrderInput === 'function') {
+                handleQuickOrderInput(qInput.value);
+              }
             }
           }
         }, (err) => console.warn('Erro sync KDS orders:', err));
@@ -1340,8 +1653,9 @@
       window.startLaunchModeSync = startLaunchModeSync;
 
       // Auto-inicia conexão usando URL ou LocalStorage
-      const urlParams = new URLSearchParams(window.location.search);
-      const storeParam = urlParams.get('store') || urlParams.get('loja') || localStorage.getItem('last_tenant_id') || localStorage.getItem('portal_last_store_id');
+      const storeParam = typeof getResolvedTenantId === 'function'
+        ? getResolvedTenantId()
+        : (new URLSearchParams(window.location.search).get('store') || localStorage.getItem('last_tenant_id') || localStorage.getItem('portal_last_store_id'));
       if (storeParam) {
         startLaunchModeSync(storeParam);
       } else {
