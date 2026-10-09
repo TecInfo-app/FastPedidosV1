@@ -10498,7 +10498,7 @@
   <!-- FIREBASE FIRESTORE REAL-TIME MULTI-DEVICE SYNC & AUTH MODULE -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, collection, onSnapshot, setDoc, doc, deleteDoc, query, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { initializeFirestore, getFirestore, collection, onSnapshot, setDoc, doc, deleteDoc, query, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
     const firebaseConfig = {
@@ -10512,7 +10512,7 @@
 
     try {
       const app = initializeApp(firebaseConfig);
-      const db = getFirestore(app);
+      const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
       const auth = getAuth(app);
 
       window.firebaseDb = db;

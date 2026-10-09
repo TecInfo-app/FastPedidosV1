@@ -1485,7 +1485,7 @@
   <!-- FIREBASE REAL-TIME CLOUD SYNC MODULE (ISOLADO E SEM ENGINE DE POLLING IFOOD) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, doc, collection, onSnapshot, setDoc, getDocs, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { initializeFirestore, getFirestore, doc, collection, onSnapshot, setDoc, getDocs, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBow5AERyHHi3_zpmPwiV9SKhHfW-ltCHY",
@@ -1503,7 +1503,7 @@
 
     try {
       const app = initializeApp(firebaseConfig);
-      const db = getFirestore(app);
+      const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
 
       window.firebaseDb = db;
       window.firebaseDoc = doc;
