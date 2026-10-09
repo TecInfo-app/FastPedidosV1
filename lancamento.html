@@ -15,7 +15,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Lançamento">
   
-  <!-- Dynamic PWA Manifest com Loja Vinculada para Instalação no Celular -->
+  <!-- Armazenamento de Parâmetro de Loja para PWA -->
   <script>
     (function() {
       try {
@@ -25,43 +25,7 @@
           localStorage.setItem('last_tenant_id', storeId);
           localStorage.setItem('portal_last_store_id', storeId);
         }
-        
-        var basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
-        var origin = window.location.origin;
-        var startUrl = storeId 
-          ? origin + basePath + 'lancamento.html?store=' + encodeURIComponent(storeId) 
-          : origin + basePath + 'lancamento.html';
-        var scopeUrl = origin + basePath;
-        var iconSvgUrl = origin + basePath + 'icon.svg';
-        var iconPng192Url = origin + basePath + 'pwa-192x192.png';
-        var iconPng512Url = origin + basePath + 'pwa-512x512.png';
-
-        var dynamicManifest = {
-          name: "Fast Pedidos - Modo Lançamento",
-          short_name: "Lançamento",
-          description: "Lançamento rápido de pedidos e acompanhamento de entregas em tempo real",
-          start_url: startUrl,
-          scope: scopeUrl,
-          display: "standalone",
-          orientation: "portrait",
-          background_color: "#090d16",
-          theme_color: "#00875a",
-          icons: [
-            { src: iconSvgUrl, sizes: "192x192 512x512 any", type: "image/svg+xml", purpose: "any" },
-            { src: iconSvgUrl, sizes: "512x512 any", type: "image/svg+xml", purpose: "maskable" },
-            { src: iconPng192Url, sizes: "192x192", type: "image/png" },
-            { src: iconPng512Url, sizes: "512x512", type: "image/png" }
-          ]
-        };
-        var blob = new Blob([JSON.stringify(dynamicManifest)], { type: 'application/json' });
-        var manifestURL = URL.createObjectURL(blob);
-        var manifestEl = document.querySelector('link[rel="manifest"]');
-        if (manifestEl) {
-          manifestEl.setAttribute('href', manifestURL);
-        }
-      } catch (e) {
-        console.warn('Dynamic manifest-lancamento error:', e);
-      }
+      } catch (e) {}
     })();
   </script>
 
@@ -1180,18 +1144,27 @@
 
       deliveryFeesList = ensureDefaultFeeKmRanges(deliveryFeesList);
       const visibleFees = (deliveryFeesList || []).filter(f => !f.isHidden);
-      list.innerHTML = visibleFees.map(fee => `
+      const recommendedFee = (pendingOrderData && pendingOrderData.detectedDistanceKm)
+        ? findFeeByDistanceKm(pendingOrderData.detectedDistanceKm)
+        : null;
+
+      list.innerHTML = visibleFees.map(fee => {
+        const isRec = recommendedFee && recommendedFee.id === fee.id;
+        return `
         <button 
           type="button" 
           onclick="confirmOrderWithFee(${fee.value}, '${escapeHtml(fee.name || 'Taxa Fixa')}')" 
-          class="w-full p-3.5 bg-slate-50 hover:bg-emerald-50 active:scale-98 border border-slate-200 hover:border-emerald-400 rounded-2xl flex items-center justify-between transition cursor-pointer text-left">
+          class="w-full p-3.5 ${isRec ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500/30' : 'bg-slate-50 border-slate-200 hover:bg-emerald-50 hover:border-emerald-400'} active:scale-98 border rounded-2xl flex items-center justify-between transition cursor-pointer text-left">
           <div>
-            <span class="text-base font-black text-emerald-700 font-mono block">${formatCurrency(fee.value)}</span>
+            <div class="flex items-center gap-2">
+              <span class="text-base font-black text-emerald-700 font-mono block">${formatCurrency(fee.value)}</span>
+              ${isRec ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-600 text-white uppercase">Sugerida por KM</span>` : ''}
+            </div>
             ${fee.minKm !== undefined && fee.maxKm !== undefined ? `<span class="text-[10px] text-slate-400 font-bold">${fee.minKm} a ${fee.maxKm} km</span>` : ''}
           </div>
           <span class="text-[11px] font-bold text-slate-500 uppercase">[ ${escapeHtml(fee.name || 'TAXA')} ]</span>
         </button>
-      `).join('');
+      `}).join('');
 
       modal.classList.remove('hidden');
     }
@@ -1241,6 +1214,14 @@
           detectedLocator = matched.phoneLocalizer || matched.locator || '';
         }
 
+        const finalDist = (matched && matched.distanceKm)
+          ? Number(matched.distanceKm)
+          : ((pendingOrderData && pendingOrderData.detectedDistanceKm) ? Number(pendingOrderData.detectedDistanceKm) : null);
+
+        if (matched && !matched.distanceKm && finalDist) {
+          matched.distanceKm = finalDist;
+        }
+
         const newMbOrder = {
           id: 'ord-' + (Date.now() + idx),
           orderNumber: orderNum,
@@ -1248,7 +1229,7 @@
           storeName: finalStoreName,
           deliveryFee: Number(feeValue) || 0,
           feeName: feeName || 'Taxa Fixa',
-          distanceKm: (matched && matched.distanceKm) ? Number(matched.distanceKm) : null,
+          distanceKm: finalDist,
           customerName: finalCustomerName,
           customerAddress: finalCustomerAddress,
           locator: detectedLocator,
