@@ -453,10 +453,27 @@
               <span class="text-[10px] font-semibold text-emerald-100 block leading-tight">Para celulares (sem conflito no motor iFood)</span>
             </div>
           </div>
-          <span class="px-2 py-0.5 rounded-full bg-white text-emerald-800 font-black text-[10px] uppercase shadow-2xs shrink-0">
-            QR / Link
+        <!-- Botão Servidor de Recepção 24h -->
+        <a 
+          id="drawer-open-service-link"
+          href="./servico.html" 
+          target="_blank" 
+          onclick="closeDrawer()" 
+          class="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 hover:from-slate-800 hover:to-indigo-900 text-white font-black text-xs sm:text-sm flex items-center justify-between shadow-md shadow-indigo-950/30 active:scale-98 transition cursor-pointer border border-indigo-500/30">
+          <div class="flex items-center gap-2.5 text-left">
+            <div class="w-7 h-7 rounded-xl bg-indigo-500/30 flex items-center justify-center shrink-0 text-white font-bold text-xs">
+              ⚡
+            </div>
+            <div>
+              <span class="block leading-tight">Servidor de Recepção 24h</span>
+              <span class="text-[10px] font-semibold text-indigo-300 block leading-tight">Aba dedicada para capturar pedidos iFood</span>
+            </div>
+          </div>
+          <span class="px-2 py-0.5 rounded-full bg-indigo-500 text-white font-black text-[10px] uppercase shadow-2xs shrink-0 flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            Abrir &rarr;
           </span>
-        </button>
+        </a>
 
         <!-- Toggle de Som / Alarme Sonoro -->
         <div class="flex items-center justify-between gap-2 p-2.5 bg-white rounded-2xl border border-slate-200 shadow-2xs">
@@ -920,6 +937,53 @@
           <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Merchant ID / UUID (Loja de Teste)</label>
           <input type="text" id="cfg-merchant-id" placeholder="ex: cb590ecf-031b-4988-9ee9-83f8912388c8" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-mono focus:ring-2 focus:ring-ifood-red focus:border-ifood-red outline-none transition">
           <span class="text-[11px] text-slate-400 mt-1 block">ID/UUID da sua Loja de Teste iFood</span>
+        </div>
+
+        <!-- SERVIDOR DEDICADO DE RECEPÇÃO 24H -->
+        <div class="p-3.5 bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-2xl border border-indigo-500/30 shadow-md">
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-xl bg-indigo-500 text-white flex items-center justify-center font-black text-sm shadow shrink-0">
+                ⚡
+              </div>
+              <div>
+                <h4 class="text-xs font-black text-white flex items-center gap-1.5">
+                  Servidor de Recepção 24h
+                  <span class="px-1.5 py-0.2 rounded text-[9px] bg-indigo-500/30 text-indigo-300 font-bold uppercase">Recomendado</span>
+                </h4>
+                <p class="text-[11px] text-slate-300 mt-0.5">
+                  Deixe uma aba dedicada aberta capturando pedidos ininterruptamente.
+                </p>
+              </div>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button 
+                type="button" 
+                onclick="copyServiceUrl()" 
+                title="Copiar Link do Servidor" 
+                class="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-bold border border-slate-700 transition cursor-pointer">
+                📋
+              </button>
+              <a 
+                id="cfg-open-service-link" 
+                href="./servico.html" 
+                target="_blank" 
+                class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-xs rounded-xl flex items-center gap-1 transition shadow cursor-pointer">
+                <span>Abrir Servidor</span>
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+              </a>
+            </div>
+          </div>
+
+          <!-- Toggle de Polling Local vs Servidor Dedicado -->
+          <div class="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-xs">
+            <span class="text-slate-300 text-[11px]">Buscar pedidos nesta tela principal:</span>
+            <label class="inline-flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="cfg-toggle-local-polling" onchange="handleToggleLocalPolling(this.checked)" class="sr-only peer" checked>
+              <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+              <span id="cfg-local-polling-status" class="text-[11px] font-bold text-emerald-400">Ativo</span>
+            </label>
+          </div>
         </div>
 
         <div class="pt-2 flex items-center justify-between border-t border-slate-100">
@@ -4897,6 +4961,8 @@
       if (drawer) drawer.classList.remove('translate-x-full');
       if (backdrop) backdrop.classList.remove('hidden');
       document.body.classList.add('overflow-hidden');
+      const drawerLink = document.getElementById('drawer-open-service-link');
+      if (drawerLink && typeof getServiceUrl === 'function') drawerLink.href = getServiceUrl();
       const resolvedTab = (tabToOpen === 'tab-config-api' || tabToOpen === 'tab-homolog') ? 'tab-advanced' : tabToOpen;
       switchDrawerTab(resolvedTab, false);
     }
@@ -10027,6 +10093,55 @@
     }
     window.shareLaunchLinkWhatsApp = shareLaunchLinkWhatsApp;
 
+    // --- SERVIDOR DEDICADO DE RECEPÇÃO IFOOD (24H EM SEGUNDO PLANO) ---
+    function getServiceUrl() {
+      const tenantId = getCurrentTenantId();
+      const currentPath = window.location.pathname;
+      const basePath = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+      const storeParam = tenantId ? `?store=${encodeURIComponent(tenantId)}` : '';
+      return `${window.location.origin}${basePath}servico.html${storeParam}`;
+    }
+    window.getServiceUrl = getServiceUrl;
+
+    function copyServiceUrl() {
+      const url = getServiceUrl();
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(() => {
+          showToast('Link Copiado!', 'Link do Servidor de Recepção copiado.', 'success');
+        }).catch(() => {});
+      }
+      const cfgLink = document.getElementById('cfg-open-service-link');
+      if (cfgLink) cfgLink.href = url;
+    }
+    window.copyServiceUrl = copyServiceUrl;
+
+    function handleToggleLocalPolling(isEnabled) {
+      const statusText = document.getElementById('cfg-local-polling-status');
+      if (isEnabled) {
+        localStorage.removeItem('fast_pedidos_disable_local_polling');
+        if (statusText) {
+          statusText.textContent = 'Ativo (busca pedidos nesta tela)';
+          statusText.className = 'text-[11px] font-bold text-emerald-400';
+        }
+        if (!pollingInterval) {
+          pollingInterval = setInterval(pollIFoodOrders, 2500);
+        }
+        showToast('Busca Local Ativada', 'Esta tela voltará a consultar a API do iFood a cada 2.5s.', 'info');
+      } else {
+        localStorage.setItem('fast_pedidos_disable_local_polling', '1');
+        if (statusText) {
+          statusText.textContent = 'Pausado (usando Servidor Dedicado)';
+          statusText.className = 'text-[11px] font-bold text-amber-400';
+        }
+        if (pollingInterval) {
+          clearInterval(pollingInterval);
+          pollingInterval = null;
+        }
+        showToast('Busca Local Pausada', 'Esta tela agora recebe pedidos exclusivamente via Firebase do Servidor Dedicado.', 'info');
+      }
+    }
+    window.handleToggleLocalPolling = handleToggleLocalPolling;
+
     function checkAuthStateOnLoad() {
       try {
         const urlParams = new URLSearchParams(window.location.search);
@@ -10347,20 +10462,39 @@
         });
       });
 
-      // Start polling loop every 2.5 seconds ONLY on the Main Link (never in Launch Mode or Motoboy Portal)
+      // Start polling loop every 2.5 seconds ONLY on the Main Link (never in Launch Mode, Motoboy Portal or when using Dedicated Server)
       const isLaunchOrPortal = document.documentElement.classList.contains('in-launch-mode') ||
         document.documentElement.classList.contains('in-portal-mode') ||
         window.location.search.includes('modo=lancamento') ||
         window.location.search.includes('mode=launch') ||
         window.location.search.includes('portal=motoboy');
-      if (!isLaunchOrPortal) {
+      const isLocalPollingDisabled = localStorage.getItem('fast_pedidos_disable_local_polling') === '1';
+
+      if (!isLaunchOrPortal && !isLocalPollingDisabled) {
         pollingInterval = setInterval(pollIFoodOrders, 2500);
       }
 
       // Modal Controls
       const modal = document.getElementById('config-modal');
       const openConfigBtn = document.getElementById('open-config-btn');
-      if (openConfigBtn && modal) openConfigBtn.addEventListener('click', () => modal.classList.remove('hidden'));
+      if (openConfigBtn && modal) {
+        openConfigBtn.addEventListener('click', () => {
+          const cfgLink = document.getElementById('cfg-open-service-link');
+          if (cfgLink && typeof getServiceUrl === 'function') cfgLink.href = getServiceUrl();
+          const drawerLink = document.getElementById('drawer-open-service-link');
+          if (drawerLink && typeof getServiceUrl === 'function') drawerLink.href = getServiceUrl();
+
+          const chk = document.getElementById('cfg-toggle-local-polling');
+          const statusText = document.getElementById('cfg-local-polling-status');
+          const isLocDisabled = localStorage.getItem('fast_pedidos_disable_local_polling') === '1';
+          if (chk) chk.checked = !isLocDisabled;
+          if (statusText) {
+            statusText.textContent = isLocDisabled ? 'Pausado (usando Servidor Dedicado)' : 'Ativo';
+            statusText.className = isLocDisabled ? 'text-[11px] font-bold text-amber-400' : 'text-[11px] font-bold text-emerald-400';
+          }
+          modal.classList.remove('hidden');
+        });
+      }
       const closeConfigBtn = document.getElementById('close-config-btn');
       if (closeConfigBtn && modal) closeConfigBtn.addEventListener('click', () => modal.classList.add('hidden'));
       const cancelConfigBtn = document.getElementById('cancel-config-btn');

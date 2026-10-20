@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Servidor de Recepção iFood - Fast Pedidos</title>
+  
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+  <link rel="icon" type="image/svg+xml" href="./icon.svg">
+  <meta name="theme-color" content="#090d16">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Servidor iFood">
+
+  <!-- TAILWIND CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'ifood-red': '#ea1d2c',
+            'ifood-red-dark': '#b80d19',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 15px rgba(16, 185, 129, 0.4); }
+      50% { box-shadow: 0 0 30px rgba(16, 185, 129, 0.8); }
+    }
+    .pulse-glow {
+      animation: pulseGlow 2.5s infinite;
+    }
+    .console-scroll::-webkit-scrollbar {
+      width: 6px;
+    }
+    .console-scroll::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 9999px;
+    }
+    .console-scroll::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+  </style>
+</head>
+<body class="h-full flex flex-col font-sans antialiased selection:bg-emerald-600 selection:text-white bg-slate-950 text-slate-100">
+
+  <!-- TOAST CONTAINER -->
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
+
+  <!-- HEADER -->
+  <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur-md px-4 sm:px-6 py-3.5 sticky top-0 z-30 flex items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 text-slate-950 flex items-center justify-center text-xl font-black shadow-lg shadow-emerald-500/20">
+        ⚡
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-base font-black tracking-tight text-white">FAST PEDIDOS</h1>
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider">
+            Servidor de Recepção 24h
+          </span>
+        </div>
+        <div class="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
+          <span class="text-slate-500">Loja Conectada:</span>
+          <span id="header-store-name" class="font-bold text-amber-400 truncate">Conectando...</span>
+          <span id="header-tenant-id" class="text-[10px] text-slate-500 font-mono hidden sm:inline"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Navigation & Switch Store -->
+    <div class="flex items-center gap-2.5">
+      <button 
+        type="button" 
+        onclick="toggleServiceExecution()" 
+        id="btn-toggle-service"
+        class="px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-2 transition cursor-pointer shadow bg-emerald-600 hover:bg-emerald-500 text-white active:scale-95">
+        <span class="w-2 h-2 rounded-full bg-white animate-ping"></span>
+        <span id="btn-toggle-label">Recepção Ativa</span>
+      </button>
+
+      <a 
+        href="./index.html" 
+        target="_blank" 
+        title="Abrir Painel Principal (Kanban KDS)" 
+        class="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 transition">
+        <span>Painel Principal</span>
+        <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+      </a>
+
+      <button 
+        type="button" 
+        onclick="promptStoreSelection()" 
+        title="Trocar Loja" 
+        class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-bold transition cursor-pointer">
+        🔄
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN MONITOR AREA -->
+  <main class="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 flex flex-col gap-6">
+
+    <!-- HERO STATUS CARD -->
+    <div id="service-status-card" class="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-slate-900 to-slate-850 border border-emerald-500/30 relative overflow-hidden pulse-glow">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
+        <div class="flex items-center gap-4">
+          <div id="status-icon-box" class="w-14 h-14 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center text-2xl font-black shrink-0">
+            🟢
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span id="service-state-title" class="text-lg sm:text-xl font-black text-white tracking-tight">Servidor Online & Recebendo Pedidos</span>
+              <span id="polling-spin-icon" class="w-3 h-3 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin"></span>
+            </div>
+            <p id="service-state-desc" class="text-xs sm:text-sm text-slate-300 mt-0.5">
+              Consultando eventos e novos pedidos do iFood continuamente a cada 2.5s com auto-confirmação.
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 self-start sm:self-center">
+          <button 
+            type="button" 
+            onclick="triggerManualPollNow()" 
+            class="px-3.5 py-2 bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 flex items-center gap-2 transition active:scale-95 cursor-pointer">
+            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            <span>Buscar Agora</span>
+          </button>
+          
+          <button 
+            type="button" 
+            id="btn-wake-lock"
+            onclick="toggleWakeLock()" 
+            class="px-3.5 py-2 bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 flex items-center gap-2 transition active:scale-95 cursor-pointer"
+            title="Evitar que o monitor desligue a tela">
+            <span>☕ Tela Ativa</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- METRICS GRID -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <!-- 1. Pedidos Recebidos na Sessão -->
+      <div class="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-400 text-xs">
+          <span>Pedidos Recebidos</span>
+          <span class="text-base">📦</span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="metric-orders-count" class="text-2xl sm:text-3xl font-black text-emerald-400 font-mono">0</span>
+          <span class="text-[11px] text-slate-400">nesta sessão</span>
+        </div>
+      </div>
+
+      <!-- 2. Última Verificação -->
+      <div class="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-400 text-xs">
+          <span>Último Polling</span>
+          <span class="text-base">⏱️</span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="metric-last-poll-seconds" class="text-2xl sm:text-3xl font-black text-white font-mono">0s</span>
+          <span class="text-[11px] text-slate-400">atrás</span>
+        </div>
+      </div>
+
+      <!-- 3. Lojas Integradas -->
+      <div class="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-400 text-xs">
+          <span>Lojas Ativas</span>
+          <span class="text-base">🏪</span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="metric-stores-count" class="text-2xl sm:text-3xl font-black text-amber-400 font-mono">1</span>
+          <span class="text-[11px] text-slate-400">no polling</span>
+        </div>
+      </div>
+
+      <!-- 4. Status da Nuvem Firebase -->
+      <div class="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-400 text-xs">
+          <span>Sincronização Nuvem</span>
+          <span class="text-base">🔥</span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="metric-firebase-status" class="text-xs sm:text-sm font-black text-emerald-400">Conectado</span>
+          <span class="text-[11px] text-slate-400">Tempo Real</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- LIVE EVENT CONSOLE -->
+    <div class="flex-1 min-h-[360px] rounded-2xl bg-slate-900 border border-slate-800 flex flex-col overflow-hidden shadow-xl">
+      <!-- Console Header -->
+      <div class="px-4 py-3 bg-slate-850 border-b border-slate-800 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-2 text-xs font-bold text-slate-300">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+          <span>Terminal de Eventos & Logs ao Vivo</span>
+          <span id="log-count-badge" class="px-2 py-0.5 rounded-full text-[10px] bg-slate-800 text-slate-400 font-mono">0 eventos</span>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button 
+            type="button" 
+            onclick="playNewOrderChime()" 
+            class="px-2.5 py-1 text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-bold border border-slate-700 transition flex items-center gap-1 cursor-pointer">
+            🔔 Testar Som
+          </button>
+          <button 
+            type="button" 
+            onclick="clearEventLogs()" 
+            class="px-2.5 py-1 text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg font-bold border border-slate-700 transition cursor-pointer">
+            Limpar
+          </button>
+        </div>
+      </div>
+
+      <!-- Console Body -->
+      <div id="console-logs-container" class="flex-1 p-4 font-mono text-xs overflow-y-auto console-scroll space-y-2 bg-slate-950/70">
+        <!-- Log rows inserted dynamically -->
+      </div>
+    </div>
+
+    <!-- FOOTER INFO & INSTRUCTIONS -->
+    <div class="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 text-xs text-slate-400 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div class="flex items-center gap-2">
+        <span class="text-base">💡</span>
+        <span>Você pode deixar esta página aberta em segundo plano ou em uma aba fixa. Ela alimenta a tela principal e os celulares automaticamente.</span>
+      </div>
+      <div class="flex items-center gap-3 shrink-0">
+        <a href="./lancamento.html" target="_blank" class="text-emerald-400 hover:underline font-bold">Link de Lançamento &rarr;</a>
+        <a href="./motoboy.html" target="_blank" class="text-amber-400 hover:underline font-bold">Portal Motoboy &rarr;</a>
+      </div>
+    </div>
+  </main>
+
+  <!-- MODAL: SELECIONAR LOJA -->
+  <div id="modal-select-store" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm hidden p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+      <h3 class="text-base font-bold text-white mb-1">Selecionar Loja para Receber Pedidos</h3>
+      <p class="text-xs text-slate-400 mb-4">Escolha a loja configurada para rodar o serviço neste computador:</p>
+
+      <div id="select-store-list" class="space-y-2 max-h-60 overflow-y-auto pr-1">
+        <div class="py-4 text-center text-xs text-slate-500">Carregando lojas...</div>
+      </div>
+
+      <div class="mt-4 pt-4 border-t border-slate-800 flex items-center gap-2">
+        <input 
+          type="text" 
+          id="manual-tenant-input" 
+          placeholder="Ou digite o código/ID da loja..." 
+          class="flex-1 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white placeholder-slate-500 outline-none focus:border-emerald-500">
+        <button 
+          type="button" 
+          onclick="handleManualStoreSelect()" 
+          class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition cursor-pointer">
+          Conectar
+        </button>
+      </div>
+
+      <div class="mt-3 text-right">
+        <button type="button" onclick="closeStoreModal()" class="text-xs text-slate-400 hover:text-white">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPT LÓGICO E FIREBASE -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { initializeFirestore, doc, collection, onSnapshot, setDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBow5AERyHHi3_zpmPwiV9SKhHfW-ltCHY",
+      authDomain: "fastpedidos-abde5.firebaseapp.com",
+      projectId: "fastpedidos-abde5",
+      storageBucket: "fastpedidos-abde5.firebasestorage.app",
+      messagingSenderId: "780977340389",
+      appId: "1:780977340389:web:e5aa31d6a4aea8b98b390c"
+    };
+
+    let app = null;
+    let db = null;
+    let currentTenantId = '';
+    let isServiceActive = true;
+    let isPolling = false;
+    let pollIntervalTimer = null;
+    let lastPollTimestamp = Date.now();
+    let sessionOrdersReceived = 0;
+    let unsubSettings = null;
+    let unsubOrders = null;
+    let wakeLockSentinel = null;
+
+    // Estado da API iFood
+    let apiCredentials = {
+      clientId: '',
+      clientSecret: '',
+      merchantId: '',
+      customApiUrl: '',
+      storeName: '',
+      baseStoreAddress: '',
+      baseStoreLat: null,
+      baseStoreLng: null
+    };
+    let storesList = [];
+    let deliveryFeesList = [];
+    let orders = [];
+
+    // --- LOGS CONSOLE ---
+    const logsContainer = document.getElementById('console-logs-container');
+    const logCountBadge = document.getElementById('log-count-badge');
+    let totalLogsCount = 0;
+
+    function addLog(type, msg, meta = '') {
+      totalLogsCount++;
+      if (logCountBadge) logCountBadge.textContent = `${totalLogsCount} eventos`;
+
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('pt-BR', { hour12: false });
+      
+      let badgeClass = 'bg-slate-800 text-slate-300';
+      let icon = 'ℹ️';
+
+      if (type === 'SUCCESS') {
+        badgeClass = 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/50';
+        icon = '✅';
+      } else if (type === 'NEW_ORDER') {
+        badgeClass = 'bg-red-950/80 text-red-400 border border-red-800/50 font-bold';
+        icon = '📦';
+      } else if (type === 'WARN') {
+        badgeClass = 'bg-amber-950/80 text-amber-400 border border-amber-800/50';
+        icon = '⚠️';
+      } else if (type === 'ERROR') {
+        badgeClass = 'bg-rose-950/80 text-rose-400 border border-rose-800/50 font-bold';
+        icon = '❌';
+      } else if (type === 'POLL') {
+        badgeClass = 'bg-indigo-950/80 text-indigo-300 border border-indigo-800/50';
+        icon = '⚡';
+      }
+
+      const row = document.createElement('div');
+      row.className = 'flex items-start gap-2.5 text-xs py-1 border-b border-slate-900/60 leading-relaxed';
+      row.innerHTML = `
+        <span class="text-slate-500 shrink-0 font-mono text-[11px]">[${timeStr}]</span>
+        <span class="px-1.5 py-0.5 rounded text-[10px] uppercase font-bold shrink-0 ${badgeClass}">${icon} ${type}</span>
+        <span class="text-slate-200 flex-1 break-words">${escapeHtml(msg)}</span>
+        ${meta ? `<span class="text-slate-500 text-[11px] font-mono shrink-0">${escapeHtml(meta)}</span>` : ''}
+      `;
+
+      if (logsContainer) {
+        logsContainer.appendChild(row);
+        // Limita a 150 linhas para poupar memória
+        while (logsContainer.children.length > 150) {
+          logsContainer.removeChild(logsContainer.firstChild);
+        }
+        logsContainer.scrollTop = logsContainer.scrollHeight;
+      }
+    }
+
+    function clearEventLogs() {
+      if (logsContainer) logsContainer.innerHTML = '';
+      totalLogsCount = 0;
+      if (logCountBadge) logCountBadge.textContent = '0 eventos';
+      addLog('INFO', 'Logs limpos pelo operador.');
+    }
+    window.clearEventLogs = clearEventLogs;
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // --- ÁUDIO NOTIFICAÇÃO ---
+    function playNewOrderChime() {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const now = audioCtx.currentTime;
+
+        const playTone = (freq, start, duration) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, start);
+          gain.gain.setValueAtTime(0.25, start);
+          gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(start);
+          osc.stop(start + duration);
+        };
+
+        playTone(587.33, now, 0.2);        // D5
+        playTone(880, now + 0.15, 0.4);    // A5
+      } catch (e) {
+        console.warn('Falha no áudio Web Audio:', e);
+      }
+    }
+    window.playNewOrderChime = playNewOrderChime;
+
+    // --- WAKE LOCK API (TELA SEMPRE ATIVA) ---
+    async function toggleWakeLock() {
+      const btn = document.getElementById('btn-wake-lock');
+      if (!navigator.wakeLock) {
+        showToast('Aviso', 'Seu navegador não suporta Wake Lock diretamente.', 'warning');
+        return;
+      }
+
+      if (wakeLockSentinel) {
+        await wakeLockSentinel.release();
+        wakeLockSentinel = null;
+        if (btn) btn.className = 'px-3.5 py-2 bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 flex items-center gap-2 transition active:scale-95 cursor-pointer';
+        addLog('INFO', 'Proteção de tela desligada.');
+      } else {
+        try {
+          wakeLockSentinel = await navigator.wakeLock.request('screen');
+          if (btn) btn.className = 'px-3.5 py-2 bg-emerald-700 text-white text-xs font-bold rounded-xl border border-emerald-500 flex items-center gap-2 transition active:scale-95 cursor-pointer shadow-md';
+          addLog('SUCCESS', 'Tela configurada para permanecer sempre ativa 24h.');
+        } catch (e) {
+          addLog('WARN', 'Não foi possível ativar o modo tela sempre ativa: ' + e.message);
+        }
+      }
+    }
+    window.toggleWakeLock = toggleWakeLock;
+
+    // --- CÁLCULO DE TAXAS POR KM ---
+    function ensureDefaultFeeKmRanges(list) {
+      if (!Array.isArray(list) || list.length === 0) {
+        return [
+          { id: 'fee-1', name: 'Até 1 km', value: 6.00, minKm: 0, maxKm: 1 },
+          { id: 'fee-2', name: 'De 1 km a 5 km', value: 12.00, minKm: 1, maxKm: 5 },
+          { id: 'fee-3', name: 'Acima de 5 km', value: 17.00, minKm: 5, maxKm: 50 }
+        ];
+      }
+      return list;
+    }
+
+    function findFeeByDistanceKm(distanceKm) {
+      if (distanceKm === null || distanceKm === undefined || isNaN(Number(distanceKm))) return null;
+      const km = Number(distanceKm);
+      if (km < 0) return null;
+
+      const fees = ensureDefaultFeeKmRanges(deliveryFeesList);
+      const visibleFees = fees.filter(f => !f.isHidden);
+      const kmFees = visibleFees
+        .filter(f => f.maxKm !== undefined && f.maxKm !== null && !isNaN(Number(f.maxKm)) && Number(f.maxKm) > 0)
+        .sort((a, b) => Number(a.maxKm) - Number(b.maxKm));
+
+      if (kmFees.length === 0) return visibleFees[0] || fees[0] || null;
+
+      for (const fee of kmFees) {
+        const min = Number(fee.minKm || 0);
+        const max = Number(fee.maxKm);
+        if (km >= min && km <= max) return fee;
+      }
+      for (const fee of kmFees) {
+        if (km <= Number(fee.maxKm)) return fee;
+      }
+      return kmFees[kmFees.length - 1];
+    }
+
+    function haversineRoadDistanceKmClient(lat1, lng1, lat2, lng2) {
+      const toRad = (deg) => (deg * Math.PI) / 180;
+      const R = 6371;
+      const dLat = toRad(lat2 - lat1);
+      const dLng = toRad(lng2 - lng1);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return Math.round(R * c * 1.28 * 10) / 10;
+    }
+
+    async function resolveDistanceForOrder(order) {
+      if (!order) return null;
+      if (order.distanceKm && Number(order.distanceKm) > 0 && Number(order.distanceKm) <= 60) {
+        return Number(order.distanceKm);
+      }
+
+      let sLat = order.storeLat ? Number(order.storeLat) : (apiCredentials.baseStoreLat ? Number(apiCredentials.baseStoreLat) : null);
+      let sLng = order.storeLng ? Number(order.storeLng) : (apiCredentials.baseStoreLng ? Number(apiCredentials.baseStoreLng) : null);
+      let cLat = order.customerLat ? Number(order.customerLat) : null;
+      let cLng = order.customerLng ? Number(order.customerLng) : null;
+
+      if (sLat && sLng && cLat && cLng) {
+        let dist = haversineRoadDistanceKmClient(sLat, sLng, cLat, cLng);
+        try {
+          const osrmRes = await fetch(`https://router.project-osrm.org/route/v1/driving/${sLng},${sLat};${cLng},${cLat}?overview=false`);
+          if (osrmRes.ok) {
+            const osrmData = await osrmRes.json();
+            if (osrmData?.routes?.[0]?.distance !== undefined) {
+              dist = Math.round((Number(osrmData.routes[0].distance) / 1000) * 10) / 10;
+            }
+          }
+        } catch (e) {}
+
+        if (dist > 0 && dist <= 60) {
+          order.distanceKm = dist;
+          return dist;
+        }
+      }
+
+      // Fallback via API backend
+      if (apiCredentials.clientId && apiCredentials.clientSecret) {
+        try {
+          const apiBase = getApiBaseUrl();
+          const targetMerchantId = order.merchantId || apiCredentials.merchantId || '';
+          const res = await fetch(`${apiBase}/api/ifood/order-distance`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ifoodOrderId: order.ifoodOrderId || order.id,
+              merchantId: targetMerchantId,
+              clientId: apiCredentials.clientId,
+              clientSecret: apiCredentials.clientSecret,
+              customerAddress: order.customerAddress || '',
+              customerLat: order.customerLat,
+              customerLng: order.customerLng,
+              storeLat: order.storeLat || apiCredentials.baseStoreLat,
+              storeLng: order.storeLng || apiCredentials.baseStoreLng
+            })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.success && data.distanceKm && Number(data.distanceKm) <= 60) {
+              const km = Number(data.distanceKm);
+              order.distanceKm = km;
+              if (data.storeLat) order.storeLat = data.storeLat;
+              if (data.storeLng) order.storeLng = data.storeLng;
+              if (data.customerLat) order.customerLat = data.customerLat;
+              if (data.customerLng) order.customerLng = data.customerLng;
+              return km;
+            }
+          }
+        } catch (e) {}
+      }
+
+      return null;
+    }
+
+    function getApiBaseUrl() {
+      if (apiCredentials && apiCredentials.customApiUrl && apiCredentials.customApiUrl.trim()) {
+        return apiCredentials.customApiUrl.trim().replace(/\/+$/, '');
+      }
+      if (window.location.hostname.includes('github.io')) {
+        return 'https://ifood-integracao.iranildo-jobs.workers.dev';
+      }
+      return '';
+    }
+
+    // --- POLLING CONTÍNUO IFOOD ---
+    async function executeIFoodPoll() {
+      if (!isServiceActive) return;
+      if (!apiCredentials.clientId || !apiCredentials.clientSecret) {
+        addLog('WARN', 'Credenciais iFood ausentes na loja atual. Configure na tela principal.');
+        return;
+      }
+      if (isPolling) return;
+      isPolling = true;
+
+      const spinIcon = document.getElementById('polling-spin-icon');
+      if (spinIcon) spinIcon.classList.remove('opacity-0');
+
+      try {
+        lastPollTimestamp = Date.now();
+        updateLastPollDisplay();
+
+        const merchantIdSet = new Set();
+        const rawSources = [
+          apiCredentials.merchantId,
+          ...(Array.isArray(storesList) ? storesList.map(s => s.merchantId) : [])
+        ].filter(Boolean).join(' ');
+
+        const sanitized = rawSources.replace(/[\r\n\t]/g, '');
+        const matchedUUIDs = sanitized.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g);
+        if (matchedUUIDs) {
+          matchedUUIDs.forEach(id => merchantIdSet.add(id.toLowerCase().trim()));
+        }
+
+        const merchantIdArray = Array.from(merchantIdSet);
+        const combinedMerchantIds = merchantIdArray.join(',');
+        const knownOrderIds = (orders || []).map(o => o.ifoodOrderId || o.id).filter(Boolean);
+
+        const response = await fetch(`${getApiBaseUrl()}/api/ifood/poll`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...apiCredentials,
+            merchantId: combinedMerchantIds || undefined,
+            merchantIds: combinedMerchantIds || undefined,
+            allMerchantIds: merchantIdArray.length > 0 ? merchantIdArray : undefined,
+            knownOrderIds: knownOrderIds.length > 0 ? knownOrderIds : undefined,
+            autoConfirm: true
+          })
+        });
+
+        if (!response.ok) {
+          const txt = await response.text();
+          addLog('ERROR', `Falha HTTP iFood (${response.status})`, txt.substring(0, 80));
+          return;
+        }
+
+        const data = await response.json();
+
+        if (data.eventsProcessed && data.eventsProcessed > 0) {
+          addLog('POLL', `${data.eventsProcessed} evento(s) iFood processado(s).`);
+        }
+
+        let hasNewOrders = false;
+
+        if (data.success && Array.isArray(data.newOrders) && data.newOrders.length > 0) {
+          for (const newOrd of data.newOrders) {
+            const existingIdx = orders.findIndex(o => (o.ifoodOrderId || o.id) === (newOrd.ifoodOrderId || newOrd.id));
+            if (existingIdx === -1) {
+              // Resolve KM e taxa para o novo pedido
+              await resolveDistanceForOrder(newOrd);
+              if (newOrd.distanceKm) {
+                const fee = findFeeByDistanceKm(newOrd.distanceKm);
+                if (fee) {
+                  newOrd.deliveryFee = fee.value;
+                  newOrd.feeName = fee.name;
+                }
+              }
+
+              orders.unshift(newOrd);
+              sessionOrdersReceived++;
+              hasNewOrders = true;
+
+              const kmText = newOrd.distanceKm ? ` (${newOrd.distanceKm} km)` : '';
+              addLog('NEW_ORDER', `Novo Pedido iFood #${newOrd.id || newOrd.displayId} - ${newOrd.customerName || 'Cliente'}${kmText}`);
+            }
+          }
+        }
+
+        // Se houver atualizações de status nos pedidos existentes
+        if (data.success && Array.isArray(data.updatedOrders) && data.updatedOrders.length > 0) {
+          data.updatedOrders.forEach(upd => {
+            const target = orders.find(o => (o.ifoodOrderId || o.id) === (upd.ifoodOrderId || upd.id));
+            if (target && target.status !== upd.status) {
+              target.status = upd.status;
+              hasNewOrders = true;
+              addLog('INFO', `Pedido #${target.id || target.displayId} status &rarr; ${upd.status.toUpperCase()}`);
+            }
+          });
+        }
+
+        if (hasNewOrders) {
+          playNewOrderChime();
+          updateMetricsUI();
+          saveOrdersToFirebase();
+        }
+
+      } catch (err) {
+        addLog('ERROR', 'Erro na rotina de polling: ' + err.message);
+      } finally {
+        isPolling = false;
+        if (spinIcon) spinIcon.classList.add('opacity-0');
+      }
+    }
+
+    // Salva estado de pedidos no Firestore
+    async function saveOrdersToFirebase() {
+      if (!currentTenantId || !db) return;
+      try {
+        const activeOrders = (orders || []).filter(o => !o.archived);
+        await setDoc(doc(db, "stores", currentTenantId, "state", "kds_orders"), {
+          orders: activeOrders,
+          updatedAt: Date.now(),
+          source: 'dedicated_server_service'
+        }, { merge: true });
+
+        addLog('SUCCESS', `Sincronizado no Firebase (${activeOrders.length} pedidos ativos).`);
+      } catch (e) {
+        addLog('WARN', 'Falha ao sincronizar pedidos no Firebase: ' + e.message);
+      }
+    }
+
+    // --- CONTROLE DE EXECUÇÃO DO SERVIÇO ---
+    function toggleServiceExecution() {
+      isServiceActive = !isServiceActive;
+      const btn = document.getElementById('btn-toggle-service');
+      const label = document.getElementById('btn-toggle-label');
+      const card = document.getElementById('service-status-card');
+      const title = document.getElementById('service-state-title');
+      const desc = document.getElementById('service-state-desc');
+      const icon = document.getElementById('status-icon-box');
+
+      if (isServiceActive) {
+        if (btn) btn.className = 'px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-2 transition cursor-pointer shadow bg-emerald-600 hover:bg-emerald-500 text-white active:scale-95';
+        if (label) label.textContent = 'Recepção Ativa';
+        if (card) { card.className = 'p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-slate-900 to-slate-850 border border-emerald-500/30 relative overflow-hidden pulse-glow'; }
+        if (title) title.textContent = 'Servidor Online & Recebendo Pedidos';
+        if (desc) desc.textContent = 'Consultando eventos e novos pedidos do iFood continuamente a cada 2.5s com auto-confirmação.';
+        if (icon) { icon.textContent = '🟢'; icon.className = 'w-14 h-14 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center text-2xl font-black shrink-0'; }
+        addLog('SUCCESS', 'Serviço de recepção iniciado.');
+        executeIFoodPoll();
+      } else {
+        if (btn) btn.className = 'px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-2 transition cursor-pointer shadow bg-rose-600 hover:bg-rose-500 text-white active:scale-95';
+        if (label) label.textContent = 'Pausado';
+        if (card) { card.className = 'p-5 sm:p-6 rounded-3xl bg-slate-900 border border-rose-500/40 relative overflow-hidden'; }
+        if (title) title.textContent = 'Servidor Pausado pelo Usuário';
+        if (desc) desc.textContent = 'A recepção de pedidos está suspensa temporariamente. Clique no botão acima para retomar.';
+        if (icon) { icon.textContent = '🔴'; icon.className = 'w-14 h-14 rounded-2xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center text-2xl font-black shrink-0'; }
+        addLog('WARN', 'Serviço de recepção pausado pelo operador.');
+      }
+    }
+    window.toggleServiceExecution = toggleServiceExecution;
+
+    function triggerManualPollNow() {
+      addLog('INFO', 'Busca manual disparada.');
+      executeIFoodPoll();
+    }
+    window.triggerManualPollNow = triggerManualPollNow;
+
+    function updateLastPollDisplay() {
+      const el = document.getElementById('metric-last-poll-seconds');
+      if (!el) return;
+      const diffSec = Math.floor((Date.now() - lastPollTimestamp) / 1000);
+      el.textContent = `${diffSec}s`;
+    }
+
+    function updateMetricsUI() {
+      const ordersEl = document.getElementById('metric-orders-count');
+      const storesEl = document.getElementById('metric-stores-count');
+      if (ordersEl) ordersEl.textContent = String(sessionOrdersReceived);
+      if (storesEl) {
+        const visibleStores = (storesList || []).filter(s => !s.isHidden);
+        storesEl.textContent = String(visibleStores.length || 1);
+      }
+    }
+
+    // Timer de contador de segundos
+    setInterval(updateLastPollDisplay, 1000);
+
+    // --- FIREBASE SYNC & TENANT SETUP ---
+    function startTenantSync(tenantId) {
+      if (!tenantId) {
+        promptStoreSelection();
+        return;
+      }
+
+      currentTenantId = tenantId;
+      localStorage.setItem('last_tenant_id', tenantId);
+      localStorage.setItem('portal_last_store_id', tenantId);
+
+      const tenantBadge = document.getElementById('header-tenant-id');
+      if (tenantBadge) tenantBadge.textContent = `[${tenantId}]`;
+
+      addLog('INFO', `Conectando em tempo real à loja [${tenantId}] via Firebase...`);
+
+      if (unsubSettings) unsubSettings();
+      if (unsubOrders) unsubOrders();
+
+      // 1. Escuta configurações e credenciais
+      unsubSettings = onSnapshot(doc(db, "stores", tenantId, "config", "settings"), (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data) {
+            if (data.clientId) apiCredentials.clientId = data.clientId;
+            if (data.clientSecret) apiCredentials.clientSecret = data.clientSecret;
+            if (data.merchantId) apiCredentials.merchantId = data.merchantId;
+            if (data.customApiUrl) apiCredentials.customApiUrl = data.customApiUrl;
+            if (data.storeName) apiCredentials.storeName = data.storeName;
+            if (data.baseStoreAddress) apiCredentials.baseStoreAddress = data.baseStoreAddress;
+            if (data.baseStoreLat) apiCredentials.baseStoreLat = data.baseStoreLat;
+            if (data.baseStoreLng) apiCredentials.baseStoreLng = data.baseStoreLng;
+
+            if (Array.isArray(data.storesList)) {
+              storesList = data.storesList;
+            }
+            if (Array.isArray(data.deliveryFeesList)) {
+              deliveryFeesList = data.deliveryFeesList;
+            }
+
+            const headerName = document.getElementById('header-store-name');
+            if (headerName) {
+              const activeS = storesList.find(s => s.active) || storesList[0];
+              headerName.textContent = (activeS && activeS.name) || apiCredentials.storeName || tenantId;
+            }
+
+            updateMetricsUI();
+
+            if (apiCredentials.clientId && apiCredentials.clientSecret) {
+              addLog('SUCCESS', `Credenciais iFood sincronizadas para loja "${apiCredentials.storeName || tenantId}".`);
+            } else {
+              addLog('WARN', 'Credenciais iFood ainda não configuradas para esta loja.');
+            }
+          }
+        }
+      }, (err) => addLog('WARN', 'Erro sync settings: ' + err.message));
+
+      // 2. Escuta pedidos existentes
+      unsubOrders = onSnapshot(doc(db, "stores", tenantId, "state", "kds_orders"), (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data && Array.isArray(data.orders)) {
+            // Se o update veio de outra tela, mescla preservando pedidos locais
+            orders = data.orders.filter(o => !o.archived);
+          }
+        }
+      }, (err) => addLog('WARN', 'Erro sync orders: ' + err.message));
+
+      // Inicia o loop de polling contínuo a cada 2.5s
+      if (pollIntervalTimer) clearInterval(pollIntervalTimer);
+      pollIntervalTimer = setInterval(executeIFoodPoll, 2500);
+
+      // Executa o primeiro poll imediatamente
+      executeIFoodPoll();
+
+      closeStoreModal();
+    }
+
+    // Modal de Loja
+    async function promptStoreSelection() {
+      const modal = document.getElementById('modal-select-store');
+      const listEl = document.getElementById('select-store-list');
+      if (!modal) return;
+      modal.classList.remove('hidden');
+
+      try {
+        const snap = await getDocs(collection(db, "stores_directory"));
+        if (snap && !snap.empty) {
+          const stores = [];
+          snap.forEach(d => {
+            const data = d.data();
+            if (data && (data.id || d.id)) {
+              stores.push({ id: data.id || d.id, name: data.name || (data.id || d.id) });
+            }
+          });
+
+          if (listEl && stores.length > 0) {
+            listEl.innerHTML = stores.map(s => `
+              <button 
+                type="button" 
+                onclick="connectToTenant('${escapeHtml(s.id)}')" 
+                class="w-full p-3 bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-emerald-500 rounded-xl flex items-center justify-between text-left transition cursor-pointer">
+                <div class="flex items-center gap-2.5">
+                  <span class="text-base">🏪</span>
+                  <div>
+                    <h4 class="text-xs font-bold text-white">${escapeHtml(s.name)}</h4>
+                    <span class="text-[10px] text-slate-400 font-mono">${escapeHtml(s.id)}</span>
+                  </div>
+                </div>
+                <span class="text-xs font-bold text-emerald-400">Selecionar &rarr;</span>
+              </button>
+            `).join('');
+            return;
+          }
+        }
+      } catch (e) {}
+
+      if (listEl) {
+        listEl.innerHTML = '<div class="py-3 text-center text-xs text-slate-400">Nenhuma loja salva no diretório. Digite o código da loja abaixo.</div>';
+      }
+    }
+    window.promptStoreSelection = promptStoreSelection;
+
+    function closeStoreModal() {
+      const modal = document.getElementById('modal-select-store');
+      if (modal) modal.classList.add('hidden');
+    }
+    window.closeStoreModal = closeStoreModal;
+
+    window.connectToTenant = function(tId) {
+      startTenantSync(tId);
+    };
+
+    window.handleManualStoreSelect = function() {
+      const input = document.getElementById('manual-tenant-input');
+      const val = input ? input.value.trim() : '';
+      if (val) {
+        startTenantSync(val);
+      }
+    };
+
+    // Toasts simples
+    function showToast(title, msg, type = 'info') {
+      const container = document.getElementById('toast-container');
+      if (!container) return;
+      const t = document.createElement('div');
+      t.className = 'p-3 bg-slate-900 border border-slate-750 text-white rounded-xl shadow-xl text-xs flex items-center justify-between gap-2 pointer-events-auto transition';
+      t.innerHTML = `<div><strong class="block font-bold">${escapeHtml(title)}</strong><span>${escapeHtml(msg)}</span></div>`;
+      container.appendChild(t);
+      setTimeout(() => { t.remove(); }, 4000);
+    }
+
+    // Inicialização
+    try {
+      app = initializeApp(firebaseConfig);
+      db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
+
+      addLog('SUCCESS', 'Firebase Firestore inicializado com sucesso.');
+
+      // Resolve tenant da URL ou do storage
+      const urlParams = new URLSearchParams(window.location.search);
+      const targetTenant = urlParams.get('store') || urlParams.get('loja') || localStorage.getItem('last_tenant_id') || localStorage.getItem('portal_last_store_id') || '';
+
+      if (targetTenant) {
+        startTenantSync(targetTenant);
+      } else {
+        promptStoreSelection();
+      }
+
+      // Tenta ativar Wake Lock automaticamente se disponível
+      if (navigator.wakeLock) {
+        toggleWakeLock().catch(() => {});
+      }
+
+    } catch (err) {
+      addLog('ERROR', 'Falha ao inicializar servidor: ' + err.message);
+    }
+  </script>
+</body>
+</html>

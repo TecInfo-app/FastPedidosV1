@@ -24,6 +24,7 @@ export default defineConfig(() => {
           main: path.resolve(__dirname, 'index.html'),
           motoboy: path.resolve(__dirname, 'motoboy.html'),
           lancamento: path.resolve(__dirname, 'lancamento.html'),
+          servico: path.resolve(__dirname, 'servico.html'),
         },
       },
     },
