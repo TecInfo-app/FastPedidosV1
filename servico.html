@@ -763,7 +763,13 @@
         }
 
       } catch (err) {
-        addLog('ERROR', 'Erro na rotina de polling: ' + err.message);
+        const isOffline = (typeof navigator !== 'undefined' && navigator.onLine === false) ||
+          (err && err.message && (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')));
+        if (isOffline) {
+          addLog('WARN', 'Oscilação na conexão com a internet (Failed to fetch). Aguardando sinal de rede para retentar...');
+        } else {
+          addLog('ERROR', 'Erro na rotina de polling: ' + err.message);
+        }
       } finally {
         isPolling = false;
         if (spinIcon) spinIcon.classList.add('opacity-0');
@@ -1161,6 +1167,15 @@
       if (navigator.wakeLock) {
         toggleWakeLock().catch(() => {});
       }
+
+      // Detecção de status de rede do navegador
+      window.addEventListener('online', () => {
+        addLog('SUCCESS', 'Conexão com a internet restabelecida! Retomando sincronização automática...');
+        executeIFoodPoll();
+      });
+      window.addEventListener('offline', () => {
+        addLog('WARN', 'Dispositivo desconectado da internet. O servidor aguardará a reconexão automática...');
+      });
 
     } catch (err) {
       addLog('ERROR', 'Falha ao inicializar servidor: ' + err.message);
