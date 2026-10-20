@@ -96,6 +96,14 @@
 
       <button 
         type="button" 
+        onclick="openAdvancedConfigModal()" 
+        title="Configurações Avançadas & Credenciais iFood" 
+        class="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-md shadow-indigo-600/20 active:scale-95">
+        <span>⚙️ Configurações</span>
+      </button>
+
+      <button 
+        type="button" 
         onclick="promptStoreSelection()" 
         title="Trocar Loja" 
         class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-bold transition cursor-pointer">
@@ -125,7 +133,14 @@
           </div>
         </div>
 
-        <div class="flex items-center gap-2 self-start sm:self-center">
+        <div class="flex items-center gap-2 flex-wrap self-start sm:self-center">
+          <button 
+            type="button" 
+            onclick="openAdvancedConfigModal()" 
+            class="px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white text-xs font-bold rounded-xl border border-indigo-400/40 flex items-center gap-1.5 transition active:scale-95 shadow-md shadow-indigo-600/20 cursor-pointer">
+            <span>⚙️ Configurações iFood</span>
+          </button>
+
           <button 
             type="button" 
             onclick="triggerManualPollNow()" 
@@ -269,6 +284,93 @@
       <div class="mt-3 text-right">
         <button type="button" onclick="closeStoreModal()" class="text-xs text-slate-400 hover:text-white">Fechar</button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CONFIGURAÇÕES AVANÇADAS & API IFOOD -->
+  <div id="modal-advanced-config" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-sm hidden p-4 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-xl w-full p-6 shadow-2xl my-8">
+      
+      <!-- Header -->
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center text-xl font-black shrink-0">
+            ⚙️
+          </div>
+          <div>
+            <h3 class="text-base font-black text-white">Configurações Avançadas & API iFood</h3>
+            <p class="text-xs text-slate-400">Credenciais e parâmetros oficiais do integrador</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeAdvancedConfigModal()" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer">
+          ✕
+        </button>
+      </div>
+
+      <form id="advanced-config-form" onsubmit="handleSaveAdvancedConfig(event)" class="mt-4 space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">Nome da Loja (Sistema)</label>
+          <input type="text" id="adv-store-name" placeholder="ex: Cia do Chopp" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-850 border border-slate-700 text-xs text-white placeholder-slate-500 focus:border-emerald-500 outline-none transition">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">Client ID</label>
+          <input type="text" id="adv-client-id" placeholder="ex: 93c04258-3fce-4529-b8fb-0991403cf13a" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-850 border border-slate-700 text-xs font-mono text-white placeholder-slate-500 focus:border-emerald-500 outline-none transition">
+          <span class="text-[11px] text-slate-500 mt-1 block">Encontrado no iFood Developer Portal &gt; Meus Aplicativos &gt; Credenciais</span>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">Client Secret</label>
+          <div class="relative">
+            <input type="password" id="adv-client-secret" placeholder="ex: hjvqfm9lpfk1fe5b971nu01ugzt7uu0ksddp9mis" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-850 border border-slate-700 text-xs font-mono text-white placeholder-slate-500 focus:border-emerald-500 outline-none transition pr-10">
+            <button type="button" onclick="toggleSecretVisibility()" class="absolute right-3 top-2.5 text-slate-400 hover:text-white text-xs cursor-pointer" title="Mostrar/Ocultar Client Secret">👁️</button>
+          </div>
+          <span class="text-[11px] text-slate-500 mt-1 block">Chave secreta gerada para homologação ou produção</span>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">Merchant ID(s) / UUIDs das Lojas</label>
+          <textarea id="adv-merchant-id" rows="2" placeholder="Cole os IDs das suas lojas separados por vírgula..." class="w-full px-3.5 py-2.5 rounded-xl bg-slate-850 border border-slate-700 text-xs font-mono text-white placeholder-slate-500 focus:border-emerald-500 outline-none transition"></textarea>
+          <span class="text-[11px] text-slate-500 mt-1 block">Suporta múltiplas lojas separadas por vírgula.</span>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">URL da API / Cloudflare Worker (Opcional)</label>
+          <input type="text" id="adv-custom-url" placeholder="https://ifood-integracao.iranildo-jobs.workers.dev" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-850 border border-slate-700 text-xs font-mono text-white placeholder-slate-500 focus:border-emerald-500 outline-none transition">
+          <span class="text-[11px] text-slate-500 mt-1 block">Padrão para GitHub Pages: <code>https://ifood-integracao.iranildo-jobs.workers.dev</code></span>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">Endereço Base da Loja (Para Cálculo de KM)</label>
+          <input type="text" id="adv-base-address" placeholder="ex: Rua Principal, 100 - Centro, Cidade - UF" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-850 border border-slate-700 text-xs text-white placeholder-slate-500 focus:border-emerald-500 outline-none transition">
+          <span class="text-[11px] text-slate-500 mt-1 block">Usado como ponto de partida das rotas de entrega</span>
+        </div>
+
+        <!-- Status e Ações -->
+        <div class="pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <button 
+            type="button" 
+            id="adv-test-btn" 
+            onclick="testAdvancedApiConnection()" 
+            class="w-full sm:w-auto px-4 py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer">
+            <span>⚡ Testar Conexão</span>
+          </button>
+
+          <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <button 
+              type="button" 
+              onclick="closeAdvancedConfigModal()" 
+              class="px-4 py-2.5 text-xs font-semibold text-slate-400 hover:text-white transition cursor-pointer">
+              Cancelar
+            </button>
+            <button 
+              type="submit" 
+              class="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition shadow-md shadow-emerald-600/20 active:scale-95 cursor-pointer">
+              Salvar no Firebase
+            </button>
+          </div>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -882,6 +984,150 @@
         startTenantSync(val);
       }
     };
+
+    // --- MODAL CONFIGURAÇÕES AVANÇADAS & API IFOOD ---
+    function openAdvancedConfigModal() {
+      const modal = document.getElementById('modal-advanced-config');
+      if (!modal) return;
+
+      const nameEl = document.getElementById('adv-store-name');
+      const cidEl = document.getElementById('adv-client-id');
+      const csecEl = document.getElementById('adv-client-secret');
+      const midEl = document.getElementById('adv-merchant-id');
+      const urlEl = document.getElementById('adv-custom-url');
+      const addrEl = document.getElementById('adv-base-address');
+
+      if (nameEl) nameEl.value = apiCredentials.storeName || '';
+      if (cidEl) cidEl.value = apiCredentials.clientId || '';
+      if (csecEl) csecEl.value = apiCredentials.clientSecret || '';
+      if (midEl) midEl.value = apiCredentials.merchantId || '';
+      if (urlEl) urlEl.value = apiCredentials.customApiUrl || '';
+      if (addrEl) addrEl.value = apiCredentials.baseStoreAddress || '';
+
+      modal.classList.remove('hidden');
+    }
+    window.openAdvancedConfigModal = openAdvancedConfigModal;
+
+    function closeAdvancedConfigModal() {
+      const modal = document.getElementById('modal-advanced-config');
+      if (modal) modal.classList.add('hidden');
+    }
+    window.closeAdvancedConfigModal = closeAdvancedConfigModal;
+
+    function toggleSecretVisibility() {
+      const el = document.getElementById('adv-client-secret');
+      if (el) {
+        el.type = el.type === 'password' ? 'text' : 'password';
+      }
+    }
+    window.toggleSecretVisibility = toggleSecretVisibility;
+
+    async function handleSaveAdvancedConfig(e) {
+      if (e && e.preventDefault) e.preventDefault();
+      if (!currentTenantId || !db) {
+        showToast('Aviso', 'Selecione uma loja primeiro.', 'warning');
+        return;
+      }
+
+      const nameEl = document.getElementById('adv-store-name');
+      const cidEl = document.getElementById('adv-client-id');
+      const csecEl = document.getElementById('adv-client-secret');
+      const midEl = document.getElementById('adv-merchant-id');
+      const urlEl = document.getElementById('adv-custom-url');
+      const addrEl = document.getElementById('adv-base-address');
+
+      const storeName = nameEl ? nameEl.value.trim() : '';
+      const clientId = cidEl ? cidEl.value.trim() : '';
+      const clientSecret = csecEl ? csecEl.value.trim() : '';
+      const merchantId = midEl ? midEl.value.trim() : '';
+      const customApiUrl = urlEl ? urlEl.value.trim() : '';
+      const baseStoreAddress = addrEl ? addrEl.value.trim() : '';
+
+      apiCredentials.storeName = storeName;
+      apiCredentials.clientId = clientId;
+      apiCredentials.clientSecret = clientSecret;
+      apiCredentials.merchantId = merchantId;
+      apiCredentials.customApiUrl = customApiUrl;
+      apiCredentials.baseStoreAddress = baseStoreAddress;
+
+      const payload = {
+        storeName,
+        clientId,
+        clientSecret,
+        merchantId,
+        customApiUrl,
+        baseStoreAddress,
+        updatedAt: Date.now()
+      };
+
+      try {
+        await setDoc(doc(db, "stores", currentTenantId, "config", "settings"), payload, { merge: true });
+
+        if (storeName) {
+          await setDoc(doc(db, "stores_directory", currentTenantId), {
+            id: currentTenantId,
+            name: storeName,
+            updatedAt: Date.now()
+          }, { merge: true }).catch(() => {});
+        }
+
+        const headerName = document.getElementById('header-store-name');
+        if (headerName) headerName.textContent = storeName || currentTenantId;
+
+        showToast('Configurações Salvas!', 'As credenciais foram atualizadas e sincronizadas no Firebase.', 'success');
+        addLog('SUCCESS', `Configurações avançadas salvas no Firebase para "${storeName || currentTenantId}".`);
+        closeAdvancedConfigModal();
+
+        // Reinicia ou dispara o polling com as novas credenciais
+        executeIFoodPoll();
+      } catch (err) {
+        showToast('Erro ao Salvar', err.message, 'warning');
+        addLog('ERROR', 'Falha ao salvar configurações no Firebase: ' + err.message);
+      }
+    }
+    window.handleSaveAdvancedConfig = handleSaveAdvancedConfig;
+
+    async function testAdvancedApiConnection() {
+      const cidEl = document.getElementById('adv-client-id');
+      const csecEl = document.getElementById('adv-client-secret');
+      const midEl = document.getElementById('adv-merchant-id');
+
+      const cid = cidEl ? cidEl.value.trim() : apiCredentials.clientId;
+      const csec = csecEl ? csecEl.value.trim() : apiCredentials.clientSecret;
+      const mid = midEl ? midEl.value.trim() : apiCredentials.merchantId;
+
+      if (!cid || !csec) {
+        showToast('Aviso', 'Preencha o Client ID e Client Secret para testar.', 'warning');
+        return;
+      }
+
+      const btn = document.getElementById('adv-test-btn');
+      if (btn) btn.innerHTML = '<span>⏳ Testando...</span>';
+
+      try {
+        addLog('INFO', 'Testando conectividade e presença na API iFood...');
+        const res = await fetch(`${getApiBaseUrl()}/api/ifood/test-credentials`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientId: cid, clientSecret: csec, merchantId: mid })
+        });
+
+        const data = await res.json();
+        if (data && data.success) {
+          showToast('Conexão Validada!', `Loja: ${data.merchant?.name || 'Conectada'} (${data.merchant?.status || 'Aberta'})`, 'success');
+          addLog('SUCCESS', `iFood Conectado! Loja: ${data.merchant?.name || 'Ativa'}`);
+        } else {
+          showToast('Falha na Conexão', data.message || 'Verifique suas credenciais.', 'warning');
+          addLog('ERROR', 'Falha ao testar credenciais iFood: ' + (data.message || 'Erro'));
+        }
+      } catch (e) {
+        showToast('Erro', e.message, 'warning');
+        addLog('ERROR', 'Erro ao testar credenciais: ' + e.message);
+      } finally {
+        if (btn) btn.innerHTML = '<span>⚡ Testar Conexão</span>';
+      }
+    }
+    window.testAdvancedApiConnection = testAdvancedApiConnection;
 
     // Toasts simples
     function showToast(title, msg, type = 'info') {
