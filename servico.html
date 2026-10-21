@@ -148,14 +148,6 @@
             <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
             <span>Buscar Agora</span>
           </button>
-
-          <button 
-            type="button" 
-            onclick="openFetchOrderModal()" 
-            class="px-3.5 py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 text-xs font-bold rounded-xl border border-amber-500/40 flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
-            title="Importar pedido que não veio automaticamente ou recebido durante oscilação">
-            <span>📥 Puxar Pedido</span>
-          </button>
           
           <button 
             type="button" 
@@ -377,55 +369,6 @@
               Salvar no Firebase
             </button>
           </div>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- MODAL: PUXAR / IMPORTAR PEDIDO POR ID -->
-  <div id="modal-fetch-order" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-sm hidden p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl">
-      <div class="flex items-center justify-between pb-4 border-b border-slate-800">
-        <div class="flex items-center gap-2.5">
-          <div class="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center text-xl font-black shrink-0">
-            📥
-          </div>
-          <div>
-            <h3 class="text-base font-black text-white">Importar Pedido iFood</h3>
-            <p class="text-xs text-slate-400">Recupere pedidos recebidos durante oscilações</p>
-          </div>
-        </div>
-        <button type="button" onclick="closeFetchOrderModal()" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer">
-          ✕
-        </button>
-      </div>
-
-      <form id="fetch-order-form" onsubmit="handleFetchOrderSubmit(event)" class="mt-4 space-y-4">
-        <div>
-          <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">ID ou UUID do Pedido</label>
-          <input 
-            type="text" 
-            id="fetch-order-id-input" 
-            placeholder="ex: 8521 ou 3fa85f64-5717-4562-b3fc-2c963f66afa6" 
-            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-850 border border-slate-700 text-xs font-mono text-white placeholder-slate-500 focus:border-amber-500 outline-none transition"
-            required>
-          <span class="text-[11px] text-slate-400 mt-1.5 block">
-            Cole o UUID completo ou o número do pedido visível no Gestor de Pedidos do iFood.
-          </span>
-        </div>
-
-        <div id="fetch-order-status-msg" class="hidden text-xs p-3 rounded-xl bg-slate-800 border border-slate-700 text-amber-300"></div>
-
-        <div class="pt-2 flex items-center justify-end gap-2">
-          <button type="button" onclick="closeFetchOrderModal()" class="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white transition cursor-pointer">
-            Cancelar
-          </button>
-          <button 
-            type="submit" 
-            id="btn-submit-fetch-order"
-            class="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-bold text-xs rounded-xl transition shadow-md shadow-amber-500/20 cursor-pointer">
-            Puxar Pedido Agora
-          </button>
         </div>
       </form>
     </div>
@@ -820,13 +763,7 @@
         }
 
       } catch (err) {
-        const isOffline = (typeof navigator !== 'undefined' && navigator.onLine === false) ||
-          (err && err.message && (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')));
-        if (isOffline) {
-          addLog('WARN', 'Oscilação na conexão com a internet (Failed to fetch). Aguardando sinal de rede para retentar...');
-        } else {
-          addLog('ERROR', 'Erro na rotina de polling: ' + err.message);
-        }
+        addLog('ERROR', 'Erro na rotina de polling: ' + err.message);
       } finally {
         isPolling = false;
         if (spinIcon) spinIcon.classList.add('opacity-0');
@@ -1048,105 +985,6 @@
       }
     };
 
-    // --- MODAL PUXAR PEDIDO MANUALMENTE ---
-    function openFetchOrderModal() {
-      const m = document.getElementById('modal-fetch-order');
-      const input = document.getElementById('fetch-order-id-input');
-      const msg = document.getElementById('fetch-order-status-msg');
-      if (input) input.value = '';
-      if (msg) { msg.classList.add('hidden'); msg.textContent = ''; }
-      if (m) m.classList.remove('hidden');
-      setTimeout(() => { if (input) input.focus(); }, 80);
-    }
-    window.openFetchOrderModal = openFetchOrderModal;
-
-    function closeFetchOrderModal() {
-      const m = document.getElementById('modal-fetch-order');
-      if (m) m.classList.add('hidden');
-    }
-    window.closeFetchOrderModal = closeFetchOrderModal;
-
-    async function handleFetchOrderSubmit(e) {
-      if (e && e.preventDefault) e.preventDefault();
-      const input = document.getElementById('fetch-order-id-input');
-      const msg = document.getElementById('fetch-order-status-msg');
-      const btn = document.getElementById('btn-submit-fetch-order');
-      const orderIdVal = input ? input.value.trim() : '';
-
-      if (!orderIdVal) {
-        showToast('ID Necessário', 'Informe o ID ou número do pedido iFood.', 'warning');
-        return;
-      }
-
-      if (!apiCredentials.clientId || !apiCredentials.clientSecret) {
-        showToast('Aviso', 'Configure as credenciais do iFood primeiro.', 'warning');
-        return;
-      }
-
-      if (btn) { btn.disabled = true; btn.textContent = 'Consultando iFood...'; }
-      if (msg) {
-        msg.classList.remove('hidden');
-        msg.className = 'text-xs p-3 rounded-xl bg-slate-800 border border-slate-700 text-amber-300';
-        msg.textContent = 'Buscando detalhes do pedido diretamente na API do iFood...';
-      }
-
-      try {
-        const res = await fetch(`${getApiBaseUrl()}/api/ifood/fetch-order-by-id`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            orderId: orderIdVal,
-            clientId: apiCredentials.clientId,
-            clientSecret: apiCredentials.clientSecret,
-            merchantId: apiCredentials.merchantId
-          })
-        });
-
-        const data = await res.json();
-        if (!res.ok || !data.success || !data.order) {
-          throw new Error(data.message || 'Pedido não encontrado no iFood.');
-        }
-
-        const newOrd = data.order;
-        // Resolve KM e taxa se não tiver
-        await resolveDistanceForOrder(newOrd);
-        if (newOrd.distanceKm) {
-          const fee = findFeeByDistanceKm(newOrd.distanceKm);
-          if (fee) {
-            newOrd.deliveryFee = fee.value;
-            newOrd.feeName = fee.name;
-          }
-        }
-
-        // Adiciona aos pedidos ou atualiza
-        const existIdx = orders.findIndex(o => (o.ifoodOrderId || o.id) === (newOrd.ifoodOrderId || newOrd.id));
-        if (existIdx >= 0) {
-          orders[existIdx] = { ...orders[existIdx], ...newOrd };
-        } else {
-          orders.unshift(newOrd);
-          sessionOrdersReceived++;
-        }
-
-        playNewOrderChime();
-        updateMetricsUI();
-        await saveOrdersToFirebase();
-
-        addLog('NEW_ORDER', `Pedido #${newOrd.id || newOrd.displayId} importado manualmente com sucesso!`);
-        showToast('Pedido Importado!', `Pedido #${newOrd.id || newOrd.displayId} adicionado ao painel e sincronizado.`, 'success');
-        closeFetchOrderModal();
-
-      } catch (err) {
-        if (msg) {
-          msg.className = 'text-xs p-3 rounded-xl bg-rose-950/80 border border-rose-800 text-rose-300';
-          msg.textContent = 'Erro ao buscar: ' + err.message;
-        }
-        showToast('Erro ao Importar', err.message, 'warning');
-      } finally {
-        if (btn) { btn.disabled = false; btn.textContent = 'Puxar Pedido Agora'; }
-      }
-    }
-    window.handleFetchOrderSubmit = handleFetchOrderSubmit;
-
     // --- MODAL CONFIGURAÇÕES AVANÇADAS & API IFOOD ---
     function openAdvancedConfigModal() {
       const modal = document.getElementById('modal-advanced-config');
@@ -1323,15 +1161,6 @@
       if (navigator.wakeLock) {
         toggleWakeLock().catch(() => {});
       }
-
-      // Detecção de status de rede do navegador
-      window.addEventListener('online', () => {
-        addLog('SUCCESS', 'Conexão com a internet restabelecida! Retomando sincronização automática...');
-        executeIFoodPoll();
-      });
-      window.addEventListener('offline', () => {
-        addLog('WARN', 'Dispositivo desconectado da internet. O servidor aguardará a reconexão automática...');
-      });
 
     } catch (err) {
       addLog('ERROR', 'Falha ao inicializar servidor: ' + err.message);
