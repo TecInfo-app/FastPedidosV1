@@ -79,6 +79,20 @@
     .animate-slide-down {
       animation: slide-down 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     }
+    
+    /* Regras explícitas para garantir rolagem do menu lateral (Configurações) */
+    #side-drawer {
+      height: 100vh !important;
+      max-height: 100vh !important;
+    }
+    #drawer-scroll-container {
+      flex: 1 1 0% !important;
+      min-height: 0 !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      -webkit-overflow-scrolling: touch !important;
+      touch-action: pan-y !important;
+    }
   </style>
 
   <!-- INSTANT RUNTIME PORTAL-MODE & LAUNCH-MODE DETECTION (PREVENTS FLASH OF MAIN LOGIN SCREEN & SUPPORTS PWA INSTALL) -->
@@ -392,7 +406,7 @@
   <!-- SIDE DRAWER (MENU LATERAL PARA CONFIGURAÇÕES E INFORMAÇÕES) -->
   <div id="drawer-backdrop" onclick="closeDrawer()" class="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-xs hidden transition-opacity"></div>
   
-  <aside id="side-drawer" class="fixed top-0 right-0 z-50 h-full w-full max-w-md bg-white shadow-2xl border-l border-slate-200 transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col overflow-hidden overscroll-contain">
+  <aside id="side-drawer" class="fixed top-0 right-0 z-50 h-screen max-h-screen w-full max-w-md bg-white shadow-2xl border-l border-slate-200 transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col overflow-hidden select-text">
     
     <!-- Drawer Header (Fixo no Topo) -->
     <div class="p-4 sm:p-5 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0 z-30 shadow-xs">
@@ -413,7 +427,7 @@
     </div>
 
     <!-- Container Único de Rolagem do Menu Lateral (Permite scroll completo e fluido) -->
-    <div id="drawer-scroll-container" class="flex-1 overflow-y-auto overscroll-contain kanban-scroll flex flex-col bg-slate-50/50">
+    <div id="drawer-scroll-container" class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden kanban-scroll flex flex-col bg-slate-50/50">
 
       <!-- Quick Access Hub inside Menu Painel -->
       <div class="p-4 bg-slate-100/90 border-b border-slate-200 space-y-3 shrink-0">
@@ -453,6 +467,9 @@
               <span class="text-[10px] font-semibold text-emerald-100 block leading-tight">Para celulares (sem conflito no motor iFood)</span>
             </div>
           </div>
+          <span class="text-xs">&rarr;</span>
+        </button>
+
         <!-- Botão Servidor de Recepção 24h -->
         <a 
           id="drawer-open-service-link"
@@ -524,7 +541,7 @@
       </div>
 
       <!-- Drawer Body (Conteúdo exclusivo e categorizado de cada Aba) -->
-      <div class="p-4 sm:p-5 space-y-5 bg-white flex-1">
+      <div class="p-4 sm:p-5 pb-32 space-y-5 bg-white">
 
         <!-- ============================================================== -->
         <!-- ABA 1: LOJAS (CADASTROS & GERENCIAMENTO DE UNIDADES) -->
@@ -3528,6 +3545,7 @@
             id: s.id,
             name: s.name,
             merchantId: s.merchantId || '',
+            active: Boolean(s.active),
             isHidden: Boolean(s.isHidden)
           }));
           const compareData = {
@@ -3548,13 +3566,13 @@
           const payload = {
             ...apiCredentials,
             deliveryFeesList: deliveryFeesList,
-            storesList: storesList,
+            storesList: normalizedStores,
             updatedAt: Date.now()
           };
           window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "config", "settings"), payload, { merge: true })
             .then(() => {
               window._firebaseLastStateSynced_settings = compareStr;
-              console.log("🔥 [Firebase]: Configurações sincronizadas na nuvem.");
+              console.log("🔥 [Firebase]: Configurações e lojas sincronizadas na nuvem.");
             })
             .catch(e => console.warn("Falha ao salvar na nuvem:", e));
 
@@ -5642,7 +5660,10 @@
       clearTimeout(_syncMotoboysTimer);
       const executeSyncMb = () => {
         try {
-          const activeMb = (motoboysList || []).filter(m => !m.archived && m.active !== false);
+          const activeMb = (motoboysList || []).filter(m => !m.archived && m.active !== false).map(m => ({
+            ...m,
+            isHidden: Boolean(m.isHidden)
+          }));
           const compareStr = JSON.stringify(activeMb);
           if (window._firebaseLastStateSynced_motoboys !== compareStr || immediate) {
             const payload = {
@@ -10644,6 +10665,7 @@
 
                 const mergedStores = data.storesList.map(s => ({
                   ...s,
+                  isHidden: Boolean(s.isHidden),
                   active: s.id === targetActiveId
                 }));
 
@@ -10680,7 +10702,10 @@
           if (docSnap.exists()) {
             const data = docSnap.data();
             if (data && Array.isArray(data.motoboys)) {
-              remoteMb = data.motoboys.filter(m => !m.archived && m.active !== false);
+              remoteMb = data.motoboys.filter(m => !m.archived && m.active !== false).map(m => ({
+                ...m,
+                isHidden: Boolean(m.isHidden)
+              }));
             }
           } else {
             // Migração automática transparente se o documento de estado ainda não existir

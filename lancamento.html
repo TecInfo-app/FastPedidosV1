@@ -1550,6 +1550,7 @@
 
                 storesList = data.storesList.map(s => ({
                   ...s,
+                  isHidden: Boolean(s.isHidden),
                   active: s.id === targetActiveId
                 }));
                 try {
@@ -1579,7 +1580,10 @@
           if (snap.exists()) {
             const data = snap.data();
             if (data && Array.isArray(data.motoboys)) {
-              const filteredMb = data.motoboys.filter(m => !m.archived && m.active !== false);
+              const filteredMb = data.motoboys.filter(m => !m.archived && m.active !== false).map(m => ({
+                ...m,
+                isHidden: Boolean(m.isHidden)
+              }));
               filteredMb.sort((a, b) => (a.order ?? 999999) - (b.order ?? 999999));
               motoboysList = filteredMb;
               try {

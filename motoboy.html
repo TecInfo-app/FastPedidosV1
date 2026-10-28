@@ -890,7 +890,7 @@
         storeNameEl.innerText = localStorage.getItem('portal_store_name') || currentTenantId || 'Minha Loja';
       }
 
-      let listToRender = (motoboysList || []);
+      let listToRender = (motoboysList || []).filter(m => !m.isHidden);
       if (portalMotoboyFilterQuery) {
         listToRender = listToRender.filter(m => m.name && m.name.toLowerCase().includes(portalMotoboyFilterQuery));
       }
@@ -1836,7 +1836,10 @@
           if (docSnap.exists()) {
             const data = docSnap.data();
             if (data && Array.isArray(data.motoboys)) {
-              list = data.motoboys.filter(m => !m.archived && m.active !== false);
+              list = data.motoboys.filter(m => !m.archived && m.active !== false).map(m => ({
+                ...m,
+                isHidden: Boolean(m.isHidden)
+              }));
             }
           } else {
             // Fallback de compatibilidade
