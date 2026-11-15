@@ -1643,7 +1643,7 @@
   <!-- FIREBASE REAL-TIME SYNC MODULE (ISOLADO PARA O PORTAL DO ENTREGADOR) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, collection, onSnapshot, setDoc, doc, query, limit, getDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getFirestore, collection, onSnapshot, setDoc, doc, query, limit, getDoc, getDocs, getDocFromServer } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBow5AERyHHi3_zpmPwiV9SKhHfW-ltCHY",
@@ -1787,6 +1787,65 @@
       }
       window.promptStorePicker = promptStorePicker;
 
+      function applyPortalSettingsSnapshot(data, tenantId) {
+        if (!data) return;
+        const activeStore =
+          (data.storesList && data.storesList.find(s => s.active && !s.isHidden)) ||
+          (data.storesList && data.storesList.find(s => !s.isHidden)) ||
+          (data.storesList && data.storesList[0]);
+        const storeName = (activeStore && activeStore.name) || data.storeName || tenantId;
+        localStorage.setItem('portal_store_name', storeName);
+        const storeNameEl = document.getElementById('portal-current-store-name');
+        if (storeNameEl) storeNameEl.innerText = storeName;
+      }
+
+      function applyPortalMotoboysList(list, docExists) {
+        if (list.length > 0 || docExists) {
+          list.sort((a, b) => (a.order ?? 999999) - (b.order ?? 999999));
+          motoboysList = list;
+
+          const urlParams = new URLSearchParams(window.location.search);
+          const targetMbId = urlParams.get('mb') || urlParams.get('motoboy');
+          if (!activePortalMotoboyId && targetMbId && list.some(m => m.id === targetMbId)) {
+            selectMotoboyForPortalAuth(targetMbId);
+            return;
+          }
+
+          if (activePortalMotoboyId && motoboysList.some(m => m.id === activePortalMotoboyId)) {
+            renderPortalDashboard(activePortalMotoboyId);
+          } else if (!activePortalMotoboyId) {
+            renderPortalMotoboySelection();
+          }
+        }
+      }
+
+      function applyPortalOrdersList(orders, docExists) {
+        if (orders.length > 0 || docExists) {
+          orders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+          motoboyOrders = orders;
+
+          if (activePortalMotoboyId) {
+            renderPortalDashboard(activePortalMotoboyId);
+
+            const myOrders = orders.filter(o => String(o.motoboyId) === String(activePortalMotoboyId));
+            if (!initialSyncDone) {
+              knownOrderIds = new Set(myOrders.map(o => String(o.id)));
+              initialSyncDone = true;
+            } else {
+              const incoming = myOrders.filter(o => !knownOrderIds.has(String(o.id)));
+              if (incoming.length > 0) {
+                incoming.forEach(ord => {
+                  knownOrderIds.add(String(ord.id));
+                  triggerNewOrderAlert(ord);
+                });
+              }
+            }
+          } else {
+            renderPortalMotoboySelection();
+          }
+        }
+      }
+
       function startPortalSync(tenantId) {
         if (!tenantId) {
           promptStorePicker();
@@ -1807,14 +1866,7 @@
         // 0. Sincroniza nome da loja em tempo real
         unsubSettings = onSnapshot(doc(db, "stores", tenantId, "config", "settings"), (snap) => {
           if (snap.exists()) {
-            const data = snap.data();
-            if (data) {
-              const activeStore = (data.storesList && data.storesList.find(s => s.active)) || (data.storesList && data.storesList[0]);
-              const storeName = (activeStore && activeStore.name) || data.storeName || tenantId;
-              localStorage.setItem('portal_store_name', storeName);
-              const storeNameEl = document.getElementById('portal-current-store-name');
-              if (storeNameEl) storeNameEl.innerText = storeName;
-            }
+            applyPortalSettingsSnapshot(snap.data(), tenantId);
           }
         }, (err) => console.warn('Erro ao carregar settings:', err));
 
@@ -1854,24 +1906,7 @@
             } catch(e) {}
           }
 
-          if (list.length > 0 || docSnap.exists()) {
-            list.sort((a, b) => (a.order ?? 999999) - (b.order ?? 999999));
-            motoboysList = list;
-
-            // Se veio parâmetro de motoboy específico na URL (?mb=xxx), abre o prompt direto
-            const urlParams = new URLSearchParams(window.location.search);
-            const targetMbId = urlParams.get('mb') || urlParams.get('motoboy');
-            if (!activePortalMotoboyId && targetMbId && list.some(m => m.id === targetMbId)) {
-              selectMotoboyForPortalAuth(targetMbId);
-              return;
-            }
-
-            if (activePortalMotoboyId && motoboysList.some(m => m.id === activePortalMotoboyId)) {
-              renderPortalDashboard(activePortalMotoboyId);
-            } else if (!activePortalMotoboyId) {
-              renderPortalMotoboySelection();
-            }
-          }
+          applyPortalMotoboysList(list, docSnap.exists());
         }, (err) => console.warn('Erro ao sincronizar motoboys:', err));
 
         // 2. Escuta lista de Pedidos dos Motoboys em tempo real (Consolidado: 1 Leitura)
@@ -1895,34 +1930,61 @@
             } catch(e) {}
           }
 
-          if (orders.length > 0 || docSnap.exists()) {
-            orders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-            motoboyOrders = orders;
-
-            if (activePortalMotoboyId) {
-              renderPortalDashboard(activePortalMotoboyId);
-
-              // Detecção de novos pedidos para o motoboy logado
-              const myOrders = orders.filter(o => String(o.motoboyId) === String(activePortalMotoboyId));
-              if (!initialSyncDone) {
-                knownOrderIds = new Set(myOrders.map(o => String(o.id)));
-                initialSyncDone = true;
-              } else {
-                const incoming = myOrders.filter(o => !knownOrderIds.has(String(o.id)));
-                if (incoming.length > 0) {
-                  incoming.forEach(ord => {
-                    knownOrderIds.add(String(ord.id));
-                    triggerNewOrderAlert(ord);
-                  });
-                }
-              }
-            } else {
-              renderPortalMotoboySelection();
-            }
-          }
+          applyPortalOrdersList(orders, docSnap.exists());
         }, (err) => console.warn('Erro ao sincronizar pedidos:', err));
       }
       window.startPortalSync = startPortalSync;
+
+      let _portalRefreshInFlight = false;
+      async function refreshPortalSyncFromServer() {
+        if (!currentTenantId || !db || _portalRefreshInFlight) return;
+        _portalRefreshInFlight = true;
+        try {
+          const [sSnap, mSnap, oSnap] = await Promise.all([
+            getDocFromServer(doc(db, "stores", currentTenantId, "config", "settings")).catch(() => null),
+            getDocFromServer(doc(db, "stores", currentTenantId, "state", "motoboys")).catch(() => null),
+            getDocFromServer(doc(db, "stores", currentTenantId, "state", "motoboy_orders")).catch(() => null)
+          ]);
+          if (sSnap && sSnap.exists()) {
+            applyPortalSettingsSnapshot(sSnap.data(), currentTenantId);
+          }
+          if (mSnap && mSnap.exists()) {
+            const d = mSnap.data();
+            const list = (d && Array.isArray(d.motoboys))
+              ? d.motoboys.filter(m => !m.archived && m.active !== false).map(m => ({ ...m, isHidden: Boolean(m.isHidden) }))
+              : [];
+            applyPortalMotoboysList(list, true);
+          }
+          if (oSnap && oSnap.exists()) {
+            const d = oSnap.data();
+            const orders = (d && Array.isArray(d.orders))
+              ? d.orders.filter(o => !o.archived)
+              : [];
+            applyPortalOrdersList(orders, true);
+          }
+        } catch (e) {
+          console.warn('Aviso ao revalidar Portal Motoboy no servidor:', e);
+        } finally {
+          _portalRefreshInFlight = false;
+        }
+      }
+
+      let _portalLastHiddenAt = 0;
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+          _portalLastHiddenAt = Date.now();
+        } else if (document.visibilityState === 'visible') {
+          if (_portalLastHiddenAt && (Date.now() - _portalLastHiddenAt > 15000)) {
+            refreshPortalSyncFromServer();
+          }
+        }
+      });
+      window.addEventListener('pageshow', (event) => {
+        if (event.persisted) refreshPortalSyncFromServer();
+      });
+      window.addEventListener('online', () => {
+        refreshPortalSyncFromServer();
+      });
 
       // Executa inicialização automática inteligente
       const urlParams = new URLSearchParams(window.location.search);

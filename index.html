@@ -3369,11 +3369,14 @@
     }
 
     let _syncKdsOrdersTimer = null;
+    window.clearPendingKdsSyncTimer = () => clearTimeout(_syncKdsOrdersTimer);
     function syncKdsOrdersStateToFirebase(tenantId) {
       if (!tenantId || !window.firebaseDb || !window.firebaseSetDoc) return;
+      if (!window._cloudHydrated || !window._cloudHydrated.kdsOrders) return;
       clearTimeout(_syncKdsOrdersTimer);
       _syncKdsOrdersTimer = setTimeout(() => {
         try {
+          if (!window._cloudHydrated || !window._cloudHydrated.kdsOrders) return;
           const activeOrders = (orders || []).filter(o => !o.archived);
           const compareStr = JSON.stringify(activeOrders);
           if (window._firebaseLastStateSynced_kds !== compareStr) {
@@ -3398,6 +3401,8 @@
         renderMotoboySpreadsheet();
       }
       if (!skipFirebase && tenantId && window.firebaseDb && window.firebaseSetDoc) {
+        if (!window._pendingLocalOrderIds) window._pendingLocalOrderIds = new Set();
+        (orders || []).forEach(o => { if (o && o.id && !o.archived) window._pendingLocalOrderIds.add(String(o.id)); });
         syncKdsOrdersStateToFirebase(tenantId);
       }
     }
@@ -3535,12 +3540,24 @@
     }
 
     let _syncSettingsTimer = null;
-    function syncSettingsToFirebase(immediate = false) {
+    window.clearPendingSettingsSyncTimer = () => clearTimeout(_syncSettingsTimer);
+    function syncSettingsToFirebase(immediate = false, forceBypassHydration = false) {
       const tenantId = getCurrentTenantId();
       if (!tenantId || !window.firebaseDb || !window.firebaseSetDoc) return;
+      if (!forceBypassHydration && (!window._cloudHydrated || !window._cloudHydrated.settings)) {
+        console.warn("🛡️ [Cloud-First]: Bloqueada tentativa de sobrescrever configurações antes de sincronizar com a nuvem.");
+        if (immediate && typeof showToast === 'function') {
+          showToast('Sincronizando...', 'Aguardando os dados mais recentes da nuvem antes de salvar.', 'info');
+        }
+        if (typeof window.refreshTenantSyncFromServer === 'function') {
+          window.refreshTenantSyncFromServer();
+        }
+        return;
+      }
       clearTimeout(_syncSettingsTimer);
       const executeSync = () => {
         try {
+          if (!forceBypassHydration && (!window._cloudHydrated || !window._cloudHydrated.settings)) return;
           const normalizedStores = (storesList || []).map(s => ({
             id: s.id,
             name: s.name,
@@ -3548,7 +3565,7 @@
             active: Boolean(s.active),
             isHidden: Boolean(s.isHidden)
           }));
-          const compareData = {
+          const cleanCredentials = {
             clientId: apiCredentials.clientId || '',
             clientSecret: apiCredentials.clientSecret || '',
             merchantId: apiCredentials.merchantId || '',
@@ -3556,22 +3573,27 @@
             storeName: apiCredentials.storeName || '',
             baseStoreAddress: apiCredentials.baseStoreAddress || DEFAULT_BASE_STORE_ADDRESS,
             baseStoreLat: apiCredentials.baseStoreLat || DEFAULT_BASE_STORE_LAT,
-            baseStoreLng: apiCredentials.baseStoreLng || DEFAULT_BASE_STORE_LNG,
+            baseStoreLng: apiCredentials.baseStoreLng || DEFAULT_BASE_STORE_LNG
+          };
+          const compareData = {
+            ...cleanCredentials,
             deliveryFeesList: deliveryFeesList || [],
             storesList: normalizedStores
           };
           const compareStr = JSON.stringify(compareData);
-          if (window._firebaseLastStateSynced_settings === compareStr && !immediate) return;
+          if (window._firebaseLastStateSynced_settings === compareStr && !immediate && !forceBypassHydration) return;
 
+          const nowTs = Date.now();
           const payload = {
-            ...apiCredentials,
+            ...cleanCredentials,
             deliveryFeesList: deliveryFeesList,
             storesList: normalizedStores,
-            updatedAt: Date.now()
+            updatedAt: nowTs
           };
           window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "config", "settings"), payload, { merge: true })
             .then(() => {
               window._firebaseLastStateSynced_settings = compareStr;
+              if (window._cloudVersions) window._cloudVersions.settingsUpdatedAt = nowTs;
               console.log("🔥 [Firebase]: Configurações e lojas sincronizadas na nuvem.");
             })
             .catch(e => console.warn("Falha ao salvar na nuvem:", e));
@@ -3582,7 +3604,7 @@
             window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores_directory", tenantId), {
               id: tenantId,
               name: storeName,
-              updatedAt: Date.now()
+              updatedAt: nowTs
             }, { merge: true }).then(() => {
               window._firebaseLastStateSynced_dirName = storeName;
             }).catch(() => {});
@@ -3593,7 +3615,7 @@
       if (immediate) {
         executeSync();
       } else {
-        _syncSettingsTimer = setTimeout(executeSync, 1000);
+        _syncSettingsTimer = setTimeout(executeSync, 600);
       }
     }
 
@@ -3621,12 +3643,21 @@
       }
 
       // Sincroniza configurações e credenciais no Firestore
-      syncSettingsToFirebase();
+      syncSettingsToFirebase(true);
     }
 
     window.receiveCredentialsFromFirebase = function(creds) {
       if (!creds) return;
-      apiCredentials = creds;
+      apiCredentials = {
+        clientId: creds.clientId || '',
+        clientSecret: creds.clientSecret || '',
+        merchantId: creds.merchantId || '',
+        customApiUrl: creds.customApiUrl || '',
+        storeName: creds.storeName || '',
+        baseStoreAddress: creds.baseStoreAddress || DEFAULT_BASE_STORE_ADDRESS,
+        baseStoreLat: creds.baseStoreLat || DEFAULT_BASE_STORE_LAT,
+        baseStoreLng: creds.baseStoreLng || DEFAULT_BASE_STORE_LNG
+      };
       const storageKey = getTenantStorageKey('config');
       localStorage.setItem(storageKey, JSON.stringify(apiCredentials));
       loadCredentials();
@@ -4964,7 +4995,7 @@
         s.active = shouldBeActive;
       });
       if (!changed) return;
-      saveStores(false); // Selecionar loja ativa na tela não precisa gravar no Firebase
+      saveStores(true, true); // Sincroniza a loja ativa imediatamente para todos os dispositivos
       const active = storesList.find(s => s.active);
       if (active && !silent) {
         showToast('Loja Ativa Selecionada', `Operando agora em: ${active.name}`, 'info');
@@ -5035,6 +5066,11 @@
       const idx = storesList.findIndex(s => s.id === id);
       if (idx !== -1) {
         storesList[idx].isHidden = !storesList[idx].isHidden;
+        // Se ocultou a loja que estava ativa, ativa automaticamente a primeira loja visível restante
+        if (storesList[idx].isHidden && storesList[idx].active) {
+          const firstVisible = storesList.find(s => !s.isHidden);
+          storesList.forEach(s => { s.active = firstVisible ? (s.id === firstVisible.id) : false; });
+        }
         saveStores(true, true);
         renderDrawerStores();
         if (typeof renderStoreChips === 'function') renderStoreChips();
@@ -5116,9 +5152,10 @@
         id: newId,
         name: name,
         merchantId: mid || undefined,
-        active: false
+        active: false,
+        isHidden: false
       });
-      saveStores();
+      saveStores(true, true);
       renderStoreChips();
       renderDrawerStores();
       closeCreateStoreModal();
@@ -5139,9 +5176,10 @@
         () => {
           storesList = storesList.filter(s => s.id !== storeId);
           if (!storesList.some(s => s.active)) {
-            storesList[0].active = true;
+            const firstVisible = storesList.find(s => !s.isHidden) || storesList[0];
+            if (firstVisible) firstVisible.active = true;
           }
-          saveStores();
+          saveStores(true, true);
           renderStoreChips();
           renderDrawerStores();
           showToast('Loja Removida', 'A loja foi excluída.', 'info');
@@ -5655,23 +5693,37 @@
     }
 
     let _syncMotoboysTimer = null;
+    window.clearPendingMotoboysSyncTimer = () => clearTimeout(_syncMotoboysTimer);
     function syncMotoboysStateToFirebase(tenantId, immediate = false) {
       if (!tenantId || !window.firebaseDb || !window.firebaseSetDoc) return;
+      if (!window._cloudHydrated || !window._cloudHydrated.motoboys) {
+        console.warn("🛡️ [Cloud-First]: Bloqueada tentativa de sobrescrever motoboys antes de sincronizar com a nuvem.");
+        if (immediate && typeof showToast === 'function') {
+          showToast('Sincronizando...', 'Aguardando a lista atualizada de motoboys da nuvem.', 'info');
+        }
+        if (typeof window.refreshTenantSyncFromServer === 'function') {
+          window.refreshTenantSyncFromServer();
+        }
+        return;
+      }
       clearTimeout(_syncMotoboysTimer);
       const executeSyncMb = () => {
         try {
+          if (!window._cloudHydrated || !window._cloudHydrated.motoboys) return;
           const activeMb = (motoboysList || []).filter(m => !m.archived && m.active !== false).map(m => ({
             ...m,
             isHidden: Boolean(m.isHidden)
           }));
           const compareStr = JSON.stringify(activeMb);
           if (window._firebaseLastStateSynced_motoboys !== compareStr || immediate) {
+            const nowTs = Date.now();
             const payload = {
               motoboys: activeMb,
-              updatedAt: Date.now()
+              updatedAt: nowTs
             };
             window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "stores", tenantId, "state", "motoboys"), payload, { merge: true }).then(() => {
               window._firebaseLastStateSynced_motoboys = compareStr;
+              if (window._cloudVersions) window._cloudVersions.motoboysUpdatedAt = nowTs;
             }).catch(() => {});
           }
         } catch(e) {}
@@ -5866,7 +5918,7 @@
       };
 
       motoboysList.push(newMb);
-      saveMotoboys();
+      saveMotoboys(null, true);
       renderDrawerMotoboys();
       populateMotoboySelect();
       renderMotoboyMosaic();
@@ -5927,7 +5979,7 @@
       mb.phone = phone;
       mb.password = password;
 
-      saveMotoboys();
+      saveMotoboys(null, true);
       closeEditMotoboyModal();
       showToast('Motoboy Atualizado', `Dados e senha de ${mb.name} atualizados com sucesso!`, 'success');
     }
@@ -5942,7 +5994,7 @@
         `Deseja realmente remover o motoboy "${mb ? mb.name : ''}" da equipe?`,
         () => {
           motoboysList = motoboysList.filter(m => m.id !== id);
-          saveMotoboys(id);
+          saveMotoboys(id, true);
           renderDrawerMotoboys();
           renderMotoboyMosaic();
           showToast('Motoboy Removido', 'Motoboy excluído da lista.', 'info');
@@ -7290,11 +7342,14 @@
     }
 
     let _syncMotoboyOrdersTimer = null;
+    window.clearPendingMotoboyOrdersSyncTimer = () => clearTimeout(_syncMotoboyOrdersTimer);
     function syncMotoboyOrdersStateToFirebase(tenantId) {
       if (!tenantId || !window.firebaseDb || !window.firebaseSetDoc) return;
+      if (!window._cloudHydrated || !window._cloudHydrated.motoboyOrders) return;
       clearTimeout(_syncMotoboyOrdersTimer);
       _syncMotoboyOrdersTimer = setTimeout(() => {
         try {
+          if (!window._cloudHydrated || !window._cloudHydrated.motoboyOrders) return;
           const activeOrders = (motoboyOrders || []).filter(o => !o.archived);
           const compareStr = JSON.stringify(activeOrders);
           if (window._firebaseLastStateSynced_motoboyOrders !== compareStr) {
@@ -7317,6 +7372,8 @@
       localStorage.setItem(storageKey, JSON.stringify(motoboyOrders));
       renderMotoboyMosaic();
       if (!skipFirebase && tenantId && window.firebaseDb && window.firebaseSetDoc) {
+        if (!window._pendingLocalMotoboyOrderIds) window._pendingLocalMotoboyOrderIds = new Set();
+        (motoboyOrders || []).forEach(o => { if (o && o.id && !o.archived) window._pendingLocalMotoboyOrderIds.add(String(o.id)); });
         syncMotoboyOrdersStateToFirebase(tenantId);
       }
     }
@@ -9670,8 +9727,9 @@
       localStorage.setItem(getTenantStorageKey('delivery_fees'), JSON.stringify(deliveryFeesList));
       localStorage.setItem(getTenantStorageKey('config'), JSON.stringify(apiCredentials));
 
-      // Sincroniza estado zerado no Firestore
-      syncSettingsToFirebase();
+      // Libera hidratação para nova loja recém-criada e sincroniza estado inicial no Firestore
+      window._cloudHydrated = { settings: true, motoboys: true, motoboyOrders: true, kdsOrders: true };
+      syncSettingsToFirebase(true, true);
 
       // Renderiza UI limpa
       renderKanban();
@@ -9692,7 +9750,7 @@
         localStorage.setItem('last_tenant_id', tenantId);
       }
 
-      // Carrega dados específicos desta loja
+      // Carrega cache local apenas para exibição instantânea (Cloud-First: NUNCA envia cache antigo para o Firebase ao iniciar)
       loadCredentials();
       loadStores();
       loadMotoboys();
@@ -9705,12 +9763,7 @@
       updateApiStatusUI();
       fetchAndRenderStoreStatus();
 
-      // Garante que as credenciais do iFood e configurações estão sincronizadas no Firestore para os celulares
-      if (apiCredentials && apiCredentials.clientId && typeof syncSettingsToFirebase === 'function') {
-        syncSettingsToFirebase();
-      }
-
-      // Conecta listeners em tempo real do Firestore para esta loja
+      // Conecta listeners em tempo real do Firestore para baixar o estado mais recente da nuvem
       if (window.initTenantSync) {
         window.initTenantSync(tenantId);
       }
@@ -10212,7 +10265,8 @@
 
       if (hasDeleted) {
         orders = validOrders;
-        saveOrders(false);
+        // Só envia remoção para a nuvem se já estivermos sincronizados com o servidor
+        saveOrders(!(window._cloudHydrated && window._cloudHydrated.kdsOrders));
         renderKanban();
       }
     }
@@ -10552,7 +10606,7 @@
   <!-- FIREBASE FIRESTORE REAL-TIME MULTI-DEVICE SYNC & AUTH MODULE -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { initializeFirestore, getFirestore, collection, onSnapshot, setDoc, doc, deleteDoc, query, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { initializeFirestore, getFirestore, collection, onSnapshot, setDoc, doc, deleteDoc, query, limit, getDocs, getDocFromServer } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
     const firebaseConfig = {
@@ -10576,6 +10630,20 @@
       window.firebaseDoc = doc;
       window.firebaseGetDocs = getDocs;
       window.firebaseCollection = collection;
+
+      // Controle Cloud-First: impede que cache antigo no aparelho sobrescreva a nuvem antes do servidor responder
+      window._cloudHydrated = window._cloudHydrated || {
+        settings: false,
+        motoboys: false,
+        motoboyOrders: false,
+        kdsOrders: false
+      };
+      window._cloudVersions = window._cloudVersions || {
+        settingsUpdatedAt: 0,
+        motoboysUpdatedAt: 0,
+        motoboyOrdersUpdatedAt: 0,
+        kdsOrdersUpdatedAt: 0
+      };
       
       window.firebaseQuotaExceeded = false;
       window.handleQuotaExceeded = () => {
@@ -10617,8 +10685,6 @@
       // Otimização: Cache local de hashes para evitar sobreescrever a nuvem com dados repetidos
       window._firebaseLastSynced = {};
 
-      window.firebaseCollection = collection;
-
       console.log("🔥 [Firebase]: Conectado ao projeto fastpedidos-abde5 com sucesso!");
 
       // Update UI Badge
@@ -10631,90 +10697,195 @@
       let unsubOrders = null;
       let unsubMotoboys = null;
       let unsubSettings = null;
+      let currentSyncTenantId = '';
+
+      function resetCloudHydrationState() {
+        window._cloudHydrated = {
+          settings: false,
+          motoboys: false,
+          motoboyOrders: false,
+          kdsOrders: false
+        };
+        window._firebaseLastStateSynced_settings = null;
+        window._firebaseLastStateSynced_motoboys = null;
+        window._firebaseLastStateSynced_motoboyOrders = null;
+        window._firebaseLastStateSynced_kds = null;
+        if (typeof window.clearPendingSettingsSyncTimer === 'function') window.clearPendingSettingsSyncTimer();
+        if (typeof window.clearPendingMotoboysSyncTimer === 'function') window.clearPendingMotoboysSyncTimer();
+        if (typeof window.clearPendingMotoboyOrdersSyncTimer === 'function') window.clearPendingMotoboyOrdersSyncTimer();
+        if (typeof window.clearPendingKdsSyncTimer === 'function') window.clearPendingKdsSyncTimer();
+      }
 
       function detachTenantSync() {
         if (unsubMotoboyOrders) { unsubMotoboyOrders(); unsubMotoboyOrders = null; }
         if (unsubOrders) { unsubOrders(); unsubOrders = null; }
         if (unsubMotoboys) { unsubMotoboys(); unsubMotoboys = null; }
         if (unsubSettings) { unsubSettings(); unsubSettings = null; }
+        currentSyncTenantId = '';
+        resetCloudHydrationState();
         console.log("🔥 [Firebase]: Listeners da loja desconectados.");
       }
       window.detachTenantSync = detachTenantSync;
 
+      function applyRemoteSettingsSnapshot(data, fromCache = false) {
+        if (!data) return;
+        if (typeof window.clearPendingSettingsSyncTimer === 'function') {
+          window.clearPendingSettingsSyncTimer();
+        }
+        if (typeof window.receiveCredentialsFromFirebase === 'function') {
+          window.receiveCredentialsFromFirebase(data);
+        }
+        let finalStores = window.storesList || [];
+        if (Array.isArray(data.storesList) && data.storesList.length > 0) {
+          const visibleStores = data.storesList.filter(s => !s.isHidden);
+          const cloudActiveStore = data.storesList.find(s => s.active && !s.isHidden);
+          const targetActiveId = cloudActiveStore
+            ? cloudActiveStore.id
+            : (visibleStores[0]?.id || data.storesList[0]?.id);
+
+          const mergedStores = data.storesList.map(s => ({
+            ...s,
+            isHidden: Boolean(s.isHidden),
+            active: s.id === targetActiveId
+          }));
+          finalStores = mergedStores;
+
+          if (typeof window.setStoresList === 'function') window.setStoresList(mergedStores);
+          else window.storesList = mergedStores;
+
+          if (typeof window.getTenantStorageKey === 'function') {
+            localStorage.setItem(window.getTenantStorageKey('stores'), JSON.stringify(mergedStores));
+          }
+          if (typeof renderStoreChips === 'function') renderStoreChips();
+          if (typeof renderDrawerStores === 'function') renderDrawerStores();
+          if (typeof updateActiveStoreDisplay === 'function') updateActiveStoreDisplay();
+        }
+        let finalFees = window.deliveryFeesList || [];
+        if (Array.isArray(data.deliveryFeesList) && data.deliveryFeesList.length > 0) {
+          const enrichedFees = typeof window.ensureDefaultFeeKmRanges === 'function'
+            ? window.ensureDefaultFeeKmRanges(data.deliveryFeesList)
+            : data.deliveryFeesList;
+          finalFees = enrichedFees;
+          if (typeof window.setDeliveryFeesList === 'function') window.setDeliveryFeesList(enrichedFees);
+          else window.deliveryFeesList = enrichedFees;
+
+          if (typeof window.getTenantStorageKey === 'function') {
+            localStorage.setItem(window.getTenantStorageKey('delivery_fees'), JSON.stringify(enrichedFees));
+          }
+          if (typeof renderDrawerFees === 'function') renderDrawerFees();
+          if (typeof populateDeliveryFeeSelect === 'function') populateDeliveryFeeSelect();
+        }
+        if (!fromCache) {
+          const normalizedStores = (finalStores || []).map(s => ({
+            id: s.id,
+            name: s.name,
+            merchantId: s.merchantId || '',
+            active: Boolean(s.active),
+            isHidden: Boolean(s.isHidden)
+          }));
+          const compareData = {
+            clientId: data.clientId || '',
+            clientSecret: data.clientSecret || '',
+            merchantId: data.merchantId || '',
+            customApiUrl: data.customApiUrl || '',
+            storeName: data.storeName || '',
+            baseStoreAddress: data.baseStoreAddress || (typeof DEFAULT_BASE_STORE_ADDRESS !== 'undefined' ? DEFAULT_BASE_STORE_ADDRESS : ''),
+            baseStoreLat: data.baseStoreLat || (typeof DEFAULT_BASE_STORE_LAT !== 'undefined' ? DEFAULT_BASE_STORE_LAT : 0),
+            baseStoreLng: data.baseStoreLng || (typeof DEFAULT_BASE_STORE_LNG !== 'undefined' ? DEFAULT_BASE_STORE_LNG : 0),
+            deliveryFeesList: finalFees || [],
+            storesList: normalizedStores
+          };
+          window._firebaseLastStateSynced_settings = JSON.stringify(compareData);
+          if (data.updatedAt) window._cloudVersions.settingsUpdatedAt = data.updatedAt;
+          window._cloudHydrated.settings = true;
+        }
+      }
+
+      function applyRemoteMotoboysSnapshot(remoteMb, docExists, fromCache = false, updatedAt = 0) {
+        if (typeof window.clearPendingMotoboysSyncTimer === 'function') {
+          window.clearPendingMotoboysSyncTimer();
+        }
+        if (remoteMb.length > 0 || docExists) {
+          remoteMb.sort((a, b) => (a.order ?? 999999) - (b.order ?? 999999));
+          if (!fromCache) {
+            window._firebaseLastStateSynced_motoboys = JSON.stringify(remoteMb);
+            if (updatedAt) window._cloudVersions.motoboysUpdatedAt = updatedAt;
+            window._cloudHydrated.motoboys = true;
+          }
+          if (typeof window.setMotoboysList === 'function') window.setMotoboysList(remoteMb);
+          else window.motoboysList = remoteMb;
+
+          if (typeof window.getTenantStorageKey === 'function') {
+            localStorage.setItem(window.getTenantStorageKey('motoboys'), JSON.stringify(remoteMb));
+          }
+
+          if (typeof renderDrawerMotoboys === 'function') renderDrawerMotoboys();
+          if (typeof renderMainMotoboyList === 'function') renderMainMotoboyList();
+          if (typeof populateMotoboySelect === 'function') populateMotoboySelect();
+          if (typeof renderMotoboyMosaic === 'function') renderMotoboyMosaic();
+
+          const mbModal = document.getElementById('modal-select-motoboy');
+          if (mbModal && !mbModal.classList.contains('hidden') && typeof openMotoboyModal === 'function' && pendingOrderData) {
+            openMotoboyModal();
+          }
+
+          const activeMbId = window.activePortalMotoboyId || (typeof window.getActivePortalMotoboyId === 'function' ? window.getActivePortalMotoboyId() : localStorage.getItem('activePortalMotoboyId'));
+          if (activeMbId) {
+            if (typeof renderPortalDashboard === 'function') {
+              renderPortalDashboard(activeMbId);
+            }
+          } else {
+            if (typeof renderPortalMotoboySelection === 'function') {
+              renderPortalMotoboySelection();
+            }
+          }
+        } else if (!fromCache && !docExists) {
+          window._cloudHydrated.motoboys = true;
+        }
+      }
+
       function initTenantSync(tenantId) {
         if (!tenantId) return;
         detachTenantSync();
+        currentSyncTenantId = tenantId;
 
-        console.log(`🔥 [Firebase]: Iniciando sincronização isolada para a loja [${tenantId}]...`);
+        console.log(`🔥 [Firebase]: Iniciando sincronização Cloud-First para a loja [${tenantId}]...`);
 
         // 1. Configurações da Loja: stores/${tenantId}/config/settings (1 Leitura)
-        unsubSettings = onSnapshot(doc(db, "stores", tenantId, "config", "settings"), (docSnap) => {
+        unsubSettings = onSnapshot(doc(db, "stores", tenantId, "config", "settings"), { includeMetadataChanges: true }, (docSnap) => {
+          const fromCache = Boolean(docSnap.metadata && docSnap.metadata.fromCache);
           if (docSnap.exists()) {
             const data = docSnap.data();
-            if (data) {
-              if (typeof window.receiveCredentialsFromFirebase === 'function') {
-                window.receiveCredentialsFromFirebase(data);
-              }
-              if (Array.isArray(data.storesList) && data.storesList.length > 0) {
-                // Preserva qual loja estava ativa localmente na tela do operador, desde que ela não esteja oculta
-                const currentActiveStore = (window.storesList || []).find(s => s.active);
-                const visibleStores = data.storesList.filter(s => !s.isHidden);
-                const targetActiveId = (currentActiveStore && !data.storesList.find(s => s.id === currentActiveStore.id)?.isHidden)
-                  ? currentActiveStore.id
-                  : (visibleStores[0]?.id || data.storesList[0]?.id);
-
-                const mergedStores = data.storesList.map(s => ({
-                  ...s,
-                  isHidden: Boolean(s.isHidden),
-                  active: s.id === targetActiveId
-                }));
-
-                if (typeof window.setStoresList === 'function') window.setStoresList(mergedStores);
-                else window.storesList = mergedStores;
-
-                if (typeof window.getTenantStorageKey === 'function') {
-                  localStorage.setItem(window.getTenantStorageKey('stores'), JSON.stringify(mergedStores));
-                }
-                if (typeof renderStoreChips === 'function') renderStoreChips();
-                if (typeof renderDrawerStores === 'function') renderDrawerStores();
-                if (typeof updateActiveStoreDisplay === 'function') updateActiveStoreDisplay();
-              }
-              if (Array.isArray(data.deliveryFeesList) && data.deliveryFeesList.length > 0) {
-                const enrichedFees = typeof window.ensureDefaultFeeKmRanges === 'function'
-                  ? window.ensureDefaultFeeKmRanges(data.deliveryFeesList)
-                  : data.deliveryFeesList;
-                if (typeof window.setDeliveryFeesList === 'function') window.setDeliveryFeesList(enrichedFees);
-                else window.deliveryFeesList = enrichedFees;
-
-                if (typeof window.getTenantStorageKey === 'function') {
-                  localStorage.setItem(window.getTenantStorageKey('delivery_fees'), JSON.stringify(enrichedFees));
-                }
-                if (typeof renderDrawerFees === 'function') renderDrawerFees();
-                if (typeof populateDeliveryFeeSelect === 'function') populateDeliveryFeeSelect();
-              }
-            }
+            applyRemoteSettingsSnapshot(data, fromCache);
+          } else if (!fromCache) {
+            window._cloudHydrated.settings = true;
           }
         }, (err) => console.warn("Firebase Settings error:", err));
 
         // 2. Motoboys da Loja: stores/${tenantId}/state/motoboys (Consolidado: 1 Leitura)
-        unsubMotoboys = onSnapshot(doc(db, "stores", tenantId, "state", "motoboys"), async (docSnap) => {
+        unsubMotoboys = onSnapshot(doc(db, "stores", tenantId, "state", "motoboys"), { includeMetadataChanges: true }, async (docSnap) => {
+          const fromCache = Boolean(docSnap.metadata && docSnap.metadata.fromCache);
           let remoteMb = [];
+          let updatedAt = 0;
           if (docSnap.exists()) {
             const data = docSnap.data();
+            updatedAt = (data && data.updatedAt) || 0;
             if (data && Array.isArray(data.motoboys)) {
               remoteMb = data.motoboys.filter(m => !m.archived && m.active !== false).map(m => ({
                 ...m,
                 isHidden: Boolean(m.isHidden)
               }));
             }
-          } else {
-            // Migração automática transparente se o documento de estado ainda não existir
+          } else if (!fromCache) {
+            // Migração automática transparente se o documento de estado ainda não existir no servidor
             try {
               const snap = await getDocs(collection(db, "stores", tenantId, "motoboys"));
               if (!snap.empty) {
                 snap.forEach(d => {
                   const data = d.data();
-                  if (data && !data.archived && data.active !== false) remoteMb.push(data);
+                  if (data && !data.archived && data.active !== false) {
+                    remoteMb.push({ ...data, isHidden: Boolean(data.isHidden) });
+                  }
                 });
                 remoteMb.sort((a, b) => (a.order ?? 999999) - (b.order ?? 999999));
                 setDoc(doc(db, "stores", tenantId, "state", "motoboys"), { motoboys: remoteMb, updatedAt: Date.now() }, { merge: true }).catch(()=>{});
@@ -10722,37 +10893,7 @@
             } catch(e) {}
           }
 
-          if (remoteMb.length > 0 || docSnap.exists()) {
-            remoteMb.sort((a, b) => (a.order ?? 999999) - (b.order ?? 999999));
-            window._firebaseLastStateSynced_motoboys = JSON.stringify(remoteMb);
-            if (typeof window.setMotoboysList === 'function') window.setMotoboysList(remoteMb);
-            else window.motoboysList = remoteMb;
-
-            if (typeof window.getTenantStorageKey === 'function') {
-              localStorage.setItem(window.getTenantStorageKey('motoboys'), JSON.stringify(remoteMb));
-            }
-            
-            if (typeof renderDrawerMotoboys === 'function') renderDrawerMotoboys();
-            if (typeof renderMainMotoboyList === 'function') renderMainMotoboyList();
-            if (typeof populateMotoboySelect === 'function') populateMotoboySelect();
-            if (typeof renderMotoboyMosaic === 'function') renderMotoboyMosaic();
-
-            const mbModal = document.getElementById('modal-select-motoboy');
-            if (mbModal && !mbModal.classList.contains('hidden') && typeof openMotoboyModal === 'function' && pendingOrderData) {
-              openMotoboyModal();
-            }
-            
-            const activeMbId = window.activePortalMotoboyId || (typeof window.getActivePortalMotoboyId === 'function' ? window.getActivePortalMotoboyId() : localStorage.getItem('activePortalMotoboyId'));
-            if (activeMbId) {
-              if (typeof renderPortalDashboard === 'function') {
-                renderPortalDashboard(activeMbId);
-              }
-            } else {
-              if (typeof renderPortalMotoboySelection === 'function') {
-                renderPortalMotoboySelection();
-              }
-            }
-          }
+          applyRemoteMotoboysSnapshot(remoteMb, docSnap.exists(), fromCache, updatedAt);
         }, (err) => {
           console.warn("Firebase Motoboys error:", err);
           if (err && err.message && (err.message.includes('quota') || err.message.includes('Quota') || err.message.includes('resource-exhausted'))) {
@@ -10761,7 +10902,8 @@
         });
 
         // 3. Pedidos dos Motoboys: stores/${tenantId}/state/motoboy_orders (Consolidado: 1 Leitura)
-        unsubMotoboyOrders = onSnapshot(doc(db, "stores", tenantId, "state", "motoboy_orders"), async (docSnap) => {
+        unsubMotoboyOrders = onSnapshot(doc(db, "stores", tenantId, "state", "motoboy_orders"), { includeMetadataChanges: true }, async (docSnap) => {
+          const fromCache = Boolean(docSnap.metadata && docSnap.metadata.fromCache);
           let remoteOrders = [];
           let docDataSource = '';
           if (docSnap.exists()) {
@@ -10770,7 +10912,7 @@
             if (data && Array.isArray(data.orders)) {
               remoteOrders = data.orders.filter(o => !o.archived);
             }
-          } else {
+          } else if (!fromCache) {
             // Migração automática transparente se o documento de estado ainda não existir
             try {
               const snap = await getDocs(query(collection(db, "stores", tenantId, "motoboyOrders"), limit(300)));
@@ -10786,22 +10928,29 @@
           }
 
           if (remoteOrders.length > 0 || docSnap.exists()) {
-            // BLINDAGEM ANTI-APAGAMENTO: Preserva pedidos lançados localmente que ainda não subiram ou sofreram atraso/cota na nuvem
-            if (docDataSource !== 'fechar_dia') {
+            const removedSet = window._locallyRemovedMotoboyOrderIds || new Set();
+            remoteOrders = remoteOrders.filter(o => o && o.id && !removedSet.has(String(o.id)));
+            const remoteIdMap = new Map(remoteOrders.map(o => [String(o.id), o]));
+
+            // Limpa pendências locais que já chegaram no servidor
+            if (!fromCache && window._pendingLocalMotoboyOrderIds) {
+              remoteOrders.forEach(o => window._pendingLocalMotoboyOrderIds.delete(String(o.id)));
+            }
+
+            // Só mescla pedidos criados NESTA sessão que ainda não subiram; nunca ressuscita cache antigo do localStorage ao reabrir
+            if (docDataSource !== 'fechar_dia' && window._cloudHydrated.motoboyOrders) {
               const currentLocal = (typeof window.getMotoboyOrders === 'function' ? window.getMotoboyOrders() : window.motoboyOrders) || [];
-              const removedSet = window._locallyRemovedMotoboyOrderIds || new Set();
-              remoteOrders = remoteOrders.filter(o => o && o.id && !removedSet.has(String(o.id)));
-              const remoteIdMap = new Map(remoteOrders.map(o => [String(o.id), o]));
+              const pendingSet = window._pendingLocalMotoboyOrderIds || new Set();
 
               currentLocal.forEach(localOrd => {
                 if (!localOrd || !localOrd.id || localOrd.archived || removedSet.has(String(localOrd.id))) return;
                 const sId = String(localOrd.id);
                 if (!remoteIdMap.has(sId)) {
-                  // Mantém o pedido local para jamais sumir da tela sozinho
-                  remoteOrders.push(localOrd);
+                  if (pendingSet.has(sId)) {
+                    remoteOrders.push(localOrd);
+                  }
                 } else {
                   const remOrd = remoteIdMap.get(sId);
-                  // Se o status mudou para 'entregue' no portal do motoboy ou localmente, preserva o status mais avançado
                   if (localOrd.status === 'entregue' && remOrd.status !== 'entregue') {
                     remOrd.status = 'entregue';
                     remOrd.deliveredAt = localOrd.deliveredAt || remOrd.deliveredAt;
@@ -10812,7 +10961,10 @@
             }
 
             remoteOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-            window._firebaseLastStateSynced_motoboyOrders = JSON.stringify(remoteOrders);
+            if (!fromCache) {
+              window._firebaseLastStateSynced_motoboyOrders = JSON.stringify(remoteOrders);
+              window._cloudHydrated.motoboyOrders = true;
+            }
 
             if (typeof window.setMotoboyOrders === 'function') window.setMotoboyOrders(remoteOrders);
             else window.motoboyOrders = remoteOrders;
@@ -10834,9 +10986,6 @@
             });
 
             // AUTO-DISPATCH NO IFOOD (PC MASTER):
-            // Quando qualquer pedido é lançado para um motoboy via celular (Link de Lançamento),
-            // o PC Master onde o motor do iFood roda identifica o pedido correspondente e realiza
-            // o DESPACHO AUTOMÁTICO na API do iFood imediatamente!
             if (!window._dispatchedIfoodFromPhoneSet) window._dispatchedIfoodFromPhoneSet = new Set();
             remoteOrders.forEach(mbOrd => {
               if (!mbOrd || !mbOrd.orderNumber) return;
@@ -10892,6 +11041,8 @@
                 }
               }
             }
+          } else if (!fromCache && !docSnap.exists()) {
+            window._cloudHydrated.motoboyOrders = true;
           }
         }, (err) => {
           console.warn("Firebase MotoboyOrders error:", err);
@@ -10901,14 +11052,15 @@
         });
 
         // 4. Pedidos iFood KDS da Loja: stores/${tenantId}/state/kds_orders (Consolidado: 1 Leitura)
-        unsubOrders = onSnapshot(doc(db, "stores", tenantId, "state", "kds_orders"), async (docSnap) => {
+        unsubOrders = onSnapshot(doc(db, "stores", tenantId, "state", "kds_orders"), { includeMetadataChanges: true }, async (docSnap) => {
+          const fromCache = Boolean(docSnap.metadata && docSnap.metadata.fromCache);
           let remoteOrders = [];
           if (docSnap.exists()) {
             const data = docSnap.data();
             if (data && Array.isArray(data.orders)) {
               remoteOrders = data.orders.filter(o => !o.archived);
             }
-          } else {
+          } else if (!fromCache) {
             // Migração automática transparente se o documento de estado ainda não existir
             try {
               const snap = await getDocs(query(collection(db, "stores", tenantId, "orders"), limit(200)));
@@ -10924,36 +11076,47 @@
           }
 
           if (remoteOrders.length > 0 || docSnap.exists()) {
-            // BLINDAGEM ANTI-APAGAMENTO KDS: Preserva pedidos locais e coordenadas/KM já calculados localmente
-            const currentLocalKds = (typeof window.getOrders === 'function' ? window.getOrders() : window.orders) || [];
             const removedKdsSet = window._locallyRemovedOrderIds || new Set();
             remoteOrders = remoteOrders.filter(o => o && o.id && !removedKdsSet.has(String(o.id)));
             const remoteKdsMap = new Map(remoteOrders.map(o => [String(o.id), o]));
 
-            currentLocalKds.forEach(localOrd => {
-              if (!localOrd || !localOrd.id || localOrd.archived || removedKdsSet.has(String(localOrd.id))) return;
-              const sId = String(localOrd.id);
-              if (!remoteKdsMap.has(sId)) {
-                remoteOrders.push(localOrd);
-              } else {
-                const remOrd = remoteKdsMap.get(sId);
-                // Preserva KM e coordenadas válidas já calculadas localmente para não precisar recalcular
-                if (localOrd.distanceKm && Number(localOrd.distanceKm) <= 60 && (!remOrd.distanceKm || Number(remOrd.distanceKm) > 60)) {
-                  remOrd.distanceKm = localOrd.distanceKm;
-                  remOrd.storeLat = localOrd.storeLat;
-                  remOrd.storeLng = localOrd.storeLng;
-                  remOrd.customerLat = localOrd.customerLat;
-                  remOrd.customerLng = localOrd.customerLng;
-                } else if (remOrd.distanceKm && Number(remOrd.distanceKm) > 60) {
-                  remOrd.distanceKm = null;
-                  remOrd.storeLat = null;
-                  remOrd.storeLng = null;
+            if (!fromCache && window._pendingLocalOrderIds) {
+              remoteOrders.forEach(o => window._pendingLocalOrderIds.delete(String(o.id)));
+            }
+
+            if (window._cloudHydrated.kdsOrders) {
+              const currentLocalKds = (typeof window.getOrders === 'function' ? window.getOrders() : window.orders) || [];
+              const pendingKdsSet = window._pendingLocalOrderIds || new Set();
+
+              currentLocalKds.forEach(localOrd => {
+                if (!localOrd || !localOrd.id || localOrd.archived || removedKdsSet.has(String(localOrd.id))) return;
+                const sId = String(localOrd.id);
+                if (!remoteKdsMap.has(sId)) {
+                  if (pendingKdsSet.has(sId)) {
+                    remoteOrders.push(localOrd);
+                  }
+                } else {
+                  const remOrd = remoteKdsMap.get(sId);
+                  if (localOrd.distanceKm && Number(localOrd.distanceKm) <= 60 && (!remOrd.distanceKm || Number(remOrd.distanceKm) > 60)) {
+                    remOrd.distanceKm = localOrd.distanceKm;
+                    remOrd.storeLat = localOrd.storeLat;
+                    remOrd.storeLng = localOrd.storeLng;
+                    remOrd.customerLat = localOrd.customerLat;
+                    remOrd.customerLng = localOrd.customerLng;
+                  } else if (remOrd.distanceKm && Number(remOrd.distanceKm) > 60) {
+                    remOrd.distanceKm = null;
+                    remOrd.storeLat = null;
+                    remOrd.storeLng = null;
+                  }
                 }
-              }
-            });
+              });
+            }
 
             remoteOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-            window._firebaseLastStateSynced_kds = JSON.stringify(remoteOrders);
+            if (!fromCache) {
+              window._firebaseLastStateSynced_kds = JSON.stringify(remoteOrders);
+              window._cloudHydrated.kdsOrders = true;
+            }
 
             if (typeof window.setOrders === 'function') window.setOrders(remoteOrders);
             else window.orders = remoteOrders;
@@ -10965,8 +11128,6 @@
             if (typeof renderKanban === 'function') renderKanban();
 
             // GARANTIA DE DESPACHO NO IFOOD (PC MASTER):
-            // Se qualquer pedido for despachado via celular (Modo Lançamento), o PC Master onde o motor do iFood roda
-            // detecta em tempo real e garante que o comando de despacho seja transmitido para a API do iFood!
             if (!window._pcDispatchedToApiSet) window._pcDispatchedToApiSet = new Set();
             if (apiCredentials && apiCredentials.clientId && apiCredentials.clientSecret) {
               remoteOrders.forEach(remOrd => {
@@ -10996,6 +11157,8 @@
                 }
               });
             }
+          } else if (!fromCache && !docSnap.exists()) {
+            window._cloudHydrated.kdsOrders = true;
           }
         }, (err) => {
           console.warn("Firebase Orders error:", err);
@@ -11005,6 +11168,71 @@
         });
       }
       window.initTenantSync = initTenantSync;
+
+      // Revalida diretamente com o servidor quando o celular volta do intervalo/segundo plano ou reconecta à internet
+      let _refreshInFlight = false;
+      async function refreshTenantSyncFromServer() {
+        const tenantId = currentSyncTenantId || (typeof window.getCurrentTenantId === 'function' ? window.getCurrentTenantId() : '');
+        if (!tenantId || !db || window.firebaseQuotaExceeded || _refreshInFlight) return;
+        _refreshInFlight = true;
+        try {
+          console.log("🔄 [Cloud-First]: Revalidando estado mais recente da loja no servidor...");
+          const [settingsSnap, mbSnap] = await Promise.all([
+            getDocFromServer(doc(db, "stores", tenantId, "config", "settings")).catch(() => null),
+            getDocFromServer(doc(db, "stores", tenantId, "state", "motoboys")).catch(() => null)
+          ]);
+          if (settingsSnap) {
+            if (settingsSnap.exists()) {
+              applyRemoteSettingsSnapshot(settingsSnap.data(), false);
+            } else {
+              window._cloudHydrated.settings = true;
+            }
+          }
+          if (mbSnap) {
+            if (mbSnap.exists()) {
+              const d = mbSnap.data();
+              const list = (d && Array.isArray(d.motoboys))
+                ? d.motoboys.filter(m => !m.archived && m.active !== false).map(m => ({ ...m, isHidden: Boolean(m.isHidden) }))
+                : [];
+              applyRemoteMotoboysSnapshot(list, true, false, (d && d.updatedAt) || 0);
+            } else {
+              window._cloudHydrated.motoboys = true;
+            }
+          }
+        } catch (e) {
+          console.warn("Aviso ao revalidar estado no servidor:", e);
+        } finally {
+          _refreshInFlight = false;
+        }
+      }
+      window.refreshTenantSyncFromServer = refreshTenantSyncFromServer;
+
+      let _lastHiddenAt = 0;
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+          _lastHiddenAt = Date.now();
+        } else if (document.visibilityState === 'visible') {
+          const sleptMs = _lastHiddenAt ? (Date.now() - _lastHiddenAt) : 0;
+          if (sleptMs > 15000) {
+            // Bloqueia escritas temporariamente até confirmar dados novos do servidor após longo descanso/intervalo
+            window._cloudHydrated.settings = false;
+            window._cloudHydrated.motoboys = false;
+            refreshTenantSyncFromServer();
+          }
+        }
+      });
+
+      window.addEventListener('pageshow', (event) => {
+        if (event.persisted) {
+          window._cloudHydrated.settings = false;
+          window._cloudHydrated.motoboys = false;
+          refreshTenantSyncFromServer();
+        }
+      });
+
+      window.addEventListener('online', () => {
+        refreshTenantSyncFromServer();
+      });
 
       // Auto-inicia sync se já houver tenantId ativo
       const activeTenant = typeof window.getCurrentTenantId === 'function' ? window.getCurrentTenantId() : '';

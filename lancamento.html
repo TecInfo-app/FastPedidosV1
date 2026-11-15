@@ -1466,7 +1466,7 @@
   <!-- FIREBASE REAL-TIME CLOUD SYNC MODULE (ISOLADO E SEM ENGINE DE POLLING IFOOD) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { initializeFirestore, getFirestore, doc, collection, onSnapshot, setDoc, getDocs, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { initializeFirestore, getFirestore, doc, collection, onSnapshot, setDoc, getDocs, getDoc, getDocFromServer } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBow5AERyHHi3_zpmPwiV9SKhHfW-ltCHY",
@@ -1482,6 +1482,15 @@
     let unsubMotoboyOrders = null;
     let unsubOrders = null;
 
+    window._launchCloudHydrated = {
+      settings: false,
+      motoboys: false,
+      motoboyOrders: false,
+      kdsOrders: false
+    };
+    window._launchPendingLocalOrderIds = new Set();
+    window._launchPendingLocalMotoboyOrderIds = new Set();
+
     try {
       const app = initializeApp(firebaseConfig);
       const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
@@ -1493,6 +1502,8 @@
       window.saveKdsOrdersToFirebase = function() {
         if (!currentTenantId || !window.firebaseDb) return;
         const activeOrders = (orders || []).filter(o => !o.archived);
+        activeOrders.forEach(o => { if (o && o.id) window._launchPendingLocalOrderIds.add(String(o.id)); });
+        if (!window._launchCloudHydrated.kdsOrders) return;
         setDoc(doc(db, "stores", currentTenantId, "state", "kds_orders"), {
           orders: activeOrders,
           updatedAt: Date.now(),
@@ -1502,12 +1513,136 @@
 
       window.saveMotoboyOrdersToFirebase = function() {
         if (!currentTenantId || !window.firebaseDb) return;
+        (motoboyOrders || []).forEach(o => { if (o && o.id && !o.archived) window._launchPendingLocalMotoboyOrderIds.add(String(o.id)); });
+        if (!window._launchCloudHydrated.motoboyOrders) return;
         setDoc(doc(db, "stores", currentTenantId, "state", "motoboy_orders"), {
           orders: motoboyOrders,
           updatedAt: Date.now(),
           source: 'launch_mode'
         }, { merge: true }).catch(() => {});
       };
+
+      function applyRemoteSettingsSnapshot(data, fromCache = false) {
+        if (!data) return;
+        if (data.clientId) apiCredentials.clientId = data.clientId;
+        if (data.clientSecret) apiCredentials.clientSecret = data.clientSecret;
+        if (data.merchantId) apiCredentials.merchantId = data.merchantId;
+        if (data.customApiUrl) apiCredentials.customApiUrl = data.customApiUrl;
+        if (data.storeName) apiCredentials.storeName = data.storeName;
+        if (data.baseStoreAddress) apiCredentials.baseStoreAddress = data.baseStoreAddress;
+        if (data.baseStoreLat) apiCredentials.baseStoreLat = data.baseStoreLat;
+        if (data.baseStoreLng) apiCredentials.baseStoreLng = data.baseStoreLng;
+
+        if (Array.isArray(data.storesList) && data.storesList.length > 0) {
+          const visibleStores = data.storesList.filter(s => !s.isHidden);
+          const cloudActiveStore = data.storesList.find(s => s.active && !s.isHidden);
+          const targetActiveId = cloudActiveStore
+            ? cloudActiveStore.id
+            : (visibleStores[0]?.id || data.storesList[0]?.id);
+
+          storesList = data.storesList.map(s => ({
+            ...s,
+            isHidden: Boolean(s.isHidden),
+            active: s.id === targetActiveId
+          }));
+          try {
+            localStorage.setItem('launch_stores_' + currentTenantId, JSON.stringify(storesList));
+          } catch(e) {}
+          renderStoreChips();
+          updateHeaderStoreDisplay();
+        }
+
+        if (Array.isArray(data.deliveryFeesList) && data.deliveryFeesList.length > 0) {
+          deliveryFeesList = ensureDefaultFeeKmRanges(data.deliveryFeesList);
+          try {
+            localStorage.setItem('launch_fees_' + currentTenantId, JSON.stringify(deliveryFeesList));
+          } catch(e) {}
+          const qInput = document.getElementById('quick-order-input');
+          if (qInput && qInput.value && typeof handleQuickOrderInput === 'function') {
+            handleQuickOrderInput(qInput.value);
+          }
+        }
+
+        if (!fromCache) {
+          window._launchCloudHydrated.settings = true;
+        }
+      }
+
+      function applyRemoteMotoboysSnapshot(data, fromCache = false) {
+        if (data && Array.isArray(data.motoboys)) {
+          const filteredMb = data.motoboys.filter(m => !m.archived && m.active !== false).map(m => ({
+            ...m,
+            isHidden: Boolean(m.isHidden)
+          }));
+          filteredMb.sort((a, b) => (a.order ?? 999999) - (b.order ?? 999999));
+          motoboysList = filteredMb;
+          try {
+            localStorage.setItem('launch_motoboys_' + currentTenantId, JSON.stringify(motoboysList));
+          } catch(e) {}
+
+          const modalMb = document.getElementById('modal-select-motoboy');
+          if (modalMb && !modalMb.classList.contains('hidden') && typeof openMotoboyModal === 'function') {
+            openMotoboyModal();
+          }
+          const modalSheet = document.getElementById('modal-motoboy-spreadsheet');
+          if (modalSheet && !modalSheet.classList.contains('hidden') && typeof openMotoboySpreadsheetModal === 'function') {
+            openMotoboySpreadsheetModal();
+          }
+        }
+        if (!fromCache) {
+          window._launchCloudHydrated.motoboys = true;
+        }
+      }
+
+      function applyRemoteMotoboyOrdersSnapshot(data, fromCache = false) {
+        if (data && Array.isArray(data.orders)) {
+          const docSource = data.source || '';
+          const remoteOrders = data.orders.filter(o => !o.archived);
+          if (!fromCache) {
+            remoteOrders.forEach(o => { if (o && o.id) window._launchPendingLocalMotoboyOrderIds.delete(String(o.id)); });
+          }
+          if (docSource !== 'fechar_dia' && window._launchCloudHydrated.motoboyOrders) {
+            const remoteIds = new Set(remoteOrders.map(o => String(o.id)));
+            (motoboyOrders || []).forEach(localOrd => {
+              if (localOrd && localOrd.id && !localOrd.archived && !remoteIds.has(String(localOrd.id)) && window._launchPendingLocalMotoboyOrderIds.has(String(localOrd.id))) {
+                remoteOrders.push(localOrd);
+              }
+            });
+          }
+          remoteOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+          motoboyOrders = remoteOrders;
+          updateFloatingMotoboyBadge();
+        }
+        if (!fromCache) {
+          window._launchCloudHydrated.motoboyOrders = true;
+        }
+      }
+
+      function applyRemoteKdsOrdersSnapshot(data, fromCache = false) {
+        if (data && Array.isArray(data.orders)) {
+          const remoteOrders = data.orders.filter(o => !o.archived);
+          if (!fromCache) {
+            remoteOrders.forEach(o => { if (o && o.id) window._launchPendingLocalOrderIds.delete(String(o.id)); });
+          }
+          if (window._launchCloudHydrated.kdsOrders) {
+            const remoteIds = new Set(remoteOrders.map(o => String(o.id)));
+            (orders || []).forEach(localOrd => {
+              if (localOrd && localOrd.id && !localOrd.archived && !remoteIds.has(String(localOrd.id)) && window._launchPendingLocalOrderIds.has(String(localOrd.id))) {
+                remoteOrders.push(localOrd);
+              }
+            });
+          }
+          orders = remoteOrders;
+          console.log(`📦 [Modo Lançamento]: ${orders.length} pedidos iFood sincronizados da nuvem.`);
+          const qInput = document.getElementById('quick-order-input');
+          if (qInput && qInput.value && typeof handleQuickOrderInput === 'function') {
+            handleQuickOrderInput(qInput.value);
+          }
+        }
+        if (!fromCache) {
+          window._launchCloudHydrated.kdsOrders = true;
+        }
+      }
 
       function startLaunchModeSync(tenantId) {
         if (!tenantId) {
@@ -1519,114 +1654,52 @@
         localStorage.setItem('last_tenant_id', tenantId);
         localStorage.setItem('portal_last_store_id', tenantId);
 
-        console.log(`🚀 [Modo Lançamento]: Conectando em tempo real à loja [${tenantId}]...`);
+        console.log(`🚀 [Modo Lançamento]: Conectando em tempo real (Cloud-First) à loja [${tenantId}]...`);
 
-        // Desconecta listeners anteriores se houver
+        // Desconecta listeners anteriores e reseta flags de hidratação
         if (unsubSettings) unsubSettings();
         if (unsubMotoboys) unsubMotoboys();
         if (unsubMotoboyOrders) unsubMotoboyOrders();
         if (unsubOrders) unsubOrders();
+        window._launchCloudHydrated = { settings: false, motoboys: false, motoboyOrders: false, kdsOrders: false };
 
         // 1. Escuta Configurações, Credenciais iFood e Taxas da Loja
-        unsubSettings = onSnapshot(doc(db, "stores", tenantId, "config", "settings"), (snap) => {
+        unsubSettings = onSnapshot(doc(db, "stores", tenantId, "config", "settings"), { includeMetadataChanges: true }, (snap) => {
+          const fromCache = Boolean(snap.metadata && snap.metadata.fromCache);
           if (snap.exists()) {
-            const data = snap.data();
-            if (data) {
-              if (data.clientId) apiCredentials.clientId = data.clientId;
-              if (data.clientSecret) apiCredentials.clientSecret = data.clientSecret;
-              if (data.merchantId) apiCredentials.merchantId = data.merchantId;
-              if (data.customApiUrl) apiCredentials.customApiUrl = data.customApiUrl;
-              if (data.storeName) apiCredentials.storeName = data.storeName;
-              if (data.baseStoreAddress) apiCredentials.baseStoreAddress = data.baseStoreAddress;
-              if (data.baseStoreLat) apiCredentials.baseStoreLat = data.baseStoreLat;
-              if (data.baseStoreLng) apiCredentials.baseStoreLng = data.baseStoreLng;
-
-              if (Array.isArray(data.storesList) && data.storesList.length > 0) {
-                const curActive = (storesList || []).find(s => s.active);
-                const visibleStores = data.storesList.filter(s => !s.isHidden);
-                const targetActiveId = (curActive && !data.storesList.find(s => s.id === curActive.id)?.isHidden)
-                  ? curActive.id
-                  : (visibleStores[0]?.id || data.storesList[0]?.id);
-
-                storesList = data.storesList.map(s => ({
-                  ...s,
-                  isHidden: Boolean(s.isHidden),
-                  active: s.id === targetActiveId
-                }));
-                try {
-                  localStorage.setItem('launch_stores_' + tenantId, JSON.stringify(storesList));
-                } catch(e) {}
-                renderStoreChips();
-                updateHeaderStoreDisplay();
-              }
-
-              if (Array.isArray(data.deliveryFeesList) && data.deliveryFeesList.length > 0) {
-                deliveryFeesList = ensureDefaultFeeKmRanges(data.deliveryFeesList);
-                try {
-                  localStorage.setItem('launch_fees_' + tenantId, JSON.stringify(deliveryFeesList));
-                } catch(e) {}
-                // Atualiza banner ou modal se houver pedido sendo digitado
-                const qInput = document.getElementById('quick-order-input');
-                if (qInput && qInput.value && typeof handleQuickOrderInput === 'function') {
-                  handleQuickOrderInput(qInput.value);
-                }
-              }
-            }
+            applyRemoteSettingsSnapshot(snap.data(), fromCache);
+          } else if (!fromCache) {
+            window._launchCloudHydrated.settings = true;
           }
         }, (err) => console.warn('Erro sync settings:', err));
 
         // 2. Escuta Motoboys Cadastrados
-        unsubMotoboys = onSnapshot(doc(db, "stores", tenantId, "state", "motoboys"), (snap) => {
+        unsubMotoboys = onSnapshot(doc(db, "stores", tenantId, "state", "motoboys"), { includeMetadataChanges: true }, (snap) => {
+          const fromCache = Boolean(snap.metadata && snap.metadata.fromCache);
           if (snap.exists()) {
-            const data = snap.data();
-            if (data && Array.isArray(data.motoboys)) {
-              const filteredMb = data.motoboys.filter(m => !m.archived && m.active !== false).map(m => ({
-                ...m,
-                isHidden: Boolean(m.isHidden)
-              }));
-              filteredMb.sort((a, b) => (a.order ?? 999999) - (b.order ?? 999999));
-              motoboysList = filteredMb;
-              try {
-                localStorage.setItem('launch_motoboys_' + tenantId, JSON.stringify(motoboysList));
-              } catch(e) {}
-              
-              // Atualiza o modal de seleção de motoboy se estiver aberto
-              const modalMb = document.getElementById('modal-select-motoboy');
-              if (modalMb && !modalMb.classList.contains('hidden') && typeof openMotoboyModal === 'function') {
-                openMotoboyModal();
-              }
-              // Atualiza a planilha de entregas se estiver aberta
-              const modalSheet = document.getElementById('modal-motoboy-spreadsheet');
-              if (modalSheet && !modalSheet.classList.contains('hidden') && typeof openMotoboySpreadsheetModal === 'function') {
-                openMotoboySpreadsheetModal();
-              }
-            }
+            applyRemoteMotoboysSnapshot(snap.data(), fromCache);
+          } else if (!fromCache) {
+            window._launchCloudHydrated.motoboys = true;
           }
         }, (err) => console.warn('Erro sync motoboys:', err));
 
         // 3. Escuta Pedidos dos Motoboys (Entregas em Rota)
-        unsubMotoboyOrders = onSnapshot(doc(db, "stores", tenantId, "state", "motoboy_orders"), (snap) => {
+        unsubMotoboyOrders = onSnapshot(doc(db, "stores", tenantId, "state", "motoboy_orders"), { includeMetadataChanges: true }, (snap) => {
+          const fromCache = Boolean(snap.metadata && snap.metadata.fromCache);
           if (snap.exists()) {
-            const data = snap.data();
-            if (data && Array.isArray(data.orders)) {
-              motoboyOrders = data.orders.filter(o => !o.archived);
-              updateFloatingMotoboyBadge();
-            }
+            applyRemoteMotoboyOrdersSnapshot(snap.data(), fromCache);
+          } else if (!fromCache) {
+            window._launchCloudHydrated.motoboyOrders = true;
           }
         }, (err) => console.warn('Erro sync motoboy orders:', err));
 
         // 4. Escuta Pedidos do iFood (KDS) em Tempo Real (vindos do PC Principal)
-        unsubOrders = onSnapshot(doc(db, "stores", tenantId, "state", "kds_orders"), (snap) => {
+        unsubOrders = onSnapshot(doc(db, "stores", tenantId, "state", "kds_orders"), { includeMetadataChanges: true }, (snap) => {
+          const fromCache = Boolean(snap.metadata && snap.metadata.fromCache);
           if (snap.exists()) {
-            const data = snap.data();
-            if (data && Array.isArray(data.orders)) {
-              orders = data.orders.filter(o => !o.archived);
-              console.log(`📦 [Modo Lançamento]: ${orders.length} pedidos iFood sincronizados da nuvem.`);
-              const qInput = document.getElementById('quick-order-input');
-              if (qInput && qInput.value && typeof handleQuickOrderInput === 'function') {
-                handleQuickOrderInput(qInput.value);
-              }
-            }
+            applyRemoteKdsOrdersSnapshot(snap.data(), fromCache);
+          } else if (!fromCache) {
+            window._launchCloudHydrated.kdsOrders = true;
           }
         }, (err) => console.warn('Erro sync KDS orders:', err));
 
@@ -1636,6 +1709,57 @@
       }
 
       window.startLaunchModeSync = startLaunchModeSync;
+
+      let _launchRefreshInFlight = false;
+      async function refreshLaunchSyncFromServer() {
+        if (!currentTenantId || !db || _launchRefreshInFlight) return;
+        _launchRefreshInFlight = true;
+        try {
+          const [sSnap, mSnap, moSnap, kSnap] = await Promise.all([
+            getDocFromServer(doc(db, "stores", currentTenantId, "config", "settings")).catch(() => null),
+            getDocFromServer(doc(db, "stores", currentTenantId, "state", "motoboys")).catch(() => null),
+            getDocFromServer(doc(db, "stores", currentTenantId, "state", "motoboy_orders")).catch(() => null),
+            getDocFromServer(doc(db, "stores", currentTenantId, "state", "kds_orders")).catch(() => null)
+          ]);
+          if (sSnap) {
+            if (sSnap.exists()) applyRemoteSettingsSnapshot(sSnap.data(), false);
+            else window._launchCloudHydrated.settings = true;
+          }
+          if (mSnap) {
+            if (mSnap.exists()) applyRemoteMotoboysSnapshot(mSnap.data(), false);
+            else window._launchCloudHydrated.motoboys = true;
+          }
+          if (moSnap) {
+            if (moSnap.exists()) applyRemoteMotoboyOrdersSnapshot(moSnap.data(), false);
+            else window._launchCloudHydrated.motoboyOrders = true;
+          }
+          if (kSnap) {
+            if (kSnap.exists()) applyRemoteKdsOrdersSnapshot(kSnap.data(), false);
+            else window._launchCloudHydrated.kdsOrders = true;
+          }
+        } catch (e) {
+          console.warn('Aviso ao revalidar Modo Lançamento no servidor:', e);
+        } finally {
+          _launchRefreshInFlight = false;
+        }
+      }
+
+      let _launchLastHiddenAt = 0;
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+          _launchLastHiddenAt = Date.now();
+        } else if (document.visibilityState === 'visible') {
+          if (_launchLastHiddenAt && (Date.now() - _launchLastHiddenAt > 15000)) {
+            refreshLaunchSyncFromServer();
+          }
+        }
+      });
+      window.addEventListener('pageshow', (event) => {
+        if (event.persisted) refreshLaunchSyncFromServer();
+      });
+      window.addEventListener('online', () => {
+        refreshLaunchSyncFromServer();
+      });
 
       // Auto-inicia conexão usando URL ou LocalStorage
       const storeParam = typeof getResolvedTenantId === 'function'
